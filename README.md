@@ -1,81 +1,146 @@
 # Simplified Line-Input Crystal-Encoding System (SLICES)
 
-The **Simplified Line-Input Crystal-Encoding System (SLICES)** is the first invertible and invariant crystal representation tool. This software supports encoding and decoding crystal structures, reconstructing them, and generating new materials with desired properties using generative deep learning.
+<div align="center">
 
-**Related Publications and Resources:**
-- **Nature Communications**: [Paper](https://www.nature.com/articles/s41467-023-42870-7)
-- **MatterGPT 图形界面介绍**: [Bilibili](https://www.bilibili.com/video/BV15XrmYMEYU/)
-- **SLICES 晶体语言介绍**: [Bilibili](https://www.bilibili.com/video/BV17H4y1W7aZ/)
-- **SLICES 101**: [Bilibili](https://www.bilibili.com/video/BV1Yr42147dM/)
-- **MatterGPT Paper**: [arXiv](https://arxiv.org/abs/2408.07608)
-- **MatterGPT Demo**: [Huggingface](https://huggingface.co/spaces/xiaohang07/MatterGPT_CPU)
-- **SLICES-PLUS Paper**: [arXiv](https://arxiv.org/abs/2410.22828)
-- **Data and Results**: [Figshare](https://doi.org/10.6084/m9.figshare.22707472)
-- **完整的Materials Project新颖性检查库和EAH计算竞争相库**: [Figshare](https://doi.org/10.6084/m9.figshare.28645331) 
-方便大家在整个MP数据库中进行新颖性检查和计算EAH！
----
+![SLICES Logo](./docs/SLICES_demo.png)
 
-## Main Functionalities
+**The First Invertible and Invariant Crystal Representation Tool**
 
-1. **Encode crystal structures into SLICES strings**
-2. **Reconstruct original crystal structures (Text2Crystal)**
-3. **Inverse design of solid-state materials with desired properties using MatterGPT**
-4. **Inverse design of solid-state materials with desired properties and crystal systems using MatterGPT ([SLICES-PLUS](https://arxiv.org/abs/2410.22828))**
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-Read%20the%20Docs-blue)](https://xiaohang007.github.io/SLICES/)
 
----
-We provide a huggingface space to allow one-click conversion of CIF to SLICES and SLICES to CIF online. 
-### [[Online SLICES/CIF Convertor]](https://huggingface.co/spaces/xiaohang07/SLICES)
-[![IMAGE ALT TEXT](./docs/SLICES_demo.png)](https://huggingface.co/spaces/xiaohang07/SLICES "Online SLICES/CIF Convertor - Click to Try!")
-### [[MatterGPT Online Demo]](https://huggingface.co/spaces/xiaohang07/MatterGPT_CPU)
-[![IMAGE ALT TEXT](./docs/huggingface_space.png)](https://huggingface.co/spaces/xiaohang07/MatterGPT_CPU "MatterGPT Online Demo - Click to Try!")
-### MatterGPT 图形界面 
-![IMAGE ALT TEXT](./docs/gui_snapshot.png)
----
+[Online Converter](#online-tools) • [Installation](#installation) • [Quick Start](#quick-start) • [Documentation](#documentation)
 
-## Table of Contents
-
-1. [Installation](#installation)
-   - [Local Installation](#local-installation)
-   - [Docker Installation](#docker-installation)
-2. [Examples](#examples)
-   - [Crystal to SLICES and SLICES to Crystal](#crystal-to-slices-and-slices-to-crystal)
-   - [Augment SLICES and Canonicalize SLICES](#augment-slices-and-canonicalize-slices)
-3. [Tutorials](#tutorials)
-4. [Troubleshooting](#troubleshooting)
-4. [Documentation](#documentation)
-5. [Reproducing Benchmarks](#reproducing-benchmarks)
-6. [Citation](#citation)
-7. [Acknowledgements](#acknowledgement)
-8. [Contact and Support](#contact-and-support)
+</div>
 
 ---
 
-## Installation
+## 🌟 Overview
 
-You can choose between **1. Local Installation** or **2. Docker Installation**.
+The **Simplified Line-Input Crystal-Encoding System (SLICES)** is a revolutionary tool for crystal structure representation that enables:
+
+- ✅ **Invertible Encoding**: Convert crystal structures to compact string representations and reconstruct them perfectly
+- ✅ **Invariant Representation**: Generate consistent representations regardless of coordinate system or unit cell choice
+- ✅ **Text-to-Crystal**: Reconstruct crystal structures from SLICES strings with high accuracy
+- ✅ **Inverse Design**: Generate new materials with desired properties using generative AI (MatterGPT)
+
+**Key Features:**
+- 🎯 **100% Encoding Success Rate** on diverse crystal structures
+- 🔄 **High-Fidelity Reconstruction** with MLIP-based geometry optimization
+- 🚀 **Multiple MLIP Support**: M3GNet, CHGNet, MatGL, MatterSim, ORBv3
+- 🖥️ **Cross-Platform**: Works on macOS, Linux, and Windows (via WSL2)
+- 📦 **Easy Installation**: Simple setup with conda and pip
+
+---
+
+## 📚 Related Publications and Resources
+
+| Resource | Link |
+|----------|------|
+| **Nature Communications Paper** | [View Paper](https://www.nature.com/articles/s41467-023-42870-7) |
+| **MatterGPT Paper** | [arXiv:2408.07608](https://arxiv.org/abs/2408.07608) |
+| **SLICES-PLUS Paper** | [arXiv:2410.22828](https://arxiv.org/abs/2410.22828) |
+| **Online SLICES/CIF Converter** | [Try Online](https://huggingface.co/spaces/xiaohang07/SLICES) |
+| **MatterGPT Demo** | [Huggingface Space](https://huggingface.co/spaces/xiaohang07/MatterGPT_CPU) |
+| **Data and Results** | [Figshare](https://doi.org/10.6084/m9.figshare.22707472) |
+| **MP Novelty Check Library** | [Figshare](https://doi.org/10.6084/m9.figshare.28645331) |
+
+**Video Tutorials (Chinese):**
+- [MatterGPT 图形界面介绍](https://www.bilibili.com/video/BV15XrmYMEYU/)
+- [SLICES 晶体语言介绍](https://www.bilibili.com/video/BV17H4y1W7aZ/)
+- [SLICES 101](https://www.bilibili.com/video/BV1Yr42147dM/)
+
+---
+
+## 🎯 Main Functionalities
+
+### 1. **Crystal Structure Encoding** (`structure2SLICES`)
+Convert any crystal structure (CIF, POSCAR, etc.) into a compact SLICES string representation.
+
+### 2. **Crystal Structure Decoding** (`SLICES2structure`)
+Reconstruct the original crystal structure from a SLICES string with high accuracy using MLIP-based relaxation.
+
+### 3. **Inverse Design with MatterGPT**
+Generate new crystal structures with desired properties using generative deep learning.
+
+### 4. **SLICES-PLUS**
+Enhanced version leveraging spatial symmetry for improved representation quality.
+
+---
+
+## 🚀 Quick Start
+
+### Online Tools (No Installation Required)
+
+**SLICES/CIF Converter:**
+[![Online Converter](./docs/SLICES_demo.png)](https://huggingface.co/spaces/xiaohang07/SLICES)
+
+**MatterGPT Demo:**
+[![MatterGPT Demo](./docs/huggingface_space.png)](https://huggingface.co/spaces/xiaohang07/MatterGPT_CPU)
 
 ### Local Installation
 
-SLICES supports installation on **macOS**, **Linux (Ubuntu)**, and **Windows 11 (via WSL2)**. Follow the instructions for your operating system below.
+```python
+from slices.core import SLICES
+from pymatgen.core.structure import Structure
+
+# Load a crystal structure
+structure = Structure.from_file('examples/NdSiRu.cif')
+
+# Initialize SLICES backend
+backend = SLICES(relax_model='chgnet')
+
+# Encode to SLICES string
+slices_string = backend.structure2SLICES(structure)
+print(f"SLICES: {slices_string}")
+
+# Decode back to structure
+reconstructed, energy = backend.SLICES2structure(slices_string)
+print(f"Energy: {energy:.4f} eV/atom")
+```
 
 ---
 
-#### macOS Installation
+## 📋 Table of Contents
+
+1. [Installation](#-installation)
+   - [macOS Installation](#macos-installation)
+   - [Linux Installation](#linux-installation)
+   - [Windows Installation](#windows-11-installation-via-wsl2)
+   - [Docker Installation](#docker-installation)
+2. [Codebase Structure](#-codebase-structure)
+3. [Configuration Guide](#-configuration-guide)
+   - [Relaxer Settings](#relaxer-settings)
+   - [MLIP Model Selection](#mlip-model-selection)
+   - [Optimization Parameters](#optimization-parameters)
+   - [Graph Method Selection](#graph-method-selection)
+4. [Machine Learning Interatomic Potentials (MLIP)](#-machine-learning-interatomic-potentials-mlip-support)
+5. [XTB Binary for Decoding](#-xtb-binary-for-decoding)
+6. [Testing](#-testing)
+7. [Examples](#-examples)
+8. [Troubleshooting](#-troubleshooting)
+9. [Documentation](#-documentation)
+10. [Citation](#-citation)
+
+---
+
+## 💻 Installation
+
+### macOS Installation
 
 **Prerequisites:**
 - macOS 10.15 (Catalina) or later
-- Xcode Command Line Tools (install via: `xcode-select --install`)
-- Homebrew (optional, but recommended)
+- Xcode Command Line Tools: `xcode-select --install`
+- Homebrew (optional, recommended)
 
 **Step 1: Install Miniconda**
-
-If you already have Miniconda or Anaconda installed, you can skip this step.
 
 ```bash
 # Download Miniconda for macOS
 curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh
 
-# For Apple Silicon (M1/M2/M3) Macs, use:
+# For Apple Silicon (M1/M2/M3) Macs:
 # curl -O https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh
 
 # Install Miniconda
@@ -83,16 +148,13 @@ bash Miniconda3-latest-MacOSX-x86_64.sh -b -p ~/miniconda3
 
 # Initialize conda
 ~/miniconda3/bin/conda init zsh  # or 'bash' if using bash
-source ~/.zshrc  # or ~/.bash_profile if using bash
-
-# Update pip
-python -m pip install --upgrade pip
+source ~/.zshrc
 ```
 
 **Step 2: Clone and Install SLICES**
 
 ```bash
-# Clone the repository
+# Clone repository
 git clone https://github.com/xiaohang007/SLICES.git
 cd SLICES
 
@@ -103,51 +165,34 @@ conda activate slices
 # Install core dependencies
 pip install tensorflow-cpu==2.13.0
 pip install --no-deps m3gnet
-pip install smact==2.5.5
-pip install ase==3.22.1
-pip install pymatgen==2024.8.9
-pip install scipy==1.13.0
-pip install scikit-learn==1.3.1
-pip install numpy==1.26.4
+pip install smact==2.5.5 ase==3.22.1 pymatgen==2024.8.9
+pip install scipy==1.13.0 scikit-learn==1.3.1 numpy==1.26.4
 
-# Install PyTorch (CPU version for macOS)
+# Install PyTorch (CPU version)
 pip install torch torchvision
 
 # Install Gradio for GUI
 pip install gradio==4.44.1
 
 # Install SLICES package
-pip install slices --no-deps
+pip install -e .
 
-# Install MLIP models (optional, for geometry relaxation)
-pip install chgnet  # Recommended alternative to M3GNet
-pip install matgl  # Newer Materials Project model
-pip install mattersim  # Microsoft's ML potential
-pip install orb-models  # Orbital Materials potential
-pip install mattersim  # Microsoft's ML potential
-pip install orb-models  # Orbital Materials potential
-
-# Note: flash-attention is not available for macOS, use MatterGPT_no_flash folder instead
+# Install MLIP models (optional, recommended)
+pip install chgnet matgl mattersim orb-models
 ```
 
-**Step 3: Access the Graphical Interface**
+**Step 3: Access Graphical Interface**
 
 ```bash
 cd MatterGPT_no_flash
 python app.py
 ```
 
-Hold `Command` and click the `http://localhost:7860` link in the terminal to open the MatterGPT graphical interface.
-
-**macOS-Specific Notes:**
-- The codebase has been updated to work natively on macOS without requiring Docker
-- All timeout commands have been replaced with cross-platform Python subprocess calls
-- Signal handling (SIGALRM) has been replaced with threading-based timeouts for macOS compatibility
-- File operations use Python's `shutil` and `os` modules for cross-platform compatibility
+Hold `Command` and click the `http://localhost:7860` link to open MatterGPT.
 
 ---
 
-#### Linux (Ubuntu) Installation
+### Linux Installation
 
 **Step 1: Install Miniconda**
 
@@ -160,128 +205,546 @@ bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
 rm ~/miniconda3/miniconda.sh
 source ~/miniconda3/bin/activate
 conda init --all
-python -m pip install --upgrade pip
 ```
 
 **Step 2: Clone and Install SLICES**
 
 ```bash
-# Clone the repository
 git clone https://github.com/xiaohang007/SLICES.git
 cd SLICES
 
-# Create conda environment
 conda create --name slices python=3.9 -y
 conda activate slices
 
 # Install dependencies
-pip install tensorflow-cpu==2.13.0
-pip install --no-deps m3gnet
-pip install smact==2.5.5
-pip install ase==3.22.1
-pip install pymatgen==2024.8.9
-pip install scipy==1.13.0
-pip install scikit-learn==1.3.1
-pip install numpy==1.26.4
+pip install tensorflow-cpu==2.13.0 --no-deps m3gnet
+pip install smact==2.5.5 ase==3.22.1 pymatgen==2024.8.9
+pip install scipy==1.13.0 scikit-learn==1.3.1 numpy==1.26.4
 
-# Install PyTorch (with CUDA support if available)
+# Install PyTorch (with CUDA if available)
 pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # Install Gradio
 pip install gradio==4.44.1
 
-# Install SLICES package
-pip install slices --no-deps
+# Install SLICES
+pip install -e .
 
-# Install MLIP models (optional, for geometry relaxation)
-# CHGNet (recommended alternative to M3GNet)
-pip install chgnet
+# Install MLIP models
+pip install chgnet matgl mattersim orb-models
 
-# MatGL (newer Materials Project model)
-pip install matgl
-
-# Try to install flash-attention (optional, for GPU acceleration)
+# Optional: Install flash-attention for GPU acceleration
 wget https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.2/flash_attn-2.8.2+cu12torch2.5cxx11abiFALSE-cp39-cp39-linux_x86_64.whl
-pip install flash_attn-2.8.2+cu12torch2.5cxx11abiFALSE-cp39-cp39-linux_x86_64.whl || echo "Flash attention installation failed, use MatterGPT_no_flash folder instead"
+pip install flash_attn-2.8.2+cu12torch2.5cxx11abiFALSE-cp39-cp39-linux_x86_64.whl || echo "Flash attention failed, use MatterGPT_no_flash"
 ```
-
-**Step 3: Access the Graphical Interface**
-
-```bash
-# If flash-attention installed successfully, use:
-cd MatterGPT
-python app.py
-
-# Otherwise, use:
-cd MatterGPT_no_flash
-python app.py
-```
-
-Hold `CTRL` and click the `http://localhost:7860` link in the terminal to open the MatterGPT graphical interface.
 
 ---
 
-#### Windows 11 Installation (via WSL2)
+### Windows 11 Installation (via WSL2)
 
 **Prerequisites:**
 - Windows 11 with WSL2 and Ubuntu installed
-- Docker Desktop (optional, for Docker installation method)
+- Docker Desktop (optional)
 
-**Step 1: Install Miniconda in WSL2 Ubuntu**
-
-Follow the Linux installation instructions above, as WSL2 runs Ubuntu.
-
-**Step 2: Follow Linux Installation Steps**
-
-Use the same commands as the Linux installation section above.
+**Steps:**
+1. Install WSL2 with Ubuntu
+2. Follow the [Linux Installation](#linux-installation) instructions above
+3. Configure Docker Desktop to use WSL2 backend (if using Docker)
 
 ---
 
-### Verification
+### Docker Installation
 
-After installation, verify that SLICES is working correctly:
+**Prerequisites:**
+- Docker Desktop installed and running
+- For Windows: WSL2 with Docker Desktop configured
+
+**Steps:**
+
+```bash
+# Clone repository
+git clone https://github.com/xiaohang007/SLICES.git
+cd SLICES
+
+# Configure CPU threads (edit slurm.conf)
+sed -i 's/CPUs=8/CPUs=16/' slurm.conf  # Linux
+sed -i '' 's/CPUs=8/CPUs=16/' slurm.conf  # macOS
+
+# Pull Docker image
+docker pull xiaohang07/slices:v12
+
+# Make scripts executable
+chmod +x entrypoint_set_cpus_gradio.sh entrypoint_set_cpus.sh ./src/slices/xtb_noring_nooutput_nostdout_noCN
+
+# Run container (Linux with GPU)
+docker run -it -p 7860:7860 -h workq --shm-size=0.5gb --gpus all -v $(pwd):/crystal xiaohang07/slices:v12 /crystal/entrypoint_set_cpus_gradio.sh
+
+# Run container (macOS, no GPU)
+docker run -it -p 7860:7860 -h workq --shm-size=0.5gb -v $(pwd):/crystal xiaohang07/slices:v12 /crystal/entrypoint_set_cpus_gradio.sh
+```
+
+---
+
+## 📁 Codebase Structure
+
+```
+SLICES/
+├── src/slices/                    # Core SLICES package
+│   ├── __init__.py               # Package initialization
+│   ├── core.py                   # Main SLICES class (encoding/decoding, ~2245 lines)
+│   ├── mlip_relaxer.py          # MLIP model adapters (M3GNet, CHGNet, etc., ~260 lines)
+│   ├── tobascco_net.py          # Graph theory implementation (from tobascco, ~500+ lines)
+│   ├── utils.py                  # Utility functions
+│   ├── utils_wyckoff.py         # Wyckoff position utilities
+│   ├── config.py                # Configuration constants
+│   ├── xtb_noring_nooutput_nostdout_noCN  # Custom XTB binary (macOS ARM64, ~4.4 MB)
+│   └── MP-2021.2.8-EFS/         # M3GNet model files (checkpoint, data, index, json)
+│
+├── examples/                     # Example scripts
+│   ├── 2.1structure2SLICES_SLICES2structure.py
+│   ├── 2.2data_augmentation_get_canonical_slices.py
+│   ├── NdSiRu.cif
+│   └── Sr3Ru2O7.cif
+│
+├── MatterGPT/                    # MatterGPT with flash-attention (Linux/GPU)
+│   ├── app.py                   # Gradio GUI application
+│   ├── 0_dataset/               # Dataset preparation
+│   ├── 1_train_generate/        # Training and generation
+│   ├── 2_decode/                # Decoding pipeline
+│   └── 3_novelty/               # Novelty checking
+│
+├── MatterGPT_no_flash/           # MatterGPT without flash-attention (macOS/CPU)
+│   └── [Same structure as MatterGPT/]
+│
+├── HTS/                         # High-Throughput Screening workflow
+│   ├── 0_get_json_mp_api/      # Fetch data from Materials Project
+│   ├── 1_augmentation/         # Data augmentation
+│   ├── 2_train_sample/         # Training scripts
+│   ├── 3_inverse/              # Inverse design
+│   └── [Additional filtering/refinement steps]
+│
+├── benchmark/                    # Benchmarking scripts
+│   ├── 1_Match_rate_MP-20/
+│   ├── 2_Match_rate_MP-21-40/
+│   └── benchmarks.md
+│
+├── data/                        # Datasets
+│   ├── mp20/                    # MP-20 dataset
+│   └── mp20_nonmetal/           # MP-20 non-metal subset
+│
+├── test_slices_functions.py     # Comprehensive test suite (encoding + decoding)
+├── test_slices_encoding_only.py # Encoding-only test suite
+├── README.md                    # This file
+└── pyproject.toml              # Package configuration
+```
+
+### Key Modules
+
+**`src/slices/core.py`** - Main SLICES class (~2245 lines)
+- **`SLICES.__init__()`**: Initialize with configuration options (relax_model, fmax, steps, optimizer, graph_method, etc.)
+- **`structure2SLICES()`**: Encode crystal structure to SLICES string representation
+- **`SLICES2structure()`**: Decode SLICES string to crystal structure (high-level interface)
+- **`to_structures()`**: Internal decoding with multiple optimization stages (barycentric embedding, ZL* optimization, MLIP relaxation)
+- **`relax()`**: MLIP-based relaxation for small structures (≤20 atoms, 360s timeout)
+- **`relax_large_cell1()`**: MLIP relaxation for medium structures (21-40 atoms, 720s timeout)
+- **`relax_large_cell2()`**: MLIP relaxation for large structures (>40 atoms, 2000s timeout)
+- **`get_inner_p_target()`**: Compute bond/angle parameters using XTB and GFN-FF
+- **`from_SLICES()`**: Parse SLICES string to extract graph topology (atom types, edge indices, edge labels)
+- **`structure2structure_graph()`**: Convert pymatgen Structure to StructureGraph using selected graph method
+- **`function_timeout()`**: Decorator for cross-platform timeout handling (prevents infinite loops)
+- **`suppress_output()`**: Context manager to silence verbose MLIP output during relaxation
+
+**`src/slices/mlip_relaxer.py`** - MLIP model adapters (~260 lines)
+- **`MLIPRelaxer`**: Abstract base class defining the `relax()` interface
+- **`M3GNetRelaxer`**: Adapter for M3GNet (Materials Project model, TensorFlow-based)
+- **`CHGNetRelaxer`**: Adapter for CHGNet (charge-informed GNN, PyTorch-based)
+- **`MatGLRelaxer`**: Adapter for MatGL (newer Materials Project model, supports FIRE/BFGS optimizers)
+- **`MatterSimRelaxer`**: Adapter for MatterSim (Microsoft's ML potential, auto-downloads models)
+- **`ORBv3Relaxer`**: Adapter for ORBv3 (Orbital Materials potential, multiple model variants)
+- **`get_relaxer()`**: Factory function to instantiate the correct relaxer based on model name
+
+**`src/slices/tobascco_net.py`** - Graph theory backend (~500+ lines)
+- **`Net`**: Network representation for crystal graphs (nodes = atoms, edges = bonds)
+- **`get_lattice_basis()`**: Compute lattice basis from cycle vectors (may return -1 for incompatible topologies)
+- Graph analysis, cycle basis computation, lattice basis computation
+- Modified from [tobascco](https://github.com/peteboyd/tobascco) project
+- Handles periodic boundary conditions and graph isomorphism
+
+**`src/slices/utils.py`** - Utility functions
+- Helper functions for structure manipulation
+- Element and composition utilities
+- Graph transformation utilities
+
+**`src/slices/utils_wyckoff.py`** - Wyckoff position utilities
+- Functions for handling Wyckoff positions and space group symmetry
+- Used in structure analysis and canonicalization
+
+**`src/slices/config.py`** - Configuration constants
+- Default values and configuration parameters
+- Constants used throughout the codebase
+
+---
+
+## ⚙️ Configuration Guide
+
+### Relaxer Settings
+
+The SLICES decoder uses Machine Learning Interatomic Potentials (MLIPs) to optimize reconstructed structures. You can configure the relaxation process through several parameters:
+
+#### Basic Configuration
+
+```python
+from slices.core import SLICES
+
+backend = SLICES(
+    relax_model="chgnet",    # MLIP model to use
+    fmax=0.2,                # Force convergence criterion (eV/Å)
+    steps=100,                # Maximum optimization steps
+    optimizer="BFGS",        # Optimizer algorithm
+    graph_method="econnn",   # Graph construction method
+    check_results=False      # Enable debug output
+)
+```
+
+#### Parameter Details
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `relax_model` | str | `"m3gnet"` | MLIP model: `"m3gnet"`, `"chgnet"`, `"matgl"`, `"mattersim"`, `"orbv3"` |
+| `fmax` | float | `0.2` | Maximum force convergence criterion in eV/Å. Lower = stricter convergence |
+| `steps` | int | `100` | Maximum number of optimization steps. More steps = better convergence (but slower) |
+| `optimizer` | str | `"BFGS"` | Optimizer algorithm. Options depend on MLIP model |
+| `graph_method` | str | `"econnn"` | Method for constructing structure graphs: `"econnn"`, `"crystalnn"`, `"brunnernn"`, `"mininn"` |
+| `check_results` | bool | `False` | If `True`, saves intermediate files for debugging |
+
+#### Force Convergence (`fmax`)
+
+The `fmax` parameter controls when the relaxation is considered converged:
+
+- **`fmax=0.2`** (default): Standard convergence, suitable for most cases
+- **`fmax=0.1`**: Tighter convergence, better accuracy but slower
+- **`fmax=0.05`**: Very tight convergence, highest accuracy but much slower
+- **`fmax=0.5`**: Looser convergence, faster but less accurate
+
+**Example:**
+```python
+# High-accuracy relaxation
+backend = SLICES(relax_model="chgnet", fmax=0.1, steps=200)
+
+# Fast relaxation (for testing)
+backend = SLICES(relax_model="chgnet", fmax=0.5, steps=50)
+```
+
+#### Maximum Steps (`steps`)
+
+Controls the maximum number of optimization iterations:
+
+- **`steps=100`** (default): Good balance between accuracy and speed
+- **`steps=200`**: More thorough optimization, better for complex structures
+- **`steps=50`**: Faster, may not fully converge for difficult structures
+
+**Note:** The optimizer may converge before reaching the maximum steps if `fmax` is satisfied.
+
+#### Timeout Limits by Structure Size
+
+The decoder automatically uses different timeout limits based on structure complexity:
+
+| Structure Size | Method | Timeout | Use Case |
+|----------------|--------|---------|----------|
+| ≤20 atoms | `relax()` | 360 seconds | Small unit cells |
+| 21-40 atoms | `relax_large_cell1()` | 720 seconds | Medium unit cells |
+| >40 atoms | `relax_large_cell2()` | 2000 seconds | Large unit cells |
+
+These timeouts prevent infinite loops and can be adjusted in `core.py` if needed.
+
+---
+
+### MLIP Model Selection
+
+#### Available Models
+
+| Model | Package | Optimizer Options | Best For |
+|-------|---------|-------------------|----------|
+| **M3GNet** | `m3gnet` | `"BFGS"` | Default, well-integrated |
+| **CHGNet** | `chgnet` | `"BFGS"` | Recommended alternative, charge-informed |
+| **MatGL** | `matgl` | `"FIRE"`, `"BFGS"` | Newer Materials Project model |
+| **MatterSim** | `mattersim` | Auto-selected | Microsoft's deep learning potential |
+| **ORBv3** | `orb-models` | Auto-selected | Orbital Materials potential |
+
+#### Model-Specific Configuration
+
+**M3GNet (Default):**
+```python
+backend = SLICES(
+    relax_model="m3gnet",
+    optimizer="BFGS",  # Only BFGS supported
+    fmax=0.2,
+    steps=100
+)
+```
+
+**CHGNet (Recommended):**
+```python
+backend = SLICES(
+    relax_model="chgnet",
+    optimizer="BFGS",  # Only BFGS supported
+    fmax=0.2,
+    steps=100
+)
+```
+
+**MatGL:**
+```python
+backend = SLICES(
+    relax_model="matgl",
+    optimizer="FIRE",  # FIRE or BFGS
+    fmax=0.2,
+    steps=100
+)
+```
+
+**MatterSim:**
+```python
+backend = SLICES(
+    relax_model="mattersim",
+    # Optimizer auto-selected by MatterSim
+    fmax=0.2,
+    steps=100
+)
+```
+
+**ORBv3:**
+```python
+backend = SLICES(
+    relax_model="orbv3",
+    # Optimizer auto-selected by ORBv3
+    fmax=0.2,
+    steps=100
+)
+```
+
+#### Model Comparison
+
+| Feature | M3GNet | CHGNet | MatGL | MatterSim | ORBv3 |
+|---------|--------|--------|-------|-----------|-------|
+| **Installation** | Included | `pip install chgnet` | `pip install matgl` | `pip install mattersim` | `pip install orb-models` |
+| **Speed** | Medium | Fast | Medium | Fast | Medium |
+| **Accuracy** | Good | Excellent | Excellent | Good | Excellent |
+| **Stability** | Good | Excellent | Good | Good | Good |
+| **GPU Support** | Limited | Yes | Yes | Yes | Yes |
+| **Recommended** | ⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ |
+
+**Recommendation:** Use **CHGNet** for best balance of speed, accuracy, and stability.
+
+---
+
+### Optimization Parameters
+
+#### Encoding Workflow (`structure2SLICES`)
+
+The encoding process converts a crystal structure to a SLICES string:
+
+1. **Structure Graph Construction**: Build labeled quotient graph using selected graph method (EconNN, CrystalNN, etc.)
+2. **Graph Canonicalization**: Apply canonical labeling to ensure invariant representation
+3. **SLICES String Generation**: Convert graph to compact string format:
+   - Atom symbols (element names)
+   - Edge indices (atom pairs)
+   - Edge labels (periodic boundary conditions: `-`, `o`, `+` for -1, 0, +1)
+   - Space group number (optional, depending on strategy)
+
+**SLICES String Format:**
+```
+[Atom1] [Atom2] ... [AtomN] [Edge1_i] [Edge1_j] [Edge1_a] [Edge1_b] [Edge1_c] [Edge2_i] ...
+```
+
+**Components:**
+- **Atoms**: Element symbols (e.g., `Nd`, `Si`, `Ru`) - one per atom in the unit cell
+- **Edges**: `[i j a b c]` where:
+  - `i, j`: Atom indices (0-based, referring to atoms in the atom list)
+  - `a, b, c`: Periodic boundary condition labels:
+    - `-` = -1 (negative direction)
+    - `o` = 0 (same unit cell)
+    - `+` = +1 (positive direction)
+
+**Example SLICES String:**
+```
+Nd Si Ru 0 1 o o o 1 2 o o o 0 2 o o o
+```
+This represents:
+- 3 atoms: Nd, Si, Ru
+- 3 edges: Nd-Si (same cell), Si-Ru (same cell), Nd-Ru (same cell)
+
+**Properties:**
+- **Invertible**: Can reconstruct original structure from SLICES string
+- **Invariant**: Same structure always produces same canonical SLICES (regardless of coordinate system)
+- **Compact**: Typically much shorter than CIF format
+- **Graph-based**: Represents crystal as a labeled quotient graph
+
+#### Decoding Optimization Stages
+
+The `SLICES2structure()` function performs a multi-stage optimization:
+
+1. **Graph Reconstruction**: Parse SLICES string to extract graph topology (atom types, edge indices, edge labels)
+2. **XTB Calculation**: 
+   - Generate topology file (`.top` format) with neighbor lists
+   - Call XTB with GFN-FF: `xtb --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl`
+   - Read `gfnff_lists.json` to get bond/angle parameters
+3. **Barycentric Embedding**: Generate initial structure from graph with rescaled lattice based on average bond scaling
+4. **ZL* Optimization**: Non-barycentric embedding that matches XTB-predicted bond lengths and angles
+5. **MLIP Relaxation**: Final structure optimization using selected MLIP model with cell optimization
+
+#### Advanced Decoding Parameters
+
+The `to_structures()` method (called internally by `SLICES2structure()`) accepts additional parameters for fine-tuning the structure reconstruction:
+
+```python
+structures, energy = backend.to_structures(
+    bond_scaling=1.05,              # Bond length scaling factor
+    delta_theta=0.005,              # Angle change limit (deprecated, kept for compatibility)
+    delta_x=0.45,                  # Maximum coordinate change allowed
+    lattice_shrink=1,              # Minimum lattice scaling factor
+    lattice_expand=1.25,           # Maximum lattice scaling factor
+    angle_weight=0.5,              # Weight for angle terms in objective function
+    vbond_param_ave_covered=0.00, # Repulsive potential well depth (covered bonds)
+    vbond_param_ave=0.01,         # Repulsive potential well depth (uncovered pairs)
+    repul=True                     # Enable repulsive potential in objective
+)
+```
+
+**Parameter Details:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `bond_scaling` | float | `1.05` | Multiplicative factor for bond lengths. Values > 1.0 increase bond lengths. Typical range: 1.0-1.1 |
+| `delta_x` | float | `0.45` | Maximum allowed change in fractional coordinates during optimization. Higher = more flexibility |
+| `lattice_shrink` | float | `1.0` | Minimum lattice scaling factor. Values < 1.0 allow lattice contraction |
+| `lattice_expand` | float | `1.25` | Maximum lattice scaling factor. Values > 1.0 allow lattice expansion (up to 25% by default) |
+| `angle_weight` | float | `0.5` | Weight for angle terms in the objective function. Higher = stricter angle constraints |
+| `vbond_param_ave_covered` | float | `0.00` | Repulsive potential depth for atom pairs connected by edges (covered bonds) |
+| `vbond_param_ave` | float | `0.01` | Repulsive potential depth for atom pairs not connected by edges (prevents overlap) |
+| `repul` | bool | `True` | Enable/disable repulsive potential terms in optimization |
+
+**Typical Values:**
+- `bond_scaling=1.05`: Standard bond scaling (5% increase), suitable for most structures
+- `bond_scaling=1.0`: No scaling, use XTB-predicted bond lengths directly
+- `lattice_expand=1.25`: Allow up to 25% lattice expansion (good default)
+- `lattice_expand=1.5`: More flexible, allows up to 50% expansion (for complex structures)
+- `angle_weight=0.5`: Moderate weight for angle constraints (balanced)
+- `angle_weight=1.0`: Strong angle constraints (for structures with specific angles)
+
+**Return Values:**
+The `to_structures()` method returns:
+- **`structures`**: List of 3 pymatgen Structure objects:
+  1. Rescaled structure (barycentric embedding with rescaled lattice)
+  2. ZL*-optimized structure (non-barycentric embedding matching bond lengths/angles)
+  3. MLIP-optimized structure (final relaxed structure with cell optimization)
+- **`energy`**: Energy per atom (eV/atom) predicted by the selected MLIP model
+
+**Note:** If MLIP relaxation fails, only the first two structures are returned.
+
+---
+
+### Graph Method Selection
+
+The `graph_method` parameter controls how the structure graph is constructed:
+
+| Method | Description | Best For |
+|--------|-------------|----------|
+| `"econnn"` | EconNN (default) | General purpose, recommended |
+| `"crystalnn"` | CrystalNN | Complex coordination environments |
+| `"brunnernn"` | BrunnerNN | Reciprocal space analysis |
+| `"mininn"` | MinimumDistanceNN | Simple distance-based |
+
+**Example:**
+```python
+# Use CrystalNN for complex structures
+backend = SLICES(graph_method="crystalnn")
+```
+
+---
+
+## 🔬 Machine Learning Interatomic Potentials (MLIP) Support
+
+### Installation
+
+```bash
+# Install all MLIP models
+pip install chgnet matgl mattersim orb-models
+
+# Or install individually
+pip install chgnet      # Recommended
+pip install matgl       # Newer Materials Project model
+pip install mattersim   # Microsoft's potential
+pip install orb-models  # Orbital Materials potential
+```
+
+### Usage Examples
 
 ```python
 from slices.core import SLICES
 from pymatgen.core.structure import Structure
 
-# Test encoding
 structure = Structure.from_file('examples/NdSiRu.cif')
-backend = SLICES()
-slices_string = backend.structure2SLICES(structure)
-print(f"SLICES string: {slices_string}")
 
-# Test decoding
-reconstructed, energy = backend.SLICES2structure(slices_string)
-print(f"Reconstruction successful! Energy: {energy} eV/atom")
+# Test different MLIP models
+models = ["chgnet", "matgl", "mattersim", "orbv3"]
+
+for model in models:
+    backend = SLICES(relax_model=model, fmax=0.2, steps=100)
+    slices_string = backend.structure2SLICES(structure)
+    reconstructed, energy = backend.SLICES2structure(slices_string)
+    print(f"{model:12s}: {energy:8.4f} eV/atom")
 ```
 
-**Verify MLIP Models:**
+### Model Details
+
+#### CHGNet (Recommended)
+
+- **Package**: `chgnet`
+- **Features**: Charge-informed, fast, accurate
+- **Use Case**: General purpose, recommended default
 
 ```python
-# Test CHGNet
-backend = SLICES(relax_model="chgnet")
-reconstructed, energy = backend.SLICES2structure(slices_string)
-print(f"CHGNet energy: {energy} eV/atom")
-
-# Test MatterSim
-backend = SLICES(relax_model="mattersim")
-reconstructed, energy = backend.SLICES2structure(slices_string)
-print(f"MatterSim energy: {energy} eV/atom")
-
-# Test ORBv3
-backend = SLICES(relax_model="orbv3")
-reconstructed, energy = backend.SLICES2structure(slices_string)
-print(f"ORBv3 energy: {energy} eV/atom")
+backend = SLICES(relax_model="chgnet", fmax=0.2, steps=100)
 ```
 
-If you encounter any issues, please check the [Troubleshooting](#troubleshooting) section or open an issue on GitHub.
+#### MatGL
 
-### XTB Binary for Decoding
+- **Package**: `matgl`
+- **Features**: Newer Materials Project model, improved accuracy
+- **Use Case**: When highest accuracy is needed
 
-#### Overview
+```python
+backend = SLICES(relax_model="matgl", optimizer="FIRE", fmax=0.2, steps=100)
+```
 
-The `SLICES2structure` (decoding) function requires a custom XTB (Extended Tight-Binding) binary to compute inner product targets during structure reconstruction. XTB is used to calculate bond and angle parameters from topology files (`.top` format) using the GFN-FF (Geometry, Frequency, Noncovalent interactions - Force Field) method.
+#### MatterSim
+
+- **Package**: `mattersim`
+- **Features**: Microsoft's deep learning potential, auto-downloads model
+- **Use Case**: Alternative to CHGNet/MatGL
+
+```python
+backend = SLICES(relax_model="mattersim", fmax=0.2, steps=100)
+```
+
+#### ORBv3
+
+- **Package**: `orb-models`
+- **Features**: Orbital Materials potential, multiple model variants
+- **Use Case**: Specialized materials (organic, infinite materials)
+
+```python
+backend = SLICES(relax_model="orbv3", fmax=0.2, steps=100)
+```
+
+---
+
+## 🔧 XTB Binary for Decoding
+
+### Overview
+
+The `SLICES2structure` (decoding) function requires a custom XTB (Extended Tight-Binding) binary to compute bond and angle parameters from topology files using GFN-FF (Geometry, Frequency, Noncovalent interactions - Force Field).
 
 **Why a Custom Binary?**
 The standard XTB binary from conda-forge does not support the `.top` file format used by SLICES. The xiaohang007/xtb repository includes modifications that:
@@ -289,13 +752,13 @@ The standard XTB binary from conda-forge does not support the `.top` file format
 - Initialize GFN-FF calculations using topology data instead of Cartesian coordinates
 - Set coordination numbers from atom types rather than computing from coordinates
 
-#### Current Status
+### Current Status
 
 - ✅ **macOS ARM64 (Apple Silicon)**: A compatible binary is included at `src/slices/xtb_noring_nooutput_nostdout_noCN`
 - ✅ **Encoding (`structure2SLICES`)**: Works perfectly on all platforms (100% success rate)
 - ✅ **Decoding (`SLICES2structure`)**: macOS-compatible XTB binary included and tested
 
-#### How XTB is Used in SLICES
+### How XTB is Used in SLICES
 
 1. **During Decoding**: When `SLICES2structure()` is called, it:
    - Generates a topology file (`testBonds_cut.top`) containing neighbor lists and atom types
@@ -308,7 +771,7 @@ The standard XTB binary from conda-forge does not support the `.top` file format
    - Verifies it's executable and compatible with the system
    - Falls back to system-installed XTB if the bundled binary is not found (with a warning)
 
-#### Building XTB from Source (macOS)
+### Building XTB from Source (macOS)
 
 If you need to rebuild the binary for your system, follow these steps:
 
@@ -373,7 +836,7 @@ chmod +x /path/to/SLICES/src/slices/xtb_noring_nooutput_nostdout_noCN
 ./src/slices/xtb_noring_nooutput_nostdout_noCN --version
 ```
 
-#### Verifying XTB Works
+### Verifying XTB Works
 
 **Test 1: Basic Functionality**
 ```python
@@ -437,7 +900,7 @@ EOF
 ls -lh gfnff_lists.json  # Should exist
 ```
 
-#### Troubleshooting
+### Troubleshooting XTB Issues
 
 **Issue: "Cannot find module file 'xtb_io_reader_top.mod'"**
 - **Cause**: The `top.f90` module wasn't included in the build
@@ -449,6 +912,7 @@ ls -lh gfnff_lists.json  # Should exist
   - Verify the binary is executable: `chmod +x src/slices/xtb_noring_nooutput_nostdout_noCN`
   - Check binary architecture: `file src/slices/xtb_noring_nooutput_nostdout_noCN`
   - Test XTB directly (see Test 3 above)
+  - Check XTB stderr output for error messages
 
 **Issue: "cannot execute binary file"**
 - **Cause**: Binary architecture mismatch (e.g., Linux binary on macOS)
@@ -460,11 +924,26 @@ ls -lh gfnff_lists.json  # Should exist
   - Make binary executable: `chmod +x src/slices/xtb_noring_nooutput_nostdout_noCN`
   - Check for missing shared libraries: `otool -L src/slices/xtb_noring_nooutput_nostdout_noCN` (macOS) or `ldd` (Linux)
 
+**Issue: "XTB failed to generate output file. Exit code: 1"**
+- **Cause**: XTB execution failed (timeout, invalid input, or binary error)
+- **Solution**: 
+  - Check XTB stderr output for specific error messages
+  - Verify topology file format is correct
+  - Ensure all required dependencies are installed
+  - Try with a simpler test structure
+
+**Issue: "Failed to parse XTB JSON output"**
+- **Cause**: XTB output is malformed or incomplete
+- **Solution**: 
+  - Check if `gfnff_lists.json` exists and is readable
+  - Verify XTB completed successfully (check exit code)
+  - Try regenerating the topology file
+
 **Issue: Decoding returns None**
 - **Cause**: `get_inner_p_target()` failed (XTB execution error)
 - **Solution**: Check XTB binary path and test XTB directly
 
-#### Technical Details
+### Technical Details
 
 **Build Configuration:**
 - **Build System**: CMake 3.9+
@@ -482,337 +961,164 @@ ls -lh gfnff_lists.json  # Should exist
 - Path: `src/slices/xtb_noring_nooutput_nostdout_noCN`
 - Environment Variable: `XTB_MOD_PATH` (set automatically by `core.py`)
 
+**XTB Execution Details:**
+- **Timeout**: 30 seconds per XTB call (prevents hangs)
+- **Output Format**: JSON (`gfnff_lists.json`)
+- **Method**: GFN-FF (Geometry, Frequency, Noncovalent interactions - Force Field)
+- **Input**: Topology file (`.top` format) with neighbor lists
+
 **Note:** The system XTB from conda (`conda install -c conda-forge xtb`) may not work correctly with SLICES decoding as it lacks the custom modifications required by the codebase. The bundled binary is recommended.
 
-#### Build Summary
+---
 
-**What Was Done:**
-1. Cloned the xiaohang007/xtb repository (fork of Grimme Lab's xtb with custom modifications)
-2. Fixed `src/io/reader/CMakeLists.txt` to include the `top.f90` module in the build
-3. Built the binary using CMake with GCC Fortran compiler for macOS ARM64
-4. Verified the binary works correctly with SLICES decoding functionality
-5. Integrated automatic binary detection in `src/slices/core.py`
+## 🧪 Testing
 
-**Key Modification:**
-The critical fix was adding `"${dir}/top.f90"` to the source list in `src/io/reader/CMakeLists.txt`. Without this, the build would fail with "Cannot open module file 'xtb_io_reader_top.mod'".
+### Encoding Test
 
-**Result:**
-- Binary size: ~4.4 MB
-- Architecture: Mach-O 64-bit executable arm64
-- Location: `src/slices/xtb_noring_nooutput_nostdout_noCN`
-- Status: Fully functional for SLICES decoding on macOS ARM64
-
-## Testing
-
-### Testing SLICES Functions
-
-The codebase includes comprehensive test suites for validating `structure2SLICES` and `SLICES2structure` functions using the mp-20 dataset:
-
-**Encoding Test (structure2SLICES):**
 ```bash
-# Test encoding on 50 samples from mp-20 dataset
+# Test encoding on 50 samples
 python test_slices_encoding_only.py --dataset data/mp20/test.csv --samples 50
+
+# Use smaller batch size for limited memory
+python test_slices_encoding_only.py --dataset data/mp20/test.csv --samples 50 --batch-size 5
 ```
 
-**Full Round-Trip Test:**
+### Full Round-Trip Test
+
 ```bash
-# Test both encoding and decoding on 20 samples
+# Test encoding + decoding
 python test_slices_functions.py --dataset data/mp20/test.csv --samples 20 --models chgnet
+
+# Test multiple models
+python test_slices_functions.py --dataset data/mp20/test.csv --samples 20 --models chgnet mattersim orbv3 --batch-size 5
 ```
 
-**Test Multiple MLIP Models:**
-```bash
-# Test with all available MLIP models
-python test_slices_functions.py --dataset data/mp20/test.csv --samples 20 --models chgnet mattersim orbv3
-```
+### Test Options
 
-The test suites provide:
-- Success rate statistics for encoding and decoding
-- Error analysis and diagnostics
-- Round-trip accuracy validation
-- Support for testing with different MLIP models
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--dataset` | Path to CSV file | `data/mp20/test.csv` |
+| `--samples` | Number of samples | `50` |
+| `--models` | MLIP models to test | `chgnet` |
+| `--batch-size` | Structures per batch | `10` |
 
+**Memory Optimization:**
+- Processes structures in batches
+- Clears memory after each batch
+- Aggregates statistics incrementally
+- Reuses backend instances
 
 ---
 
-### Docker Installation
+## 📖 Examples
 
-Docker installation is recommended for users who want a containerized environment or are having dependency issues with local installation.
-
-**Prerequisites:**
-- Docker Desktop installed and running
-- For Windows 11: WSL2 with Ubuntu installed, Docker Desktop configured to use WSL2 backend
-- For Linux: Docker and nvidia-docker (for GPU support) installed
-- For macOS: Docker Desktop installed (note: GPU support is limited on macOS)
-
-**Step 1: Clone the Repository**
-
-```bash
-git clone https://github.com/xiaohang007/SLICES.git
-cd SLICES
-```
-
-**Step 2: Configure CPU Threads**
-
-Edit `slurm.conf` to set the number of CPU threads (example: 16 threads):
-
-```bash
-# On Linux/macOS
-sed -i 's/CPUs=8/CPUs=16/' slurm.conf
-
-# On macOS, if sed -i doesn't work:
-sed -i '' 's/CPUs=8/CPUs=16/' slurm.conf
-```
-
-**Step 3: Pull and Run Docker Image**
-
-```bash
-# Pull the pre-built Docker image
-docker pull xiaohang07/slices:v12
-
-# If docker pull fails, download from:
-# https://figshare.com/s/260701a1accd0192de20
-# Then load the image:
-# xz -T4 -dc dockerv12.tar.xz | docker load
-
-# Make scripts executable
-chmod +x entrypoint_set_cpus_gradio.sh entrypoint_set_cpus.sh ./src/slices/xtb_noring_nooutput_nostdout_noCN
-
-# Run Docker container
-# For Linux with GPU support:
-docker run -it -p 7860:7860 -h workq --shm-size=0.5gb --gpus all -v $(pwd):/crystal xiaohang07/slices:v12 /crystal/entrypoint_set_cpus_gradio.sh
-
-# For macOS (no GPU support):
-docker run -it -p 7860:7860 -h workq --shm-size=0.5gb -v $(pwd):/crystal xiaohang07/slices:v12 /crystal/entrypoint_set_cpus_gradio.sh
-```
-
-**Step 4: Access the Graphical Interface**
-
-Hold `CTRL` (or `Command` on Mac) and click the `http://localhost:7860` link in the terminal to open the MatterGPT graphical interface.
-
-**Notes:**
-- **Windows 11**: Requires WSL2 with Ubuntu. Configure Docker Desktop to use WSL2 backend.
-- **Linux**: Local installation is recommended for better GPU support (nvidia-docker can be difficult to configure).
-- **macOS**: Native installation is recommended as Docker on macOS has limited GPU support and performance overhead.
-
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-**Issue: ImportError or ModuleNotFoundError**
-```bash
-# Solution: Ensure you're in the correct conda environment
-conda activate slices
-# Reinstall the package
-pip install slices --no-deps --force-reinstall
-```
-
-**Issue: Timeout errors on macOS**
-- The codebase has been updated to use cross-platform timeout mechanisms
-- If you encounter timeout issues, ensure you're using the latest version of the codebase
-
-**Issue: Flash attention installation fails**
-- This is expected on macOS and some Linux systems
-- Use the `MatterGPT_no_flash` folder instead of `MatterGPT` folder
-
-**Issue: Permission denied errors**
-```bash
-# Make scripts executable
-chmod +x entrypoint_set_cpus_gradio.sh entrypoint_set_cpus.sh
-```
-
-**Issue: Port 7860 already in use**
-```bash
-# Find and kill the process using port 7860
-# On macOS/Linux:
-lsof -ti:7860 | xargs kill -9
-
-# Or change the port in app.py
-```
-
-**Issue: CUDA/GPU not detected**
-- For CPU-only systems (including most macOS), this is normal
-- The code will automatically use CPU mode
-- Ensure `tensorflow-cpu` is installed (not `tensorflow`)
-
-**Issue: M3GNet model download fails**
-- Check your internet connection
-- The model will be downloaded automatically on first use
-- If it fails, try running the code again
-
-For more help, please open an issue on [GitHub](https://github.com/xiaohang007/SLICES/issues).
-
----
-
-## Machine Learning Interatomic Potentials (MLIP) Support
-
-SLICES supports multiple MLIP models for geometry relaxation, providing alternatives to M3GNet:
-
-### Supported MLIP Models
-
-1. **M3GNet** (default) - Materials Project trained model
-2. **CHGNet** - Charge-informed graph neural network potential
-3. **MatGL** - Materials Project graph neural network (newer version)
-4. **MatterSim** - Microsoft's machine learning potential (requires installation)
-5. **ORBv3** - Orbital Materials potential (requires installation)
-
-### Installation
-
-Install the MLIP models you want to use:
-
-```bash
-# CHGNet (recommended, well-tested)
-pip install chgnet
-
-# MatGL
-pip install matgl
-
-# MatterSim (Microsoft's ML potential)
-pip install mattersim
-
-# ORBv3 (Orbital Materials potential)
-pip install orb-models
-```
-
-### Usage
-
-Specify the MLIP model when initializing SLICES:
+### Basic Encoding/Decoding
 
 ```python
 from slices.core import SLICES
 from pymatgen.core.structure import Structure
 
-# Use CHGNet for relaxation
-backend = SLICES(relax_model="chgnet")
-
-# Use MatGL for relaxation
-backend = SLICES(relax_model="matgl")
-
-# Use MatterSim for relaxation
-backend = SLICES(relax_model="mattersim")
-
-# Use ORBv3 for relaxation
-backend = SLICES(relax_model="orbv3")
-
-# Use M3GNet (default)
-backend = SLICES(relax_model="m3gnet")
-
-# Load structure and convert to SLICES
+# Load structure
 structure = Structure.from_file('examples/NdSiRu.cif')
+
+# Initialize with CHGNet
+backend = SLICES(relax_model="chgnet", fmax=0.2, steps=100)
+
+# Encode
 slices_string = backend.structure2SLICES(structure)
+print(f"SLICES: {slices_string}")
 
-# Reconstruct with selected MLIP model
+# Decode
 reconstructed, energy = backend.SLICES2structure(slices_string)
-print(f"Energy per atom: {energy} eV/atom")
+print(f"Energy: {energy:.4f} eV/atom")
+print(f"Formula: {reconstructed.formula}")
 ```
 
-### Model Comparison
-
-- **M3GNet**: Default model, well-integrated, may have TensorFlow version compatibility issues
-- **CHGNet**: Recommended alternative, charge-informed, good performance, well-tested
-- **MatGL**: Newer Materials Project model, improved accuracy
-- **MatterSim**: Microsoft's deep learning potential, automatically downloads pretrained model
-- **ORBv3**: Orbital Materials potential, supports multiple model variants (direct/conservative)
-
-### Advanced Usage
-
-**ORBv3 Model Selection:**
-ORBv3 supports multiple model variants. You can specify which one to use:
-
-```python
-from slices.mlip_relaxer import get_relaxer
-
-# Available ORBv3 models include:
-# - 'orb-v3-direct-inf-mpa' (default, infinite materials)
-# - 'orb-v3-conservative-inf-mpa' (conservative variant)
-# - 'orb-v3-direct-20-mpa' (20-atom cutoff)
-# - 'orb-v3-direct-inf-omat' (organic materials)
-# - 'orb-v3-direct-omol' (organic molecules)
-# And more...
-
-# Use a specific ORBv3 model
-backend = SLICES(relax_model="orbv3")  # Uses default
-```
-
-**Device Selection (for GPU acceleration):**
-```python
-# Use GPU if available (for MatterSim and ORBv3)
-backend = SLICES(relax_model="mattersim")  # Automatically detects device
-```
-
-### Notes
-
-- If a specified model is not installed, SLICES will fall back to M3GNet
-- Different models may produce slightly different relaxation results
-- CHGNet is recommended as a reliable alternative to M3GNet
-- MatterSim and ORBv3 automatically download pretrained models on first use
-- Model performance may vary depending on the material system
-- All models have been tested and verified to work correctly
-
----
-
-## Examples
-
-### Crystal to SLICES and SLICES to Crystal
-Convert a crystal structure to its SLICES string and reconstruct it.
+### Data Augmentation
 
 ```python
 from slices.core import SLICES
 from pymatgen.core.structure import Structure
 
-# Load crystal structure from file
-original_structure = Structure.from_file(filename='NdSiRu.cif')
-
-# Initialize SLICES with MLIP model (default: m3gnet)
-# Options: 'm3gnet', 'chgnet', 'matgl', 'mattersim', 'orbv3'
-backend = SLICES(relax_model="chgnet")  # Using CHGNet as example
-
-# Convert to SLICES string
-slices_NdSiRu = backend.structure2SLICES(original_structure)
-
-# Reconstruct crystal and get predicted energy
-reconstructed_structure, final_energy_per_atom = backend.SLICES2structure(slices_NdSiRu)
-
-print('SLICES string of NdSiRu is:', slices_NdSiRu)
-print('Reconstructed structure:', reconstructed_structure)
-print('Final energy per atom:', final_energy_per_atom, 'eV/atom')
-```
-
-### Augment SLICES and Canonicalize SLICES
-Generate augmented SLICES strings and reduce them to a canonical form.
-
-```python
-from slices.core import SLICES
-from pymatgen.core.structure import Structure
-
-# Load crystal structure
-original_structure = Structure.from_file(filename='Sr3Ru2O7.cif')
+structure = Structure.from_file('examples/Sr3Ru2O7.cif')
 backend = SLICES(graph_method='econnn')
 
 # Generate augmented SLICES
-slices_list = backend.structure2SLICESAug_atom_order(structure=original_structure, num=50)
+slices_list = backend.structure2SLICESAug_atom_order(structure=structure, num=50)
+
+# Get canonical forms
 canonical_slices = list(set(backend.get_canonical_SLICES(s) for s in slices_list))
-
-print('Unique Canonical SLICES:', len(canonical_slices))
+print(f"Unique canonical SLICES: {len(canonical_slices)}")
 ```
+
+### Custom Configuration
+
+```python
+# High-accuracy relaxation
+backend = SLICES(
+    relax_model="chgnet",
+    fmax=0.1,        # Tighter convergence
+    steps=200,       # More steps
+    optimizer="BFGS",
+    graph_method="crystalnn"
+)
+
+# Fast relaxation (for testing)
+backend = SLICES(
+    relax_model="chgnet",
+    fmax=0.5,        # Looser convergence
+    steps=50,        # Fewer steps
+    check_results=False
+)
+```
+
 ---
 
-## Documentation
-The official documentation is available at [Read the Docs](https://xiaohang007.github.io/SLICES/).
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**ImportError or ModuleNotFoundError:**
+```bash
+conda activate slices
+pip install -e . --force-reinstall
+```
+
+**Timeout Errors:**
+- Ensure you're using the latest codebase
+- Check system resources (CPU, memory)
+- Try reducing `steps` parameter
+
+**Memory Issues:**
+- Use smaller batch sizes: `--batch-size 5`
+- Test fewer samples: `--samples 10`
+- Close other applications
+
+**XTB Binary Issues:**
+- Verify binary is executable: `chmod +x src/slices/xtb_noring_nooutput_nostdout_noCN`
+- Check architecture: `file src/slices/xtb_noring_nooutput_nostdout_noCN`
+- See [XTB Binary Documentation](#xtb-binary-for-decoding) for rebuilding
+
+**MLIP Model Issues:**
+- Ensure model is installed: `pip install chgnet`
+- Check model compatibility with your Python version
+- Try a different model if one fails
+
+For more help, open an issue on [GitHub](https://github.com/xiaohang007/SLICES/issues).
 
 ---
 
-## Reproducing Benchmarks
-Refer to the [Benchmarks Guide](benchmark/benchmarks.md) for detailed instructions.
+## 📚 Documentation
+
+- **Official Documentation**: [Read the Docs](https://xiaohang007.github.io/SLICES/)
+- **API Reference**: Available in the documentation
+- **Benchmarks Guide**: [benchmark/benchmarks.md](benchmark/benchmarks.md)
 
 ---
 
-## Citation
+## 📄 Citation
 
-If you use SLICES, MatterGPT or SLICES-PLUS, please cite the following works:
+If you use SLICES, MatterGPT, or SLICES-PLUS, please cite:
 
 ```bibtex
 @article{xiao2023invertible,
@@ -837,30 +1143,94 @@ If you use SLICES, MatterGPT or SLICES-PLUS, please cite the following works:
 }
 
 @misc{wang2024slicespluscrystalrepresentationleveraging,
-      title={SLICES-PLUS: A Crystal Representation Leveraging Spatial Symmetry}, 
-      author={Baoning Wang and Zhiyuan Xu and Zhiyu Han and Qiwen Nie and Hang Xiao and Gang Yan},
-      year={2024},
-      eprint={2410.22828},
-      archivePrefix={arXiv},
-      primaryClass={physics.comp-ph},
-      url={https://arxiv.org/abs/2410.22828}, 
+  title={SLICES-PLUS: A Crystal Representation Leveraging Spatial Symmetry}, 
+  author={Baoning Wang and Zhiyuan Xu and Zhiyu Han and Qiwen Nie and Hang Xiao and Gang Yan},
+  year={2024},
+  eprint={2410.22828},
+  archivePrefix={arXiv},
+  primaryClass={physics.comp-ph},
+  url={https://arxiv.org/abs/2410.22828}
 }
 ```
 
 ---
 
-## Acknowledgement
-Special thanks to the open-source projects and developers that inspired this work:
-- [tobascco](https://github.com/peteboyd/tobascco)
-- [xtb](https://github.com/grimme-lab/xtb)
-- [m3gnet](https://github.com/materialsvirtuallab/m3gnet)
-- [chgnet](https://github.com/CederGroupHub/chgnet)
-- [molgpt](https://github.com/devalab/molgpt)
+## 🙏 Acknowledgement
+
+Special thanks to:
+- [tobascco](https://github.com/peteboyd/tobascco) - Graph theory implementation
+- [xtb](https://github.com/grimme-lab/xtb) - Extended Tight-Binding method
+- [m3gnet](https://github.com/materialsvirtuallab/m3gnet) - Materials Project MLIP
+- [chgnet](https://github.com/CederGroupHub/chgnet) - Charge-informed GNN
+- [molgpt](https://github.com/devalab/molgpt) - Molecular GPT inspiration
 
 ---
 
-## Contact and Support
+## 📧 Contact and Support
+
 - **Email**: [hangxiao@ln.edu.hk](mailto:hangxiao@ln.edu.hk)
 - **ResearchGate**: [Hang Xiao](https://www.researchgate.net/profile/Hang-Xiao-8)
-- **Start a Discussion**: [GitHub Discussions](https://github.com/xiaohang007/SLICES/discussions/categories/general)
+- **GitHub Discussions**: [Start a Discussion](https://github.com/xiaohang007/SLICES/discussions/categories/general)
+- **GitHub Issues**: [Report a Bug](https://github.com/xiaohang007/SLICES/issues)
 
+---
+
+## 📝 Quick Reference
+
+### Common Operations
+
+**Basic Encoding/Decoding:**
+```python
+from slices.core import SLICES
+from pymatgen.core.structure import Structure
+
+backend = SLICES(relax_model="chgnet")
+structure = Structure.from_file('structure.cif')
+
+# Encode
+slices = backend.structure2SLICES(structure)
+
+# Decode
+reconstructed, energy = backend.SLICES2structure(slices)
+```
+
+**Recommended Settings:**
+```python
+# High accuracy (slower)
+backend = SLICES(relax_model="chgnet", fmax=0.1, steps=200)
+
+# Balanced (default)
+backend = SLICES(relax_model="chgnet", fmax=0.2, steps=100)
+
+# Fast (for testing)
+backend = SLICES(relax_model="chgnet", fmax=0.5, steps=50)
+```
+
+**Available MLIP Models:**
+- `"m3gnet"` - Default, well-integrated
+- `"chgnet"` - ⭐ Recommended, fast and accurate
+- `"matgl"` - Newer Materials Project model
+- `"mattersim"` - Microsoft's potential
+- `"orbv3"` - Orbital Materials potential
+
+**Graph Methods:**
+- `"econnn"` - Default, general purpose
+- `"crystalnn"` - Complex coordination environments
+- `"brunnernn"` - Reciprocal space analysis
+- `"mininn"` - Simple distance-based
+
+**Key Files:**
+- `src/slices/core.py` - Main SLICES class
+- `src/slices/mlip_relaxer.py` - MLIP adapters
+- `src/slices/tobascco_net.py` - Graph theory backend
+- `src/slices/xtb_noring_nooutput_nostdout_noCN` - XTB binary (macOS)
+
+---
+
+<div align="center">
+
+**Made with ❤️ by the SLICES Team**
+
+[⬆ Back to Top](#simplified-line-input-crystal-encoding-system-slices)
+
+</div>
