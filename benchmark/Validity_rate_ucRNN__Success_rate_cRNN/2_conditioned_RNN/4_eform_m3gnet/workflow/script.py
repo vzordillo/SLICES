@@ -12,6 +12,8 @@ from contextlib import contextmanager
 from functools import wraps
 import json
 import signal
+import threading
+import platform
 tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -20,18 +22,35 @@ os.environ["OMP_NUM_THREADS"] = "1"
 with open('./chemPotMP.json') as handle:
     chemPot = json.loads(handle.read())
 def function_timeout(seconds: int):
-    """Wrapper of Decorator to pass arguments"""
+    """Wrapper of Decorator to pass arguments - Cross-platform implementation"""
     def decorator(func):
         @contextmanager
         def time_limit(seconds_):
+            # Use SIGALRM on Linux (Unix systems that support it)
+            # Use threading.Timer on macOS and Windows
+            if platform.system() != 'Darwin' and hasattr(signal, 'SIGALRM'):
+                # Linux/Unix with SIGALRM support
             def signal_handler(signum, frame):  # noqa
-                raise SystemExit("Timed out!")  #TimeoutException
+                    raise SystemExit("Timed out!")
             signal.signal(signal.SIGALRM, signal_handler)
             signal.alarm(seconds_)
             try:
                 yield
             finally:
                 signal.alarm(0)
+            else:
+                # macOS and Windows: use threading.Timer
+                timer = None
+                def timeout_handler():
+                    raise SystemExit("Timed out!")
+                
+                timer = threading.Timer(seconds_, timeout_handler)
+                timer.start()
+                try:
+                    yield
+                finally:
+                    if timer:
+                        timer.cancel()
         @wraps(func)
         def wrapper(*args, **kwargs):
             with time_limit(seconds):

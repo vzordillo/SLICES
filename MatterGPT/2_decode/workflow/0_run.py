@@ -3,6 +3,7 @@
 # xiaohang07@live.cn
 import os,sys,json,gc,math
 import subprocess
+import shutil
 def run_script(timeout_sec):
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = "1"
@@ -10,10 +11,11 @@ def run_script(timeout_sec):
     env["OPENBLAS_NUM_THREADS"] = "1"
     try:
         result = subprocess.run(
-            ["timeout", f"{timeout_sec}s", "python", "-B", "script.py"],
+            ["python", "-B", "script.py"],
             capture_output=True,
             check=True,
-            env=env
+            env=env,
+            timeout=timeout_sec
         )
         return result.stdout
     except subprocess.TimeoutExpired:
@@ -38,4 +40,6 @@ for i in range(len(slices_split)):
     with open('temp_splited.csv', 'w') as f:
         f.writelines(slices_split[i])
     run_script(batch_size * 120)
-os.system("mv result2.csv result.csv")
+if os.path.exists("result2.csv"):
+    import shutil
+    shutil.move("result2.csv", "result.csv")

@@ -57,7 +57,14 @@ def splitRun(filename,threads,skip_header=False):
         skip_header (bool, optional): 是否跳过任务列表的头部。默认值为False。
     """
     # 清理之前的任务目录和结果
-    os.system('rm -rf job_* structures_ori_opt ./result.csv')
+    for pattern in ['job_*', 'structures_ori_opt']:
+        for path in glob.glob(pattern):
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            elif os.path.isfile(path):
+                os.remove(path)
+    if os.path.exists('./result.csv'):
+        os.remove('./result.csv')
     
     # 读取任务列表
     with open(filename, 'r') as f:
@@ -90,7 +97,8 @@ def splitRun(filename,threads,skip_header=False):
     for i in range(len(cifs_split)):
         job_dir = f'job_{i}'
         os.mkdir(job_dir)
-        os.system('cp -r ./workflow/. ' + job_dir)
+        if os.path.exists('./workflow'):
+            shutil.copytree('./workflow', job_dir, dirs_exist_ok=True)
         temp_json_path = os.path.join(job_dir, 'temp.json')
         with open(temp_json_path, 'w') as f:
             json.dump(cifs_split[i], f)
@@ -107,7 +115,16 @@ def splitRun(filename,threads,skip_header=False):
 
 def splitRun_csv(filename,threads,skip_header=False):
     # 清理之前的任务目录和结果
-    os.system('rm -rf job_* structures_ori_opt ./result.csv')
+    import glob
+    import shutil
+    for pattern in ['job_*', 'structures_ori_opt']:
+        for path in glob.glob(pattern):
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            elif os.path.isfile(path):
+                os.remove(path)
+    if os.path.exists('./result.csv'):
+        os.remove('./result.csv')
     
     # 读取任务列表，并排除空行
     with open(filename, 'r') as f:
@@ -133,7 +150,8 @@ def splitRun_csv(filename,threads,skip_header=False):
     for i in range(len(cifs_split)):
         job_dir = f'job_{i}'
         os.mkdir(job_dir)
-        os.system('cp -r ./workflow/. ' + job_dir)
+        if os.path.exists('./workflow'):
+            shutil.copytree('./workflow', job_dir, dirs_exist_ok=True)
         temp_csv_path = os.path.join(job_dir, 'temp.csv')
         with open(temp_csv_path, 'w') as f:
             f.writelines(cifs_split[i])
@@ -150,7 +168,14 @@ def splitRun_csv(filename,threads,skip_header=False):
 
 def splitRun_sample(threads=8,sample_size=8000):
     config = configparser.ConfigParser()
-    os.system('rm -rf job_* structures_ori_opt ./result.csv')
+    for pattern in ['job_*', 'structures_ori_opt']:
+        for path in glob.glob(pattern):
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            elif os.path.isfile(path):
+                os.remove(path)
+    if os.path.exists('./result.csv'):
+        os.remove('./result.csv')
     config["Settings"] = {'sample_size':int(sample_size/threads) }
     with open('./workflow/settings.ini', 'w') as configfile:
         config.write(configfile)

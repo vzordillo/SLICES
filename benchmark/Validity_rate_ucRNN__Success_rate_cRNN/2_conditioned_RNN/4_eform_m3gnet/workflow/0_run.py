@@ -2,6 +2,7 @@
 # Hang Xiao 2023.04
 # xiaohang07@live.cn
 import os,sys,json,gc,math
+import subprocess
 
 
 
@@ -21,4 +22,13 @@ sciles_split=list(split_list(sciles_list,math.ceil(len(sciles_list)/batch_size))
 for i in range(len(sciles_split)):
     with open('temp_splited.csv', 'w') as f:
         f.writelines(sciles_split[i])
-    os.system("timeout "+str(batch_size* 1)+"s python -B script.py")
+    try:
+        subprocess.run(
+            ["python", "-B", "script.py"],
+            timeout=batch_size * 1,
+            check=True
+        )
+    except subprocess.TimeoutExpired:
+        print(f"Script timed out after {batch_size * 1} seconds")
+    except subprocess.CalledProcessError as e:
+        print(f"Script failed with error: {e}")
