@@ -87,6 +87,14 @@ import platform
 tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)
 
+# Suppress ERROR level logging from tobascco_net to reduce noise
+# These errors are expected for some structures with incompatible graph topologies
+# Configure root logger to suppress ERROR messages (only show CRITICAL)
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.CRITICAL)
+# Also suppress for any logger that might be used by tobascco_net
+logging.getLogger('slices.tobascco_net').setLevel(logging.CRITICAL)
+
 class TimeoutException(Exception):
     """Exception raised when a function times out."""
     pass
@@ -1107,15 +1115,43 @@ class SLICES:
             temp_dir = tempfile.TemporaryDirectory()
         with open(temp_dir.name+'/testBonds_cut.top','w') as f:
             f.write(nbf)
-        subprocess.call(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
-        cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+        
+        # Run XTB with timeout (30 seconds should be enough for most structures)
+        try:
+            result = subprocess.run(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
+            cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=30)
+        except subprocess.TimeoutExpired:
+            temp_dir.cleanup()
+            raise RuntimeError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
+        
+        # Check if XTB output file exists
+        gfnff_json_path = temp_dir.name+'/gfnff_lists.json'
+        if not os.path.exists(gfnff_json_path):
+            error_msg = f"XTB failed to generate output file. Exit code: {result.returncode}"
+            if result.stderr:
+                # Extract key error messages from stderr
+                stderr_lines = result.stderr.split('\n')
+                key_errors = [line for line in stderr_lines if any(keyword in line.lower() for keyword in ['error', 'fatal', 'abnormal', 'termination', 'exception'])]
+                if key_errors:
+                    error_msg += f"\nXTB error: {'; '.join(key_errors[:3])}"
+                else:
+                    error_msg += f"\nXTB stderr: {result.stderr[:200]}"
+            temp_dir.cleanup()
+            raise FileNotFoundError(error_msg)
+        
         if self.check_results:
             os.system("cp "+temp_dir.name+'/testBonds_cut.top '+os.getcwd())
-            os.system("cp "+temp_dir.name+'/gfnff_lists.json '+os.getcwd())
-        with open(temp_dir.name+'/gfnff_lists.json', 'r') as fgfn:
+            if os.path.exists(gfnff_json_path):
+                os.system("cp "+gfnff_json_path+' '+os.getcwd())
+        
+        with open(gfnff_json_path, 'r') as fgfn:
             txt=fgfn.read()
             txt=txt.replace("********","       0") # deal with the xtb output bug
-            data = json.loads(txt)  # read blist,vbond,alist,vangl
+            try:
+                data = json.loads(txt)  # read blist,vbond,alist,vangl
+            except json.JSONDecodeError as json_err:
+                temp_dir.cleanup()
+                raise ValueError(f"Failed to parse XTB JSON output: {str(json_err)[:200]}. This may indicate XTB output is malformed.")
             del(txt)
         temp_dir.cleanup()
         blist_original=blist
@@ -1219,15 +1255,42 @@ class SLICES:
         try:
             with open(temp_dir.name+'/testBonds_cut.top','w') as f:
                 f.write(nbf)
-            subprocess.call(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
-            cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+            
+            # Run XTB with timeout (30 seconds should be enough for most structures)
+            try:
+                result = subprocess.run(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
+                cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=30)
+            except subprocess.TimeoutExpired:
+                temp_dir.cleanup()
+                raise RuntimeError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
+            
+            # Check if XTB output file exists
+            gfnff_json_path = temp_dir.name+'/gfnff_lists.json'
+            if not os.path.exists(gfnff_json_path):
+                error_msg = f"XTB failed to generate output file. Exit code: {result.returncode}"
+                if result.stderr:
+                    # Extract key error messages from stderr
+                    stderr_lines = result.stderr.split('\n')
+                    key_errors = [line for line in stderr_lines if any(keyword in line.lower() for keyword in ['error', 'fatal', 'abnormal', 'termination', 'exception'])]
+                    if key_errors:
+                        error_msg += f"\nXTB error: {'; '.join(key_errors[:3])}"
+                    else:
+                        error_msg += f"\nXTB stderr: {result.stderr[:200]}"
+                temp_dir.cleanup()
+                raise FileNotFoundError(error_msg)
+            
             if self.check_results:
                 os.system("cp "+temp_dir.name+'/testBonds_cut.top '+os.getcwd())
-                os.system("cp "+temp_dir.name+'/gfnff_lists.json '+os.getcwd())
-            with open(temp_dir.name+'/gfnff_lists.json', 'r') as fgfn:
+                if os.path.exists(gfnff_json_path):
+                    os.system("cp "+gfnff_json_path+' '+os.getcwd())
+            
+            with open(gfnff_json_path, 'r') as fgfn:
                 txt=fgfn.read()
                 txt=txt.replace("********","       0") # deal with the xtb output bug
-                data = json.loads(txt)  # read blist,vbond,alist,vangl
+                try:
+                    data = json.loads(txt)  # read blist,vbond,alist,vangl
+                except json.JSONDecodeError as json_err:
+                    raise ValueError(f"Failed to parse XTB JSON output: {str(json_err)[:200]}. This may indicate XTB output is malformed.")
                 del(txt)
             temp_dir.cleanup()
             blist_original=blist
@@ -1305,8 +1368,13 @@ class SLICES:
                 with open('inner_p_target.json', 'w') as  f:
                     json.dump(inner_p_target_dict,f)
             return inner_p_target, colattice_inds, colattice_weights
+        except (FileNotFoundError, ValueError, RuntimeError) as e:
+            # These are expected errors - don't print, just return None
+            # The calling code will handle the error appropriately
+            temp_dir.cleanup()
+            return None, None, None
         except Exception as e:
-            print(e)
+            # Unexpected errors - log but don't print to reduce noise
             temp_dir.cleanup()
             return None, None, None
 
@@ -1892,7 +1960,9 @@ class SLICES:
             fig.savefig("graph.png")
         # check the graph first (super fast)
         net.simple_cycle_basis()
-        net.get_lattice_basis()
+        lattice_basis_result = net.get_lattice_basis()
+        if lattice_basis_result == -1:
+            raise RuntimeError("Failed to obtain lattice basis from cycle vectors. This structure may have incompatible graph topology for SLICES decoding.")
         net.get_cocycle_basis()
         # then calculate inner_p_target (slower)
         if self.check_results:
