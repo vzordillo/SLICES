@@ -21,4 +21,13 @@ slices_split=list(split_list(slices_list,math.ceil(len(slices_list)/batch_size))
 for i in range(len(slices_split)):
     with open('temp_splited.csv', 'w') as f:
         f.writelines(slices_split[i])
-    os.system("timeout "+str(batch_size* 8)+"s python -B script.py")
+    try:
+        subprocess.run(
+            ["python", "-B", "script.py"],
+            timeout=batch_size * 8,
+            check=True
+        )
+    except subprocess.TimeoutExpired:
+        print(f"Script timed out after {batch_size * 8} seconds")
+    except subprocess.CalledProcessError as e:
+        print(f"Script failed with error: {e}")

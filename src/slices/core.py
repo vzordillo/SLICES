@@ -7,7 +7,48 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["XTB_MOD_PATH"] = os.path.abspath(os.path.dirname(__file__))+"/xtb_noring_nooutput_nostdout_noCN"
+# Use the custom XTB binary from xiaohang007/xtb repository
+# This is a modified version with specific flags (noring, nooutput, nostdout, noCN)
+# For macOS users: You may need to build from source from https://github.com/xiaohang007/xtb
+xtb_custom = os.path.abspath(os.path.dirname(__file__))+"/xtb_noring_nooutput_nostdout_noCN"
+if os.path.exists(xtb_custom):
+    # Check if binary is executable and compatible
+    import platform
+    import stat
+    is_executable = os.access(xtb_custom, os.X_OK)
+    
+    # On macOS, check if it's a Linux binary (won't work natively)
+    if platform.system() == 'Darwin':
+        try:
+            import subprocess
+            # Try to check file type
+            result = subprocess.run(['file', xtb_custom], capture_output=True, text=True)
+            if 'Linux' in result.stdout and 'x86-64' in result.stdout:
+                # Linux binary on macOS - try to use system XTB as fallback
+                import shutil
+                system_xtb = shutil.which("xtb")
+                if system_xtb:
+                    os.environ["XTB_MOD_PATH"] = system_xtb
+                else:
+                    os.environ["XTB_MOD_PATH"] = xtb_custom
+                    print("WARNING: Using Linux-only XTB binary on macOS. Decoding may fail.")
+                    print("Please build XTB from https://github.com/xiaohang007/xtb for macOS compatibility.")
+                # Note: The system XTB may not have the same flags, so decoding might still fail
+            else:
+                os.environ["XTB_MOD_PATH"] = xtb_custom
+        except:
+            os.environ["XTB_MOD_PATH"] = xtb_custom
+    else:
+        os.environ["XTB_MOD_PATH"] = xtb_custom
+else:
+    # Fallback to system XTB
+    import shutil
+    system_xtb = shutil.which("xtb")
+    if system_xtb:
+        os.environ["XTB_MOD_PATH"] = system_xtb
+        print("WARNING: Using system XTB instead of custom binary. Some features may not work.")
+    else:
+        os.environ["XTB_MOD_PATH"] = "xtb"  # Hope it's in PATH
 os.environ["PYTHONWARNINGS"]="ignore" 
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.core.structure import Structure
@@ -41,16 +82,24 @@ from functools import wraps
 import itertools
 import copy,sys
 import m3gnet.models
+import threading
+import platform
 tf.config.threading.set_inter_op_parallelism_threads(1)
 tf.config.threading.set_intra_op_parallelism_threads(1)
+
+class TimeoutException(Exception):
+    """Exception raised when a function times out."""
+    pass
+
 def function_timeout(seconds: int):
     """Define a decorator that sets a time limit for a function call.
+    Cross-platform implementation that works on Linux, macOS, and Windows.
 
     Args:
         seconds (int): Time limit.
 
     Raises:
-        SystemExit: Timeout exception.
+        TimeoutException: Timeout exception.
 
     Returns:
         Decorator: Timeout Decorator.
@@ -58,14 +107,31 @@ def function_timeout(seconds: int):
     def decorator(func):
         @contextmanager
         def time_limit(seconds_):
-            def signal_handler(signum, frame):  # noqa
-                raise TimeoutException("Timed out!")  #TimeoutException
-            signal.signal(signal.SIGALRM, signal_handler)
-            signal.alarm(seconds_)
-            try:
-                yield
-            finally:
-                signal.alarm(0)
+            # Use SIGALRM on Linux (Unix systems that support it)
+            # Use threading.Timer on macOS and Windows
+            if platform.system() != 'Darwin' and hasattr(signal, 'SIGALRM'):
+                # Linux/Unix with SIGALRM support
+                def signal_handler(signum, frame):  # noqa
+                    raise TimeoutException("Timed out!")
+                signal.signal(signal.SIGALRM, signal_handler)
+                signal.alarm(seconds_)
+                try:
+                    yield
+                finally:
+                    signal.alarm(0)
+            else:
+                # macOS and Windows: use threading.Timer
+                timer = None
+                def timeout_handler():
+                    raise TimeoutException("Timed out!")
+                
+                timer = threading.Timer(seconds_, timeout_handler)
+                timer.start()
+                try:
+                    yield
+                finally:
+                    if timer:
+                        timer.cancel()
         @wraps(func)
         def wrapper(*args, **kwargs):
             with time_limit(seconds):
@@ -89,10 +155,12 @@ class SLICES:
                 to generate labeled quotient graphs. Defaults to 'econnn'.
             check_results (bool, optional): Flag to indicate whether to output intermediate results for 
                 debugging purposes. Defaults to False.
-            optimizer (str, optional): Optimizer used in M3GNet_IAP optimization. Defaults to "BFGS".
+            optimizer (str, optional): Optimizer used in MLIP optimization. Defaults to "BFGS".
             fmax (float, optional): Convergence criterion of maximum allowable force on each atom. 
                 Defaults to 0.2.
             steps (int, optional): Max steps. Defaults to 100.
+            relax_model (str, optional): MLIP model to use for relaxation. Options: 'm3gnet', 'matgl', 
+                'chgnet', 'mattersim', 'orbv3'. Defaults to "m3gnet".
         """        
         tf.keras.backend.clear_session()
         gc.collect()
@@ -109,15 +177,25 @@ class SLICES:
         self.relax_model=relax_model
         self.space_group_num = None
 
-        # copy m3gnet model file?
-        if self.relax_model=="m3gnet":
-            model_path=m3gnet.models.__path__[0]+'/MP-2021.2.8-EFS/'
-            if not os.path.isdir(model_path):
-                data_path=os.path.dirname(__file__)+'/MP-2021.2.8-EFS'
-                subprocess.call(['mkdir','-p', model_path])
-                subprocess.call(['cp',data_path+'/checkpoint',data_path+'/m3gnet.data-00000-of-00001',\
-                data_path+'/m3gnet.index',data_path+'/m3gnet.json',model_path])
-            self.relaxer = Relaxer(optimizer=optimizer)
+        # Initialize MLIP relaxer based on relax_model parameter
+        from slices.mlip_relaxer import get_relaxer
+        try:
+            if self.relax_model == "m3gnet":
+                # Copy m3gnet model file if needed
+                model_path=m3gnet.models.__path__[0]+'/MP-2021.2.8-EFS/'
+                if not os.path.isdir(model_path):
+                    data_path=os.path.dirname(__file__)+'/MP-2021.2.8-EFS'
+                    subprocess.call(['mkdir','-p', model_path])
+                    subprocess.call(['cp',data_path+'/checkpoint',data_path+'/m3gnet.data-00000-of-00001',\
+                    data_path+'/m3gnet.index',data_path+'/m3gnet.json',model_path])
+                self.relaxer = get_relaxer("m3gnet", optimizer=optimizer)
+            else:
+                # Use unified relaxer interface for other models
+                self.relaxer = get_relaxer(self.relax_model, optimizer=optimizer)
+        except (ImportError, ValueError) as e:
+            warnings.warn(f"Failed to initialize {self.relax_model} relaxer: {e}. Falling back to m3gnet.")
+            self.relax_model = "m3gnet"
+            self.relaxer = get_relaxer("m3gnet", optimizer=optimizer)
 
     @contextmanager
     def suppress_output(self):
@@ -1021,7 +1099,12 @@ class SLICES:
             list: Colattice weights.
         """
         nbf, blist = self.get_nbf_blist()
-        temp_dir = tempfile.TemporaryDirectory(dir="/dev/shm")
+        # Use /dev/shm on Linux, system temp on macOS/Windows
+        import platform
+        if platform.system() == 'Linux' and os.path.exists("/dev/shm"):
+            temp_dir = tempfile.TemporaryDirectory(dir="/dev/shm")
+        else:
+            temp_dir = tempfile.TemporaryDirectory()
         with open(temp_dir.name+'/testBonds_cut.top','w') as f:
             f.write(nbf)
         subprocess.call(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
@@ -1127,7 +1210,12 @@ class SLICES:
             list: Colattice weights.
         """
         nbf, blist = self.get_nbf_blist()
-        temp_dir = tempfile.TemporaryDirectory(dir="/dev/shm")
+        # Use /dev/shm on Linux, system temp on macOS/Windows
+        import platform
+        if platform.system() == 'Linux' and os.path.exists("/dev/shm"):
+                                    temp_dir = tempfile.TemporaryDirectory(dir="/dev/shm")
+        else:
+            temp_dir = tempfile.TemporaryDirectory()
         try:
             with open(temp_dir.name+'/testBonds_cut.top','w') as f:
                 f.write(nbf)
@@ -1220,6 +1308,7 @@ class SLICES:
         except Exception as e:
             print(e)
             temp_dir.cleanup()
+            return None, None, None
 
     def convert_graph(self):
         """Convert self.edge_indices, self.to_jimages into networkx format.
@@ -1772,7 +1861,7 @@ class SLICES:
          calculated with modified GFN-FF predicted geometry 
         (2) non-barycentric net embedding that matches bond lengths and bond angles predicted with
          modified GFN-FF
-        (3) non-barycentric net embedding undergone cell optimization using M3GNet IAPs
+        (3) non-barycentric net embedding undergone cell optimization using MLIP models
         if cell optimization failed, then output (1) and (2)
 
         Args:
@@ -1810,6 +1899,10 @@ class SLICES:
             inner_p_target, colattice_inds, colattice_weights = self.get_inner_p_target_debug(bond_scaling)
         else:
             inner_p_target, colattice_inds, colattice_weights = self.get_inner_p_target(bond_scaling)
+        
+        # Handle case where get_inner_p_target fails (e.g., XTB not available)
+        if inner_p_target is None or colattice_inds is None or colattice_weights is None:
+            raise RuntimeError("Failed to compute inner product target. This may be due to XTB binary not being available or compatible with your system. Please ensure XTB is properly installed and executable.")
         uncovered_pair = self.get_uncovered_pair(net.graph)
         uncovered_pair_lj = self.get_uncovered_pair_lj(uncovered_pair)
         covered_pair_lj = self.get_covered_pair_lj()
@@ -1923,7 +2016,7 @@ class SLICES:
         """
         Convert edge_indices, to_jimages and atom_types stored in the InvCryRep instance back to 
         a pymatgen structure object: non-barycentric net embedding undergone cell optimization 
-        using M3GNet IAPs.
+        using MLIP models.
         If cell optimization failed, then raise error.
         """
         structures,final_energy_per_atom=self.to_structures(bond_scaling,delta_theta,delta_x,lattice_shrink,lattice_expand,angle_weight,vbond_param_ave_covered,vbond_param_ave,repul)
@@ -1946,15 +2039,15 @@ class SLICES:
 
     @function_timeout(seconds=360)
     def relax(self,struc):
-        """Cell optimization using CHGNET/M3GNET IAPs (time limit is set to 60 seconds 
-        to prevent buggy cell optimization that takes fovever to finish).
+        """Cell optimization using MLIP models (time limit is set to 360 seconds 
+        to prevent buggy cell optimization that takes forever to finish).
 
         Args:
             struc (Structure): A pymatgen Structure object.
 
         Returns:
-            Structure: Optimized pymatgen Structure object with CHGNET/M3GNET IAP.
-            float: Energy per atom predicted with CHGNET/M3GNET.
+            Structure: Optimized pymatgen Structure object with selected MLIP model.
+            float: Energy per atom predicted with the MLIP model.
         """
         if self.check_results:
             relax_results = self.relaxer.relax(struc,fmax=self.fmax,steps=self.steps)
@@ -1967,15 +2060,15 @@ class SLICES:
 
     @function_timeout(seconds=720)
     def relax_large_cell1(self,struc):
-        """Cell optimization using CHGNET/M3GNET IAPs (time limit is set to 360 seconds 
-        to prevent buggy cell optimization that takes fovever to finish).
+        """Cell optimization using MLIP models (time limit is set to 720 seconds 
+        to prevent buggy cell optimization that takes forever to finish).
 
         Args:
             struc (Structure): A pymatgen Structure object.
 
         Returns:
-            Structure: Optimized pymatgen Structure object with CHGNET/M3GNET IAP.
-            float: Energy per atom predicted with CHGNET/M3GNET.
+            Structure: Optimized pymatgen Structure object with selected MLIP model.
+            float: Energy per atom predicted with the MLIP model.
         """
         if self.check_results:
             relax_results = self.relaxer.relax(struc,fmax=self.fmax,steps=self.steps)
@@ -1988,22 +2081,22 @@ class SLICES:
 
     @function_timeout(seconds=2000)
     def relax_large_cell2(self,struc):
-        """Cell optimization using CHGNET/M3GNET IAPs (time limit is set to 1000 seconds 
-        to prevent buggy cell optimization that takes fovever to finish).
+        """Cell optimization using MLIP models (time limit is set to 2000 seconds 
+        to prevent buggy cell optimization that takes forever to finish).
 
         Args:
             struc (Structure): A pymatgen Structure object.
 
         Returns:
-            Structure: Optimized pymatgen Structure object with CHGNET/M3GNET IAP.
+            Structure: Optimized pymatgen Structure object with selected MLIP model.
 
-            float: Energy per atom predicted with CHGNET/M3GNET.
+            float: Energy per atom predicted with the MLIP model.
         """
         if self.check_results:
-            relax_results = self.relaxer.relax(struc)
+            relax_results = self.relaxer.relax(struc, fmax=self.fmax, steps=self.steps)
         else:
             with self.suppress_output():
-                relax_results = self.relaxer.relax(struc)
+                relax_results = self.relaxer.relax(struc, fmax=self.fmax, steps=self.steps)
         final_structure = relax_results['final_structure']
         final_energy_per_atom = float(relax_results['trajectory'].energies[-1] / len(struc))
         return final_structure,final_energy_per_atom
