@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 # Hang Xiao 2023.04
 # xiaohang07@live.cn
+
+# ============================================================================
+# SECTION 1: Imports and Environment Configuration
+# ============================================================================
 import os,subprocess,random,warnings
 os.environ["CUDA_VISIBLE_DEVICES"]=""
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -98,6 +102,10 @@ root_logger = logging.getLogger()
 root_logger.setLevel(logging.CRITICAL)
 # Also suppress for any logger that might be used by tobascco_net
 logging.getLogger('slices.tobascco_net').setLevel(logging.CRITICAL)
+
+# ============================================================================
+# SECTION 2: Exception Classes
+# ============================================================================
 
 class TimeoutException(Exception):
     """Exception raised when a function times out."""
@@ -1032,6 +1040,10 @@ class SLICES:
         
         return atom_types, np.array(edge_indices), np.array(to_jimages), space_group_number
 
+
+# ============================================================================
+# SECTION 8: SLICES Class - XTB Integration
+# ============================================================================
 
     def get_nbf_blist(self):
         """ (1) Get nbf(neighbor list with atom types for xtb_mod).
