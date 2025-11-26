@@ -1,0 +1,39 @@
+WARNING:tensorflow:From /opt/miniconda3/envs/slices/lib/python3.11/site-packages/tensorflow/python/util/deprecation.py:588: calling function (from tensorflow.python.eager.polymorphic_function.polymorphic_function) with experimental_relax_shapes is deprecated and will be removed in a future version.
+Instructions for updating:
+experimental_relax_shapes is deprecated, use reduce_retracing instead
+================================================================================
+SLICES Functionality Test Suite (Memory-Efficient)
+================================================================================
+Dataset: data/mp20/test.csv
+Number of samples: 10
+MLIP models to test: chgnet
+Batch size: 5
+
+Loading dataset indices...
+  ✓ Loaded 9046 structures from dataset
+  ✓ Selected 10 random samples for testing
+
+Testing with CHGNET...
+--------------------------------------------------------------------------------
+CHGNet v0.3.0 initialized with 412,525 parameters
+CHGNet will run on mps
+  ✓ CHGNET backend initialized
+  Processed batch 1 (5/10 structures)... (Success: 4)
+  Processed batch 2 (10/10 structures)... (Success: 7)
+
+  CHGNET Results:
+    Encoding success rate: 10/10 (100.0%)
+    Decoding success rate: 10/10 (100.0%)
+    Round-trip success rate: 7/10 (70.0%)
+    Average energy per atom: -5.0161 eV/atom
+
+================================================================================
+Overall Test Summary
+================================================================================
+Total tests: 10
+Encoding success: 10/10 (100.0%)
+Decoding success: 10/10 (100.0%)
+Round-trip success: 7/10 (70.0%)
+
+================================================================================
+⚠ 7/10 tests passed (70.0%)

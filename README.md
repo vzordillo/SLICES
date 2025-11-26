@@ -121,7 +121,8 @@ print(f"Energy: {energy:.4f} eV/atom")
 7. [Examples](#-examples)
 8. [Troubleshooting](#-troubleshooting)
 9. [Documentation](#-documentation)
-10. [Citation](#-citation)
+10. [Developer Guide](#-developer-guide)
+11. [Citation](#-citation)
 
 ---
 
@@ -165,6 +166,8 @@ conda activate slices
 # Install core dependencies
 pip install tensorflow-cpu==2.13.0
 pip install --no-deps m3gnet
+# For TensorFlow 2.16+ with Keras 3, install tf_keras for M3GNet compatibility:
+# pip install tf_keras
 pip install smact==2.5.5 ase==3.22.1 pymatgen==2024.8.9
 pip install scipy==1.13.0 scikit-learn==1.3.1 numpy==1.26.4
 
@@ -218,6 +221,8 @@ conda activate slices
 
 # Install dependencies
 pip install tensorflow-cpu==2.13.0 --no-deps m3gnet
+# For TensorFlow 2.16+ with Keras 3, install tf_keras for M3GNet compatibility:
+# pip install tf_keras
 pip install smact==2.5.5 ase==3.22.1 pymatgen==2024.8.9
 pip install scipy==1.13.0 scikit-learn==1.3.1 numpy==1.26.4
 
@@ -482,6 +487,7 @@ backend = SLICES(
     steps=100
 )
 ```
+> **Note**: M3GNet requires Keras 2, but SLICES automatically handles Keras 3 compatibility. If you encounter errors, install `tf_keras`: `pip install tf_keras`
 
 **CHGNet (Recommended):**
 ```python
@@ -527,14 +533,15 @@ backend = SLICES(
 
 | Feature | M3GNet | CHGNet | MatGL | MatterSim | ORBv3 |
 |---------|--------|--------|-------|-----------|-------|
-| **Installation** | Included | `pip install chgnet` | `pip install matgl` | `pip install mattersim` | `pip install orb-models` |
+| **Installation** | Included (+ `tf_keras` for Keras 3) | `pip install chgnet` | `pip install matgl` | `pip install mattersim` | `pip install orb-models` |
 | **Speed** | Medium | Fast | Medium | Fast | Medium |
 | **Accuracy** | Good | Excellent | Excellent | Good | Excellent |
 | **Stability** | Good | Excellent | Good | Good | Good |
 | **GPU Support** | Limited | Yes | Yes | Yes | Yes |
+| **Keras 3 Compatible** | ✅ (with `tf_keras`) | ✅ Native | ✅ Native | ✅ Native | ✅ Native |
 | **Recommended** | ⭐ | ⭐⭐⭐ | ⭐⭐ | ⭐⭐ | ⭐⭐ |
 
-**Recommendation:** Use **CHGNet** for best balance of speed, accuracy, and stability.
+**Recommendation:** Use **CHGNet** for best balance of speed, accuracy, and stability. **M3GNet** works well but requires `tf_keras` for Keras 3 compatibility (automatically handled by SLICES).
 
 ---
 
@@ -676,6 +683,9 @@ pip install chgnet      # Recommended
 pip install matgl       # Newer Materials Project model
 pip install mattersim   # Microsoft's potential
 pip install orb-models  # Orbital Materials potential
+
+# For M3GNet with Keras 3 compatibility (required for TensorFlow 2.16+)
+pip install tf_keras    # Legacy Keras 2 support for M3GNet
 ```
 
 ### Usage Examples
@@ -687,7 +697,7 @@ from pymatgen.core.structure import Structure
 structure = Structure.from_file('examples/NdSiRu.cif')
 
 # Test different MLIP models
-models = ["chgnet", "matgl", "mattersim", "orbv3"]
+models = ["m3gnet", "chgnet", "matgl", "mattersim", "orbv3"]
 
 for model in models:
     backend = SLICES(relax_model=model, fmax=0.2, steps=100)
@@ -707,6 +717,30 @@ for model in models:
 ```python
 backend = SLICES(relax_model="chgnet", fmax=0.2, steps=100)
 ```
+
+#### M3GNet
+
+- **Package**: `m3gnet`
+- **Features**: Materials Project model, TensorFlow-based, well-integrated
+- **Use Case**: Default model, good balance of speed and accuracy
+- **⚠️ Keras 3 Compatibility**: M3GNet requires Keras 2, but SLICES automatically handles Keras 3 compatibility
+
+```python
+backend = SLICES(relax_model="m3gnet", optimizer="BFGS", fmax=0.2, steps=100)
+```
+
+**Keras 3 Compatibility Workaround:**
+
+M3GNet was built for Keras 2, but SLICES includes an automatic workaround for Keras 3 environments:
+
+1. **Automatic**: The code automatically sets `TF_USE_LEGACY_KERAS=1` and uses `tf_keras` if available
+2. **Installation**: If you encounter errors, install `tf_keras`:
+   ```bash
+   pip install tf_keras
+   ```
+3. **How it works**: SLICES patches TensorFlow to use legacy Keras 2 (`tf_keras`) before M3GNet imports, ensuring compatibility
+
+**Note**: If you're using TensorFlow 2.13 or earlier, M3GNet should work without `tf_keras`. For TensorFlow 2.16+ with Keras 3, `tf_keras` is required.
 
 #### MatGL
 
@@ -1100,9 +1134,22 @@ pip install -e . --force-reinstall
 - See [XTB Binary Documentation](#xtb-binary-for-decoding) for rebuilding
 
 **MLIP Model Issues:**
-- Ensure model is installed: `pip install chgnet`
-- Check model compatibility with your Python version
-- Try a different model if one fails
+
+- **M3GNet Keras 3 Compatibility Error:**
+  ```
+  File format not supported: Keras 3 only supports V3 `.keras` and `.weights.h5` files
+  ```
+  **Solution**: Install `tf_keras` for legacy Keras 2 support:
+  ```bash
+  pip install tf_keras
+  ```
+  SLICES automatically uses `tf_keras` when available. The workaround is transparent - no code changes needed.
+
+- **General MLIP Issues:**
+  - Ensure model is installed: `pip install chgnet` (or `m3gnet`, `matgl`, etc.)
+  - Check model compatibility with your Python version
+  - Try a different model if one fails (CHGNet is recommended as most compatible)
+  - For M3GNet specifically, ensure TensorFlow is installed: `pip install tensorflow` or `tensorflow-cpu`
 
 For more help, open an issue on [GitHub](https://github.com/xiaohang007/SLICES/issues).
 
@@ -1112,7 +1159,26 @@ For more help, open an issue on [GitHub](https://github.com/xiaohang007/SLICES/i
 
 - **Official Documentation**: [Read the Docs](https://xiaohang007.github.io/SLICES/)
 - **API Reference**: Available in the documentation
+- **Developer Guide**: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) - Technical documentation for developers
 - **Benchmarks Guide**: [benchmark/benchmarks.md](benchmark/benchmarks.md)
+
+---
+
+## 👨‍💻 Developer Guide
+
+For developers working on the SLICES codebase, see the [Developer Guide](DEVELOPER_GUIDE.md) which includes:
+
+- **Codebase Architecture**: Overview of core components and their interactions
+- **tobascco_net.py Module**: Detailed explanation of the graph theory module
+- **Performance Optimizations**: Memory management and performance improvements
+- **Code Quality Improvements**: Type hints, documentation, and best practices
+- **Testing and Verification**: How to test and verify changes
+
+The Developer Guide provides technical documentation for:
+- Understanding the internal structure of SLICES
+- Implementing new features
+- Debugging and troubleshooting
+- Contributing to the codebase
 
 ---
 
@@ -1143,12 +1209,12 @@ If you use SLICES, MatterGPT, or SLICES-PLUS, please cite:
 }
 
 @misc{wang2024slicespluscrystalrepresentationleveraging,
-  title={SLICES-PLUS: A Crystal Representation Leveraging Spatial Symmetry}, 
-  author={Baoning Wang and Zhiyuan Xu and Zhiyu Han and Qiwen Nie and Hang Xiao and Gang Yan},
-  year={2024},
-  eprint={2410.22828},
-  archivePrefix={arXiv},
-  primaryClass={physics.comp-ph},
+      title={SLICES-PLUS: A Crystal Representation Leveraging Spatial Symmetry}, 
+      author={Baoning Wang and Zhiyuan Xu and Zhiyu Han and Qiwen Nie and Hang Xiao and Gang Yan},
+      year={2024},
+      eprint={2410.22828},
+      archivePrefix={arXiv},
+      primaryClass={physics.comp-ph},
   url={https://arxiv.org/abs/2410.22828}
 }
 ```
