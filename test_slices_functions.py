@@ -31,6 +31,13 @@ import warnings
 import gc
 warnings.filterwarnings("ignore")
 
+# Try to import TensorFlow for memory management
+try:
+    import tensorflow as tf
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
+
 def parse_cif_from_csv_row(cif_string):
     """Parse CIF string from CSV row (handles escaped newlines)"""
     if pd.isna(cif_string):
@@ -53,7 +60,7 @@ def test_structure2slices(backend, structure, material_id):
     except Exception as e:
         return False, None, str(e)
 
-def test_slices2structure(backend, slices_string, original_structure, material_id):
+def test_slices2structure(backend, slices_string, original_structure, material_id, matcher=None):
     """Test SLICES2structure function"""
     try:
         result = backend.SLICES2structure(slices_string)
@@ -80,8 +87,9 @@ def test_slices2structure(backend, slices_string, original_structure, material_i
         if len(reconstructed_structure) == 0:
             return False, None, None, "Reconstructed structure has no atoms"
         
-        # Compare structures using StructureMatcher
-        matcher = StructureMatcher()
+        # Compare structures using StructureMatcher (reuse if provided)
+        if matcher is None:
+            matcher = StructureMatcher()
         try:
             is_match = matcher.fit(original_structure, reconstructed_structure)
         except Exception as match_error:
@@ -106,7 +114,7 @@ def test_slices2structure(backend, slices_string, original_structure, material_i
             error_msg = error_msg[:200] + "..."
         return False, None, None, error_msg
 
-def test_round_trip(backend, structure, material_id, mlip_model):
+def test_round_trip(backend, structure, material_id, mlip_model, matcher=None):
     """Test complete round-trip: structure -> SLICES -> structure"""
     results = {
         'material_id': material_id,
@@ -139,7 +147,7 @@ def test_round_trip(backend, structure, material_id, mlip_model):
     decode_success = False
     try:
         decode_success, reconstructed, energy, decode_error = test_slices2structure(
-            backend, slices_string, structure, material_id
+            backend, slices_string, structure, material_id, matcher=matcher
         )
         results['decode_success'] = decode_success
         results['energy_per_atom'] = energy
@@ -156,10 +164,10 @@ def test_round_trip(backend, structure, material_id, mlip_model):
         results['reconstructed_formula'] = reconstructed.formula
         results['reconstructed_natoms'] = len(reconstructed)
     
-    # Check round-trip success
+    # Check round-trip success (reuse matcher if provided)
     if encode_success and decode_success:
-        # Use StructureMatcher for comparison
-        matcher = StructureMatcher()
+        if matcher is None:
+            matcher = StructureMatcher()
         try:
             is_match = matcher.fit(structure, reconstructed)
             results['structure_match'] = is_match
@@ -175,6 +183,13 @@ def test_round_trip(backend, structure, material_id, mlip_model):
     del reconstructed
     del slices_string
     
+    # Clear TensorFlow session to free memory (especially important for M3GNet)
+    if TF_AVAILABLE:
+        try:
+            tf.keras.backend.clear_session()
+        except:
+            pass
+    
     return results
 
 def process_structure_batch(backend, structures_batch, mlip_model, batch_num):
@@ -188,11 +203,14 @@ def process_structure_batch(backend, structures_batch, mlip_model, batch_num):
         'errors': []
     }
     
+    # Create a single StructureMatcher to reuse across all structures in the batch
+    matcher = StructureMatcher()
+    
     for material_id, structure in structures_batch:
         batch_stats['total'] += 1
         
         try:
-            result = test_round_trip(backend, structure, material_id, mlip_model)
+            result = test_round_trip(backend, structure, material_id, mlip_model, matcher=matcher)
             
             if result['encode_success']:
                 batch_stats['encode_success'] += 1
@@ -210,11 +228,28 @@ def process_structure_batch(backend, structures_batch, mlip_model, batch_num):
         
         # Clear structure reference
         del structure
-        gc.collect()
+        
+        # Aggressive memory clearing every few structures
+        if batch_stats['total'] % 3 == 0:
+            gc.collect()
+            if TF_AVAILABLE:
+                try:
+                    tf.keras.backend.clear_session()
+                except:
+                    pass
+    
+    # Final cleanup
+    del matcher
+    gc.collect()
+    if TF_AVAILABLE:
+        try:
+            tf.keras.backend.clear_session()
+        except:
+            pass
     
     return batch_stats
 
-def run_tests(dataset_path, num_samples=100, mlip_models=['chgnet'], batch_size=10):
+def run_tests(dataset_path, num_samples=100, mlip_models=['chgnet'], batch_size=5):
     """Run comprehensive tests on mp-20 dataset with memory-efficient processing"""
     
     print("=" * 80)
@@ -224,6 +259,13 @@ def run_tests(dataset_path, num_samples=100, mlip_models=['chgnet'], batch_size=
     print(f"Number of samples: {num_samples}")
     print(f"MLIP models to test: {', '.join(mlip_models)}")
     print(f"Batch size: {batch_size}")
+    
+    # Warn about memory usage for large batch sizes or M3GNet
+    if batch_size > 10:
+        print(f"⚠ Warning: Large batch size ({batch_size}) may cause memory issues. Consider using --batch-size 3-5")
+    if 'm3gnet' in [m.lower() for m in mlip_models]:
+        print("⚠ Note: M3GNet uses TensorFlow and may require more memory. Using aggressive memory clearing.")
+    
     print()
     
     # Load dataset header first to get column names
@@ -330,6 +372,12 @@ def run_tests(dataset_path, num_samples=100, mlip_models=['chgnet'], batch_size=
                 # Clear batch
                 structures_batch = []
                 gc.collect()
+                # Clear TensorFlow session after each batch
+                if TF_AVAILABLE:
+                    try:
+                        tf.keras.backend.clear_session()
+                    except:
+                        pass
         
         # Process remaining structures
         if structures_batch:
@@ -346,6 +394,12 @@ def run_tests(dataset_path, num_samples=100, mlip_models=['chgnet'], batch_size=
             print(f"  Processed final batch ({model_stats['total']}/{num_samples} structures)...")
             structures_batch = []
             gc.collect()
+            # Clear TensorFlow session
+            if TF_AVAILABLE:
+                try:
+                    tf.keras.backend.clear_session()
+                except:
+                    pass
         
         # Print statistics for this model
         print()
@@ -374,6 +428,12 @@ def run_tests(dataset_path, num_samples=100, mlip_models=['chgnet'], batch_size=
         del backend
         del model_stats
         gc.collect()
+        # Final TensorFlow session clear
+        if TF_AVAILABLE:
+            try:
+                tf.keras.backend.clear_session()
+            except:
+                pass
         print()
     
     # Overall statistics
@@ -436,8 +496,8 @@ if __name__ == "__main__":
     parser.add_argument('--models', type=str, nargs='+', 
                        default=['chgnet'],
                        help='MLIP models to test (default: chgnet)')
-    parser.add_argument('--batch-size', type=int, default=10,
-                       help='Batch size for processing structures (default: 10, lower = less memory)')
+    parser.add_argument('--batch-size', type=int, default=5,
+                       help='Batch size for processing structures (default: 5, lower = less memory. Recommended: 3-5 for M3GNet)')
     
     args = parser.parse_args()
     
