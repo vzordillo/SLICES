@@ -456,3 +456,36 @@ Create `scripts/benchmark.py`:
 3. **Performance Tracking**: Monitor benchmark results
 4. **Documentation Reviews**: Regular documentation updates
 5. **Test Database Updates**: Add new known-good structures regularly
+
+### To-dos
+
+- [ ] Replace SymPy with NumPy/SciPy for nullspace computation - REVERTED per user request
+- [x] Convert recursive iter_cycles() to iterative version
+- [x] Add type hints and improve documentation to tobascco_net.py
+- [x] Consolidate all MD files into two organized documentation files
+- [ ] Phase 0: Create git tag (v2.0.12-working) and backup branch before any changes
+- [ ] Phase 0: Run baseline tests and document results for comparison
+- [x] Phase 0: Create and switch to feature/testing-and-organization branch
+- [x] Phase 0: Create git_checkpoint.sh script for incremental checkpoints
+- [x] Phase 1: Create tests/ directory structure with all subdirectories
+- [x] Phase 1: Set up pytest.ini and test configuration
+- [x] Phase 1: Create conftest.py with shared fixtures and copy test data
+- [x] Phase 2: Write unit tests for encoding (structure2SLICES)
+- [x] Phase 2: Write unit tests for decoding (SLICES2structure)
+- [x] Phase 2: Write unit tests for validation methods
+- [x] Phase 2: Write unit tests for tobascco_net module
+- [x] Phase 3: Write integration tests for round-trip workflows
+- [x] Phase 3: Write integration tests for MLIP model workflows
+- [x] Phase 3: Move existing test files to proper locations and verify they work
+- [x] Phase 4: Create regression tests with known good structures
+- [x] Phase 4: Create backward compatibility tests
+- [x] Phase 5: Create new directory structure (docs/, scripts/)
+- [x] Phase 5: Move and organize files incrementally with verification
+- [x] Phase 5: Add section markers to core.py for better readability
+- [x] Phase 6: Create comprehensive API documentation
+- [x] Phase 6: Create user guides (getting started, advanced, troubleshooting)
+- [x] Phase 6: Create developer documentation (testing, architecture, contributing)
+- [x] Phase 7: Set up GitHub Actions workflow for automated testing
+- [x] Phase 7: Configure pre-commit hooks for code quality
+- [x] Phase 7: Create benchmark scripts for performance monitoring
+- [x] Final: Run comprehensive test suite, verify no regressions, create release candidate tag
