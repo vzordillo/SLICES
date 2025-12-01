@@ -181,7 +181,18 @@ def splitRun_sample(threads=8,sample_size=8000):
         config.write(configfile)
     for i in range(threads):
         os.mkdir('job_'+str(i))
-        os.system('cp -r ./workflow/. job_'+str(i))
+        # Copy workflow directory contents (cross-platform)
+        workflow_dst = 'job_'+str(i)
+        if os.path.exists('./workflow'):
+            if not os.path.exists(workflow_dst):
+                os.makedirs(workflow_dst, exist_ok=True)
+            for item in os.listdir('./workflow'):
+                src = os.path.join('./workflow', item)
+                dst = os.path.join(workflow_dst, item)
+                if os.path.isdir(src):
+                    shutil.copytree(src, dst, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src, dst)
         os.chdir('job_'+str(i))
         if len(sys.argv)==2:
             if sys.argv[1]=="test":
@@ -545,7 +556,10 @@ def collect_json(output,glob_target,cleanup=True):
         json.dump(data, outfile)     
     if cleanup:
         for i in glob.glob("job_*"):
-            os.system("rm -r "+i)
+            if os.path.isdir(i):
+                shutil.rmtree(i)
+            elif os.path.isfile(i):
+                os.remove(i)
     print("Results have been collected into: "+output)
 
 def collect_csv(output,glob_target,header="",index=False,cleanup=True):
@@ -568,7 +582,10 @@ def collect_csv(output,glob_target,header="",index=False,cleanup=True):
         result.write(result_sli)  
     if cleanup:
         for i in glob.glob("job_*"):
-            os.system("rm -r "+i)
+            if os.path.isdir(i):
+                shutil.rmtree(i)
+            elif os.path.isfile(i):
+                os.remove(i)
     print("Results have been collected into: "+output)
 
 def collect_csv_filter(output,glob_target,header,condition,cleanup=True):
@@ -590,7 +607,10 @@ def collect_csv_filter(output,glob_target,header,condition,cleanup=True):
         result.write(result_filtered_csv) 
     if cleanup:
         for i in glob.glob("job_*"):
-            os.system("rm -r "+i)
+            if os.path.isdir(i):
+                shutil.rmtree(i)
+            elif os.path.isfile(i):
+                os.remove(i)
     print("Results have been collected into: "+output)
 
 def exclude_elements_json(input_json,exclude_elements):
