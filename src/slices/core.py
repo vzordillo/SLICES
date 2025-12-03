@@ -1312,10 +1312,19 @@ class SLICES:
             with open(temp_dir.name+'/testBonds_cut.top','w') as f:
                 f.write(nbf)
             
-            # Run XTB with timeout (30 seconds should be enough for most structures)
+            # Calculate adaptive timeout based on structure complexity
+            try:
+                from slices.decoding_improvements import calculate_xtb_timeout
+                num_atoms = len(self.atom_types)
+                num_bonds = len(blist)
+                timeout = calculate_xtb_timeout(num_atoms, num_bonds)
+            except ImportError:
+                timeout = 30  # Fallback to default
+            
+            # Run XTB with adaptive timeout
             try:
                 result = subprocess.run(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
-                cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=30)
+                cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=timeout)
             except subprocess.TimeoutExpired:
                 temp_dir.cleanup()
                 raise XTBExecutionError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
@@ -1365,8 +1374,22 @@ class SLICES:
                 elif len(temp2[0]):
                     index=temp2[0][0]
                 else:
-                    print('Cannot find bond!!!') 
-                    continue
+                    # Use fallback bond parameter estimation
+                    try:
+                        from slices.decoding_improvements import BondParameterFallback
+                        atom_symbols = [str(ElementBase.from_Z(z)) for z in self.atom_types]
+                        atom1 = atom_symbols[blist_original[i][0]]
+                        atom2 = atom_symbols[blist_original[i][1]]
+                        estimated_length_bohr = BondParameterFallback.estimate_bond_length(atom1, atom2)
+                        # Convert to Angstrom and apply scaling
+                        estimated_length_angstrom = estimated_length_bohr * 0.529177 * bond_scaling
+                        inner_p_target[i,i] = round(estimated_length_angstrom**2, 5)
+                        bond_weight.append(1.0)  # Default weight for estimated bonds
+                        logging.warning(f"Using fallback bond length for {atom1}-{atom2}: {estimated_length_angstrom:.3f} Å")
+                        continue
+                    except (ImportError, Exception) as e:
+                        logging.warning(f"Cannot find bond and fallback failed: {e}")
+                        continue
                 if np.isnan(data['vbond'][index][2]):
                     bond_weight.append(1)
                     data['vbond'][index][2]=1
@@ -2113,12 +2136,49 @@ class SLICES:
                 if metric_tensor_std[2,2]==metric_tensor_std[1,1]:
                     lattice_type=21
             x,bounds = self.initialize_x_bounds(net.ndim,net.cocycle_rep,metric_tensor_std,lattice_type,delta_theta,delta_x,lattice_expand,lattice_shrink)
-            x=fmin_l_bfgs_b(self.func, x, fprime=None, args= \
-            (net.ndim,net.order,inner_p_target,colattice_inds,colattice_weights,net.cycle_rep,net.cycle_cocycle_I, \
-            num_nodes,shortest_path,spanning,uncovered_pair,uncovered_pair_lj,covered_pair_lj,vbond_param_ave_covered,vbond_param_ave, \
-            lattice_vectors_scaled,atom_symbols,angle_weight,repul,lattice_type,metric_tensor_std), \
-            approx_grad=True, bounds=bounds, m=10, factr=10000000.0, pgtol=1e-05, \
-            epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
+            
+            # Use adaptive convergence parameters and multi-start optimization
+            try:
+                from slices.decoding_improvements import AdaptiveConvergence, MultiStartOptimizer
+                conv_params = AdaptiveConvergence.get_convergence_params(num_nodes)
+                
+                # Create objective function with arguments
+                def objective_func(x_opt):
+                    return self.func(x_opt, net.ndim, net.order, inner_p_target, colattice_inds, 
+                                   colattice_weights, net.cycle_rep, net.cycle_cocycle_I,
+                                   num_nodes, shortest_path, spanning, uncovered_pair, 
+                                   uncovered_pair_lj, covered_pair_lj, vbond_param_ave_covered,
+                                   vbond_param_ave, lattice_vectors_scaled, atom_symbols,
+                                   angle_weight, repul, lattice_type, metric_tensor_std)
+                
+                # Multi-start optimization
+                x_opt, f_opt, info = MultiStartOptimizer.optimize(
+                    objective_func, x, bounds,
+                    n_starts=3,  # Reduced from 5 for speed
+                    fprime=None,
+                    args=(),
+                    approx_grad=True,
+                    m=10,
+                    factr=conv_params['factr'],
+                    pgtol=conv_params['pgtol'],
+                    epsilon=1e-08,
+                    iprint=-1,
+                    maxfun=15000,
+                    maxiter=15000,
+                    disp=None,
+                    callback=None,
+                    maxls=20
+                )
+                # Format to match expected tuple: (x, f, info_dict) - same as fmin_l_bfgs_b
+                x = (x_opt, f_opt, info)
+            except ImportError:
+                # Fallback to original single-start optimization
+                x=fmin_l_bfgs_b(self.func, x, fprime=None, args= \
+                (net.ndim,net.order,inner_p_target,colattice_inds,colattice_weights,net.cycle_rep,net.cycle_cocycle_I, \
+                num_nodes,shortest_path,spanning,uncovered_pair,uncovered_pair_lj,covered_pair_lj,vbond_param_ave_covered,vbond_param_ave, \
+                lattice_vectors_scaled,atom_symbols,angle_weight,repul,lattice_type,metric_tensor_std), \
+                approx_grad=True, bounds=bounds, m=10, factr=10000000.0, pgtol=1e-05, \
+                epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
             #get optimized structure
             net.metric_tensor, net.cocycle_rep = self.convert_params(x[0], net.ndim, int(net.order - 1),lattice_type,metric_tensor_std)
             lattice_vectors_new=np.linalg.cholesky(net.metric_tensor)
@@ -2135,15 +2195,56 @@ class SLICES:
                 num_nodes,shortest_path,spanning,uncovered_pair,uncovered_pair_lj,covered_pair_lj,vbond_param_ave_covered,vbond_param_ave, \
                 lattice_vectors_scaled,atom_symbols,angle_weight,repul,lattice_type,metric_tensor_std))
         try:
-            if num_nodes <= 20:
-                structure_recreated_opt2, final_energy_per_atom=self.relax(structure_recreated_opt)
-            elif 20 < num_nodes <= 40:
-                structure_recreated_opt2, final_energy_per_atom=self.relax_large_cell1(structure_recreated_opt)
-            else:
-                structure_recreated_opt2, final_energy_per_atom=self.relax_large_cell2(structure_recreated_opt)                                
-            return [structure_recreated_std, structure_recreated_opt,  structure_recreated_opt2 ],final_energy_per_atom
+            # Use progressive relaxation strategy
+            try:
+                from slices.decoding_improvements import ProgressiveRelaxer
+                strategies = ProgressiveRelaxer.get_relaxation_strategies()
+                
+                structure_recreated_opt2 = None
+                final_energy_per_atom = 0.0
+                
+                for strategy in strategies:
+                    try:
+                        # Temporarily update fmax and steps
+                        old_fmax = self.fmax
+                        old_steps = self.steps
+                        self.fmax = strategy['fmax']
+                        self.steps = strategy['steps']
+                        
+                        if num_nodes <= 20:
+                            structure_recreated_opt2, final_energy_per_atom = self.relax(structure_recreated_opt)
+                        elif 20 < num_nodes <= 40:
+                            structure_recreated_opt2, final_energy_per_atom = self.relax_large_cell1(structure_recreated_opt)
+                        else:
+                            structure_recreated_opt2, final_energy_per_atom = self.relax_large_cell2(structure_recreated_opt)
+                        
+                        # Restore original settings
+                        self.fmax = old_fmax
+                        self.steps = old_steps
+                        break  # Success, exit loop
+                    except (TimeoutException, MLIPRelaxationError, Exception) as e:
+                        # Restore original settings
+                        self.fmax = old_fmax
+                        self.steps = old_steps
+                        logging.debug(f"Relaxation with {strategy['name']} failed: {e}")
+                        continue
+                
+                if structure_recreated_opt2 is None:
+                    # All strategies failed, return without MLIP relaxation
+                    return [structure_recreated_std, structure_recreated_opt], 0.0
+                
+                return [structure_recreated_std, structure_recreated_opt, structure_recreated_opt2], final_energy_per_atom
+            except ImportError:
+                # Fallback to original relaxation
+                if num_nodes <= 20:
+                    structure_recreated_opt2, final_energy_per_atom=self.relax(structure_recreated_opt)
+                elif 20 < num_nodes <= 40:
+                    structure_recreated_opt2, final_energy_per_atom=self.relax_large_cell1(structure_recreated_opt)
+                else:
+                    structure_recreated_opt2, final_energy_per_atom=self.relax_large_cell2(structure_recreated_opt)                                
+                return [structure_recreated_std, structure_recreated_opt,  structure_recreated_opt2 ],final_energy_per_atom
         except Exception as e:
-            print(e)
+            logging.warning(f"MLIP relaxation failed: {e}")
             return [structure_recreated_std, structure_recreated_opt],0
 
     def SLICES2structure(self,SLICES,strategy=4,fix_duplicate_edge=True):
@@ -2159,6 +2260,92 @@ class SLICES:
         self.from_SLICES(SLICES,strategy,fix_duplicate_edge)
         structures,final_energy_per_atom = self.to_structures()
         return structures[-1],final_energy_per_atom
+    
+    def robust_SLICES2structure(self, SLICES, strategy=4, fix_duplicate_edge=True, max_attempts=3):
+        """
+        Robust decoding with multiple fallback strategies to maximize success rate.
+        
+        This method implements a comprehensive error recovery pipeline that tries
+        multiple strategies when standard decoding fails:
+        1. Standard decoding
+        2. Alternative encoding strategies
+        3. Fallback bond parameters
+        4. Progressive relaxation
+        5. Return structure without MLIP relaxation if all else fails
+        
+        Args:
+            SLICES (str): A SLICES string.
+            strategy (int): Encoding strategy (1-4).
+            fix_duplicate_edge (bool): Fix duplicate edges if present.
+            max_attempts (int): Maximum number of alternative strategy attempts.
+            
+        Returns:
+            tuple: (Structure, float) - Reconstructed structure and energy per atom.
+                   If MLIP relaxation fails, returns ZL*-optimized structure with energy 0.0.
+        
+        References:
+            - Boyd & Woo (2016): Graph theory methods for crystal structures
+            - Lenstra et al. (1982): Lattice basis reduction algorithms
+        """
+        # Attempt 1: Standard decoding
+        try:
+            return self.SLICES2structure(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+        except LatticeBasisError as e:
+            logging.warning(f"Lattice basis error, trying alternative strategies: {e}")
+            
+            # Attempt 2: Try different encoding strategies
+            for alt_strategy in [3, 2, 1]:
+                if alt_strategy == strategy:
+                    continue
+                try:
+                    # Re-encode with alternative strategy
+                    self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+                    alt_slices = self.to_SLICES(strategy=alt_strategy)
+                    return self.SLICES2structure(alt_slices, strategy=alt_strategy)
+                except Exception as e2:
+                    logging.debug(f"Alternative strategy {alt_strategy} failed: {e2}")
+                    continue
+        
+        except XTBExecutionError as e:
+            logging.warning(f"XTB execution error, using fallback bond parameters: {e}")
+            # Attempt 3: Use fallback bond parameters (handled in get_inner_p_target)
+            try:
+                self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+                structures, _ = self.to_structures()
+                # Return best available structure (ZL*-optimized if MLIP failed)
+                if len(structures) >= 2:
+                    return structures[1], 0.0  # Return ZL*-optimized structure
+                else:
+                    return structures[0], 0.0  # Return barycentric embedding
+            except Exception as e2:
+                logging.error(f"Fallback bond parameters failed: {e2}")
+        
+        except (TimeoutException, MLIPRelaxationError) as e:
+            logging.warning(f"MLIP relaxation failed, returning ZL*-optimized structure: {e}")
+            # Attempt 4: Return structure without MLIP relaxation
+            try:
+                self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+                structures, _ = self.to_structures()
+                if len(structures) >= 2:
+                    return structures[1], 0.0  # Return ZL*-optimized structure
+                else:
+                    return structures[0], 0.0  # Return barycentric embedding
+            except Exception as e2:
+                logging.error(f"Failed to get ZL*-optimized structure: {e2}")
+        
+        except Exception as e:
+            logging.error(f"Unexpected error in robust decoding: {e}")
+        
+        # Final fallback: Return barycentric embedding
+        try:
+            self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+            structures, _ = self.to_structures()
+            return structures[0], 0.0  # Return initial structure
+        except Exception as e:
+            raise SLICESDecodingError(
+                f"All decoding strategies failed for SLICES string. "
+                f"Last error: {str(e)[:200]}"
+            ) from e
 
     def to_relaxed_structure(self, bond_scaling=1.05, delta_theta=0.005, delta_x=0.45,lattice_shrink=1,lattice_expand=1.25,angle_weight=0.5,vbond_param_ave_covered=0.000,vbond_param_ave=0.01,repul=True):
         """

@@ -1,0 +1,29 @@
+{
+  "timestamp": "2025-12-02T15:14:10.713786",
+  "total_structures": 100,
+  "standard": {
+    "success_rate": 0.0,
+    "successful": 0,
+    "failed": 100,
+    "avg_time": 0,
+    "total_time": 0.00341796875,
+    "errors": {
+      "other": 100
+    }
+  },
+  "robust": {
+    "success_rate": 0.0,
+    "successful": 0,
+    "failed": 100,
+    "avg_time": 0,
+    "total_time": 0.004637956619262695,
+    "errors": {
+      "other": 100
+    }
+  },
+  "improvement": {
+    "success_rate_delta": 0.0,
+    "additional_successful": 0,
+    "relative_improvement_pct": 0
+  }
+}

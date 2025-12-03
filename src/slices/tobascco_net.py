@@ -643,8 +643,19 @@ class Net:
             )
         
         L = []
-        inds = list(range(self.cycle_rep.shape[0]))
-        np.random.shuffle(inds)
+        # Enhanced cycle basis selection for better lattice basis computation
+        # Try to find cycle ordering that maximizes linear independence
+        try:
+            from slices.decoding_improvements import CycleBasisOptimizer
+            inds = CycleBasisOptimizer.select_optimal_cycle_basis(
+                self.cycle_rep, max_attempts=50
+            )
+            inds = inds.tolist()
+        except ImportError:
+            # Fallback to random shuffle if improvements module not available
+            inds = list(range(self.cycle_rep.shape[0]))
+            np.random.shuffle(inds)
+        
         # Create views with shuffled indices to avoid full copies
         # This reduces memory usage for large arrays
         cycle_rep = self.cycle_rep[inds]  # Advanced indexing creates a copy, but only of the selected rows
@@ -954,9 +965,28 @@ class Net:
     def indices_with_voltage(self, volt):
         return np.where([np.all(i == volt) for i in self.cycle_rep])
 
-    def is_integral(self, vect):
-        return np.all(np.equal(np.mod(vect, 1), 0)) and not np.all(np.equal(0, vect))
-        # return np.all(np.logical_or(np.abs(vect) == 0., np.abs(vect) == 1.))
+    def is_integral(self, vect, tolerance=1e-6):
+        """
+        Check if vector is integral (or approximately integral with tolerance).
+        
+        Args:
+            vect: Vector to check
+            tolerance: Maximum deviation from integer values (default: 1e-6)
+            
+        Returns:
+            True if vector is (approximately) integral and non-zero
+        """
+        if len(vect) == 0 or np.all(np.equal(vect, 0)):
+            return False
+        
+        # Original strict check
+        if np.all(np.equal(np.mod(vect, 1), 0)):
+            return True
+        
+        # Relaxed check with tolerance (for numerical errors)
+        fractional_parts = np.mod(np.abs(vect), 1)
+        is_approx_integral = np.all(fractional_parts < tolerance) or np.all(fractional_parts > 1 - tolerance)
+        return is_approx_integral
 
     @property
     def kernel(self):
