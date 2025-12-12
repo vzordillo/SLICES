@@ -4,8 +4,6 @@ This directory contains investigations into potential improvements and alternati
 
 ## Current Investigations
 
-### pGFNFF Integration
-
 **Status**: Investigation Complete  
 **Branch**: `investigate-pgfnff`  
 **Date**: 2025-01-02
