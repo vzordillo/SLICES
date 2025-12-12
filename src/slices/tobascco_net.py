@@ -2,6 +2,29 @@
 # created by Boyd, P. G.; K. Woo, T. A Generalized Method for Constructing Hypothetical Nanoporous Materials of Any Net Topology from Graph Theory. CrystEngComm 2016, 18 (21), 3777–3792. https://github.com/peteboyd/tobascco
 # modified by Hang Xiao; fixed self-loop bug
 # xiaohang07@live.cn
+"""
+Graph theory algorithms for analyzing periodic crystal structures (nets).
+
+This module provides classes and methods for working with periodic graphs
+representing crystal structures, including cycle basis computation, lattice
+basis determination, and metric tensor calculations.
+"""
+from typing import Optional, List, Tuple, Generator, Dict, Any
+
+
+class NetError(Exception):
+    """Base exception class for Net-related errors."""
+    pass
+
+
+class LatticeBasisError(NetError):
+    """Exception raised when lattice basis cannot be computed from cycle vectors."""
+    pass
+
+
+class CocycleBasisError(NetError):
+    """Exception raised when cocycle basis cannot be computed."""
+    pass
 import distutils.util as du
 import math
 import sys
@@ -149,7 +172,24 @@ class SystreDB(dict):
 
 
 class Net:
-    def __init__(self, graph=None, dim=3, options=None):
+    """Represents a periodic graph (net) for crystal structure analysis.
+    
+    This class provides methods for computing cycle bases, cocycle bases,
+    lattice bases, and metric tensors from periodic graph representations.
+    
+    Attributes:
+        name: Name of the net
+        lattice_basis: Lattice basis vectors
+        metric_tensor: Metric tensor describing unit cell geometry
+        cycle: Cycle basis vectors
+        cycle_rep: Cycle representation
+        cocycle: Cocycle basis vectors
+        cocycle_rep: Cocycle representation
+        periodic_rep: Periodic representation
+        ndim: Dimensionality of the net (default: 3)
+        _graph: Internal NetworkX graph representation
+    """
+    def __init__(self, graph: Optional[List[Tuple]] = None, dim: int = 3, options: Optional[Any] = None) -> None:
         self.name = None
         self.lattice_basis = None
         self.metric_tensor = None
@@ -186,6 +226,40 @@ class Net:
 
         self.options = options
 
+    def clear_cache(self) -> None:
+        """Clear cached properties and large arrays to free memory.
+        
+        This method should be called when a Net object is no longer needed
+        to prevent memory accumulation during batch processing. It clears
+        all computed properties while keeping the original graph data.
+        
+        Returns:
+            None
+        """
+        # Clear cached properties
+        if hasattr(self, '_kernel'):
+            del self._kernel
+        if hasattr(self, '_cycle_cocycle'):
+            del self._cycle_cocycle
+        if hasattr(self, '_cycle_cocycle_I'):
+            del self._cycle_cocycle_I
+        
+        # Clear large arrays (set to None to allow garbage collection)
+        # Note: We don't delete everything, just the computed properties
+        # The graph itself is kept as it's the source data
+        self.cycle = None
+        self.cocycle = None
+        self.cycle_rep = None
+        self.cocycle_rep = None
+        self.periodic_rep = None
+        self.lattice_basis = None
+        self.metric_tensor = None
+        self.colattice_dotmatrix = None
+        
+        # Force garbage collection
+        import gc
+        gc.collect()
+
     def nodes_iter(self, data=True):
         """Oh man, fixing to networkx 2.0
 
@@ -194,7 +268,7 @@ class Net:
         """
         for node in self._graph.nodes():
             if data:
-                d = self._graph.node[node]
+                d = self._graph.nodes[node]  # Fixed: use nodes[node] instead of node[node] for NetworkX 2.x+
                 yield (node, d)
             else:
                 yield node
@@ -208,8 +282,15 @@ class Net:
                 yield (erp[0], erp[1])
 
 
-    def get_cocycle_basis(self):
-        """The orientation is important here!"""
+    def get_cocycle_basis(self) -> None:
+        """Compute the cocycle basis for the graph.
+        
+        The cocycle basis is complementary to the cycle basis and represents
+        the cutsets of the graph. The orientation of edges is important.
+        
+        Returns:
+            None: Modifies self.cocycle and self.cocycle_rep in place
+        """
         size = self._graph.order() - 1
         length = self._graph.size()
         count = 0
@@ -350,11 +431,16 @@ class Net:
     def debug_print(self, val, msg):
         print("%s[%d] %s" % ("  " * val, val, msg))
 
-    def simple_cycle_basis(self):
-        """Cycle basis is constructed using a minimum spanning tree.
-        This tree is traversed, and all the remaining edges are added
-        to obtain the basis.
-
+    def simple_cycle_basis(self) -> None:
+        """Compute cycle basis using a minimum spanning tree.
+        
+        This method constructs a cycle basis by:
+        1. Finding a minimum spanning tree of the graph
+        2. For each edge not in the tree, finding the cycle it completes
+        3. Building basis vectors from these cycles
+        
+        Returns:
+            None: Modifies self.cycle and self.cycle_rep in place
         """
         edges = self.all_edges()
         st_vtx = np.random.choice(range(self.graph.order()))
@@ -415,65 +501,94 @@ class Net:
         self,
         node=None,
         edge=None,
-        cycle=[],
-        used=[],
-        nodes_visited=[],
-        cycle_baggage=[],
+        cycle=None,
+        used=None,
+        nodes_visited=None,
+        cycle_baggage=None,
         counter=0,
+        max_depth=100,
     ):
-        """Recursive method to iterate over all cycles of a graph.
-        NB: Not tested to ensure completeness, however it does find cycles.
-        NB: Likely produces duplicate cycles along different starting points
-        **last point fixed but not tested**
-
+        """Iterative method to iterate over all cycles of a graph.
+        
+        This method uses an iterative approach with a stack to avoid recursion
+        depth limits and stack overflow errors. It finds cycles in the graph
+        by performing a depth-first search.
+        
+        Args:
+            node: Starting node (default: first vertex)
+            edge: Current edge being traversed
+            cycle: Current cycle being built
+            used: List of used edges
+            nodes_visited: List of visited nodes
+            cycle_baggage: Set of already found cycles (to avoid duplicates)
+            counter: Current depth counter
+            max_depth: Maximum search depth to prevent infinite loops (default: 100)
+        
+        Yields:
+            list: Cycles found in the graph
         """
+        from collections import deque
+        
+        # Initialize default values
         if node is None:
             node = self.vertices(0)
-        if node in nodes_visited:
-            i = nodes_visited.index(node)
-            nodes_visited.append(node)
-            cycle.append(edge)
-            used.append(edge[:3])
-            c = cycle[i:]
-            uc = sorted([j[:3] for j in c])
-            # yield c
-            if uc in cycle_baggage:
-                pass
+        if cycle is None:
+            cycle = []
+        if used is None:
+            used = []
+        if nodes_visited is None:
+            nodes_visited = []
+        if cycle_baggage is None:
+            cycle_baggage = []
+        
+        # Use a stack to simulate recursion iteratively
+        stack = deque([(node, edge, cycle[:], used[:], nodes_visited[:], counter)])
+        
+        while stack:
+            node, edge, cycle, used, nodes_visited, depth = stack.popleft()
+            
+            # Prevent infinite loops
+            if depth > max_depth:
+                continue
+            
+            if node in nodes_visited:
+                # Found a cycle
+                i = nodes_visited.index(node)
+                cycle_copy = cycle[:]
+                cycle_copy.append(edge)
+                c = cycle_copy[i:]
+                uc = sorted([j[:3] for j in c])
+                
+                if uc not in cycle_baggage:
+                    cycle_baggage.append(uc)
+                    yield c
             else:
-                cycle_baggage.append(uc)
-                yield c
-        else:
-            nodes_visited.append(node)
-            if edge:
-                cycle.append(edge)
-                used.append(edge[:3])
-            e = [
-                (x, y, z, 1)
-                for x, y, z in self.out_edges(node)
-                if (x, y, z) not in used
-            ]
-            e += [
-                (x, y, z, -1)
-                for x, y, z in self.in_edges(node)
-                if (x, y, z) not in used
-            ]
-            for j in e:
-                newnode = j[0] if j[0] != node else j[1]
-                # msg = "test: (%s to %s) via %s"%(node, newnode, j[2])
-                # self.debug_print(counter, msg)
-                for val in self.iter_cycles(
-                    node=newnode,
-                    edge=j,
-                    cycle=cycle,
-                    used=used,
-                    nodes_visited=nodes_visited,
-                    cycle_baggage=cycle_baggage,
-                    counter=counter + 1,
-                ):
-                    yield val
-                nodes_visited.pop(-1)
-                cycle.pop(-1)
-                used.pop(-1)
+                # Continue traversal
+                nodes_visited_new = nodes_visited[:]
+                nodes_visited_new.append(node)
+                cycle_new = cycle[:]
+                used_new = used[:]
+                
+                if edge:
+                    cycle_new.append(edge)
+                    used_new.append(edge[:3])
+                
+                # Get all edges from current node
+                e = [
+                    (x, y, z, 1)
+                    for x, y, z in self.out_edges(node)
+                    if (x, y, z) not in used_new
+                ]
+                e += [
+                    (x, y, z, -1)
+                    for x, y, z in self.in_edges(node)
+                    if (x, y, z) not in used_new
+                ]
+                
+                # Add all possible next steps to stack
+                for j in e:
+                    newnode = j[0] if j[0] != node else j[1]
+                    stack.append((newnode, j, cycle_new[:], used_new[:], nodes_visited_new[:], depth + 1))
 
     def linear_independent_vectors(self, R, dim):
         R = np.matrix(R)
@@ -509,16 +624,45 @@ class Net:
             i += 1
         return R_independent
 
-    def get_lattice_basis(self):
+    def get_lattice_basis(self) -> None:
+        """Compute the lattice basis vectors from cycle representation.
+        
+        Uses SymPy for nullspace computation.
+        
+        Returns:
+            None: Modifies self.lattice_basis in place
+            
+        Raises:
+            LatticeBasisError: If lattice basis cannot be computed from cycle vectors.
+                This typically indicates an incompatible graph topology.
+        """
+        if self.cycle_rep is None or self.cycle is None:
+            raise LatticeBasisError(
+                "Cycle representation must be computed before lattice basis. "
+                "Call simple_cycle_basis() first."
+            )
+        
         L = []
-        inds = list(range(self.cycle_rep.shape[0]))
-        np.random.shuffle(inds)
-        cycle_rep = self.cycle_rep.copy()
-        cycle = self.cycle.copy()
-        # j = cycle_rep
+        # Enhanced cycle basis selection for better lattice basis computation
+        # Try to find cycle ordering that maximizes linear independence
+        try:
+            from slices.decoding_improvements import CycleBasisOptimizer
+            inds = CycleBasisOptimizer.select_optimal_cycle_basis(
+                self.cycle_rep, max_attempts=50
+            )
+            inds = inds.tolist()
+        except ImportError:
+            # Fallback to random shuffle if improvements module not available
+            inds = list(range(self.cycle_rep.shape[0]))
+            np.random.shuffle(inds)
+        
+        # Create views with shuffled indices to avoid full copies
+        # This reduces memory usage for large arrays
+        cycle_rep = self.cycle_rep[inds]  # Advanced indexing creates a copy, but only of the selected rows
+        cycle = self.cycle[inds]  # Advanced indexing creates a copy, but only of the selected rows
         # determine the null space of the cycle_rep w.r.t. the lattice unit vectors.
         lattice = []
-        for e in np.identity(self.ndim):
+        for i, e in enumerate(np.identity(self.ndim)):
             kk = np.vstack((e, cycle_rep))
             j = sy.Matrix(kk.T)
             null = np.array(
@@ -535,11 +679,12 @@ class Net:
                         lattice.append(tv)
                         break
             if not found_vector:
-                error("Could not obtain the lattice basis from the cycle vectors!")
-                # Terminate(1)
-                return -1
+                raise LatticeBasisError(
+                    f"Could not obtain lattice basis vector {i+1} from cycle vectors. "
+                    "This structure may have incompatible graph topology for SLICES decoding. "
+                    "The graph may not be periodic in the required number of dimensions."
+                )
         self.lattice_basis = np.array(lattice)
-        return 1
 
     def check_linear_dependency(self, vect, vset):
         if not np.any(vset):
@@ -701,7 +846,15 @@ class Net:
             % (angle_average / DEG2RAD, angle_std / DEG2RAD)
         )
 
-    def get_metric_tensor(self):
+    def get_metric_tensor(self) -> None:
+        """Compute the metric tensor from the lattice basis and projection.
+        
+        The metric tensor describes the geometry of the unit cell and is
+        computed from the lattice basis and Eon's projection matrix.
+        
+        Returns:
+            None: Modifies self.metric_tensor in place
+        """
         # self.metric_tensor = self.lattice_basis*self.projection*self.lattice_basis.T
         self.metric_tensor = np.dot(
             np.dot(self.lattice_basis, self.eon_projection), self.lattice_basis.T
@@ -812,9 +965,28 @@ class Net:
     def indices_with_voltage(self, volt):
         return np.where([np.all(i == volt) for i in self.cycle_rep])
 
-    def is_integral(self, vect):
-        return np.all(np.equal(np.mod(vect, 1), 0)) and not np.all(np.equal(0, vect))
-        # return np.all(np.logical_or(np.abs(vect) == 0., np.abs(vect) == 1.))
+    def is_integral(self, vect, tolerance=1e-6):
+        """
+        Check if vector is integral (or approximately integral with tolerance).
+        
+        Args:
+            vect: Vector to check
+            tolerance: Maximum deviation from integer values (default: 1e-6)
+            
+        Returns:
+            True if vector is (approximately) integral and non-zero
+        """
+        if len(vect) == 0 or np.all(np.equal(vect, 0)):
+            return False
+        
+        # Original strict check
+        if np.all(np.equal(np.mod(vect, 1), 0)):
+            return True
+        
+        # Relaxed check with tolerance (for numerical errors)
+        fractional_parts = np.mod(np.abs(vect), 1)
+        is_approx_integral = np.all(fractional_parts < tolerance) or np.all(fractional_parts > 1 - tolerance)
+        return is_approx_integral
 
     @property
     def kernel(self):

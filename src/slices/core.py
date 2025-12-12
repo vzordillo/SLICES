@@ -1,9 +1,17 @@
 # -*- coding: utf-8 -*-
 # Hang Xiao 2023.04
 # xiaohang07@live.cn
+
+# ============================================================================
+# SECTION 1: Imports and Environment Configuration
+# ============================================================================
 import os,subprocess,random,warnings
 os.environ["CUDA_VISIBLE_DEVICES"]=""
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# Enable Keras 2 compatibility mode for M3GNet (works with TensorFlow 2.16+)
+# This allows M3GNet to work with Keras 3 by using legacy Keras 2
+if "TF_USE_LEGACY_KERAS" not in os.environ:
+    os.environ["TF_USE_LEGACY_KERAS"] = "1"
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -36,7 +44,7 @@ if os.path.exists(xtb_custom):
                 # Note: The system XTB may not have the same flags, so decoding might still fail
             else:
                 os.environ["XTB_MOD_PATH"] = xtb_custom
-        except:
+        except (KeyError, AttributeError):
             os.environ["XTB_MOD_PATH"] = xtb_custom
     else:
         os.environ["XTB_MOD_PATH"] = xtb_custom
@@ -62,7 +70,7 @@ import re
 import networkx as nx
 from networkx.algorithms import tree
 import numpy as np
-from slices.tobascco_net import Net, SystreDB
+from slices.tobascco_net import Net, SystreDB, LatticeBasisError, CocycleBasisError
 from slices.config import OFFSET, LJ_PARAMS_LIST, PERIODIC_DATA
 from slices.utils_wyckoff import get_space_group_num_from_letter_enc, get_tokenized_enc
 import math
@@ -95,8 +103,40 @@ root_logger.setLevel(logging.CRITICAL)
 # Also suppress for any logger that might be used by tobascco_net
 logging.getLogger('slices.tobascco_net').setLevel(logging.CRITICAL)
 
+# ============================================================================
+# SECTION 2: Exception Classes
+# ============================================================================
+
 class TimeoutException(Exception):
     """Exception raised when a function times out."""
+    pass
+
+class SLICESError(Exception):
+    """Base exception class for SLICES-related errors."""
+    pass
+
+class SLICESEncodingError(SLICESError):
+    """Exception raised when encoding a structure to SLICES fails."""
+    pass
+
+class SLICESDecodingError(SLICESError):
+    """Exception raised when decoding a SLICES string to structure fails."""
+    pass
+
+class GraphTopologyError(SLICESError):
+    """Exception raised when graph topology is incompatible for SLICES operations."""
+    pass
+
+class LatticeBasisError(GraphTopologyError):
+    """Exception raised when lattice basis cannot be computed from cycle vectors."""
+    pass
+
+class XTBExecutionError(SLICESError):
+    """Exception raised when XTB binary execution fails."""
+    pass
+
+class MLIPRelaxationError(SLICESError):
+    """Exception raised when MLIP relaxation fails."""
     pass
 
 def function_timeout(seconds: int):
@@ -335,7 +375,7 @@ class SLICES:
                 edge_indices[i,0]=int(edge[0])
                 edge_indices[i,1]=int(edge[1])
                 if edge_indices[i,0] > num_atoms-1 or edge_indices[i,1] > num_atoms-1:
-                    raise Exception("Error: wrong edge indices")
+                    raise SLICESEncodingError("Invalid edge indices in SLICES string. Edge indices must be valid and within bounds.")
                 for j in range(3):
                     if edge[j+2]=='-':
                         to_jimages[i,j]=-1
@@ -344,7 +384,7 @@ class SLICES:
                     elif edge[j+2]=='+':
                         to_jimages[i,j]=1
                     else:
-                        raise Exception("Error: wrong edge label")
+                        raise SLICESEncodingError("Invalid edge label in SLICES string. Edge labels must be valid periodic images.")
 
         if strategy==1:
             temp_list=[]
@@ -363,7 +403,7 @@ class SLICES:
                 self.atom_symbols[edge_indices[i,0]]=edge[0]
                 self.atom_symbols[edge_indices[i,1]]=edge[1]
                 if edge_indices[i,0] > num_atoms-1 or edge_indices[i,1] > num_atoms-1:
-                    raise Exception("Error: wrong edge indices")
+                    raise SLICESEncodingError("Invalid edge indices in SLICES string. Edge indices must be valid and within bounds.")
                 for j in range(3):
                     if edge[j+4]=='-':
                         to_jimages[i,j]=-1
@@ -372,9 +412,9 @@ class SLICES:
                     elif edge[j+4]=='+':
                         to_jimages[i,j]=1
                     else:
-                        raise Exception("Error: wrong edge label")
+                        raise SLICESEncodingError("Invalid edge label in SLICES string. Edge labels must be valid periodic images.")
             if 'NaN' in self.atom_symbols:
-                raise Exception("Error: wrong atom symbols")
+                raise SLICESEncodingError("Invalid atom symbols in SLICES string. Atom symbols must be valid chemical elements.")
 
         if strategy == 4:
             # Find first element symbol to determine where tokenized encoding ends
@@ -384,12 +424,12 @@ class SLICES:
                     Element(token)
                     first_elem_idx = i
                     break
-                except:
+                except (ValueError, KeyError):
                     continue
                 
             if first_elem_idx is None:
                 # No element symbols found - invalid SLICES
-                raise Exception("Error: no valid element symbols found")
+                raise SLICESEncodingError("No valid element symbols found in SLICES string. Cannot decode structure.")
                 
             # Get space group number if tokenized encoding exists
             if first_elem_idx > 0:
@@ -398,7 +438,7 @@ class SLICES:
                     space_group_num = get_space_group_num_from_letter_enc(letter_enc)
                 except:
                     space_group_num = None
-                    raise Exception("Error: space_group_num = None")
+                    raise SLICESEncodingError("Space group number is None. Cannot proceed with encoding.")
             else:
                 space_group_num = None
             for i in range(first_elem_idx,len(tokens)):
@@ -418,7 +458,7 @@ class SLICES:
                 edge_indices[i,0] = int(edge[0])
                 edge_indices[i,1] = int(edge[1])
                 if edge_indices[i,0] > num_atoms-1 or edge_indices[i,1] > num_atoms-1:
-                    raise Exception("Error: wrong edge indices")
+                    raise SLICESEncodingError("Invalid edge indices in SLICES string. Edge indices must be valid and within bounds.")
                 for j in range(3):
                     if edge[2][j] == '-':
                         to_jimages[i,j] = -1
@@ -427,7 +467,7 @@ class SLICES:
                     elif edge[2][j] == '+':
                         to_jimages[i,j] = 1
                     else:
-                        raise Exception("Error: wrong edge label")        
+                        raise SLICESEncodingError("Invalid edge label in SLICES string. Edge labels must be valid periodic images.")        
 
         if fix_duplicate_edge:
             edge_data_ascending=[]
@@ -595,7 +635,12 @@ class SLICES:
                 self.from_SLICES(SLICES,strategy,fix_duplicate_edge=False)
             else:
                 self.from_SLICES(SLICES,strategy,fix_duplicate_edge=True)
-        except:
+        except (SLICESEncodingError, ValueError, KeyError, IndexError) as e:
+            # Expected errors for invalid SLICES strings
+            return False
+        except Exception as e:
+            # Unexpected errors should be logged but still return False
+            logging.debug(f"Unexpected error in check_SLICES: {e}")
             return False
         # make sure the rank of first homology group of graph >= 3, in order to get 3D embedding 
         G = nx.MultiGraph()
@@ -672,7 +717,12 @@ class SLICES:
         """
         try:
             self.from_SLICES(SLICES,strategy)
-        except:
+        except (SLICESEncodingError, ValueError, KeyError, IndexError) as e:
+            # Expected errors for invalid SLICES strings
+            return False
+        except Exception as e:
+            # Unexpected errors should be logged but still return False
+            logging.debug(f"Unexpected error in check_SLICES_basic: {e}")
             return False
         # check if all nodes has been covered by edges
         nodes_covered=[]
@@ -973,7 +1023,9 @@ class SLICES:
         try:
             analyzer = SpacegroupAnalyzer(structure)
             space_group_number = analyzer.get_space_group_number()
-        except:
+        except (ValueError, AttributeError, RuntimeError) as e:
+            # Space group analysis may fail for some structures
+            logging.debug(f"Failed to determine space group number: {e}")
             space_group_number = None
             
         atom_types = np.array(structure.atomic_numbers)
@@ -988,6 +1040,10 @@ class SLICES:
         
         return atom_types, np.array(edge_indices), np.array(to_jimages), space_group_number
 
+
+# ============================================================================
+# SECTION 8: SLICES Class - XTB Integration
+# ============================================================================
 
     def get_nbf_blist(self):
         """ (1) Get nbf(neighbor list with atom types for xtb_mod).
@@ -1122,7 +1178,7 @@ class SLICES:
             cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=30)
         except subprocess.TimeoutExpired:
             temp_dir.cleanup()
-            raise RuntimeError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
+            raise XTBExecutionError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
         
         # Check if XTB output file exists
         gfnff_json_path = temp_dir.name+'/gfnff_lists.json'
@@ -1137,7 +1193,7 @@ class SLICES:
                 else:
                     error_msg += f"\nXTB stderr: {result.stderr[:200]}"
             temp_dir.cleanup()
-            raise FileNotFoundError(error_msg)
+            raise XTBExecutionError(error_msg)
         
         if self.check_results:
             os.system("cp "+temp_dir.name+'/testBonds_cut.top '+os.getcwd())
@@ -1151,7 +1207,7 @@ class SLICES:
                 data = json.loads(txt)  # read blist,vbond,alist,vangl
             except json.JSONDecodeError as json_err:
                 temp_dir.cleanup()
-                raise ValueError(f"Failed to parse XTB JSON output: {str(json_err)[:200]}. This may indicate XTB output is malformed.")
+                raise XTBExecutionError(f"Failed to parse XTB JSON output: {str(json_err)[:200]}. This may indicate XTB output is malformed.")
             del(txt)
         temp_dir.cleanup()
         blist_original=blist
@@ -1256,13 +1312,22 @@ class SLICES:
             with open(temp_dir.name+'/testBonds_cut.top','w') as f:
                 f.write(nbf)
             
-            # Run XTB with timeout (30 seconds should be enough for most structures)
+            # Calculate adaptive timeout based on structure complexity
+            try:
+                from slices.decoding_improvements import calculate_xtb_timeout
+                num_atoms = len(self.atom_types)
+                num_bonds = len(blist)
+                timeout = calculate_xtb_timeout(num_atoms, num_bonds)
+            except ImportError:
+                timeout = 30  # Fallback to default
+            
+            # Run XTB with adaptive timeout
             try:
                 result = subprocess.run(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
-                cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=30)
+                cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=timeout)
             except subprocess.TimeoutExpired:
                 temp_dir.cleanup()
-                raise RuntimeError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
+                raise XTBExecutionError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
             
             # Check if XTB output file exists
             gfnff_json_path = temp_dir.name+'/gfnff_lists.json'
@@ -1277,7 +1342,7 @@ class SLICES:
                     else:
                         error_msg += f"\nXTB stderr: {result.stderr[:200]}"
                 temp_dir.cleanup()
-                raise FileNotFoundError(error_msg)
+                raise XTBExecutionError(error_msg)
             
             if self.check_results:
                 os.system("cp "+temp_dir.name+'/testBonds_cut.top '+os.getcwd())
@@ -1290,7 +1355,7 @@ class SLICES:
                 try:
                     data = json.loads(txt)  # read blist,vbond,alist,vangl
                 except json.JSONDecodeError as json_err:
-                    raise ValueError(f"Failed to parse XTB JSON output: {str(json_err)[:200]}. This may indicate XTB output is malformed.")
+                    raise XTBExecutionError(f"Failed to parse XTB JSON output: {str(json_err)[:200]}. This may indicate XTB output is malformed.")
                 del(txt)
             temp_dir.cleanup()
             blist_original=blist
@@ -1309,8 +1374,22 @@ class SLICES:
                 elif len(temp2[0]):
                     index=temp2[0][0]
                 else:
-                    print('Cannot find bond!!!') 
-                    continue
+                    # Use fallback bond parameter estimation
+                    try:
+                        from slices.decoding_improvements import BondParameterFallback
+                        atom_symbols = [str(ElementBase.from_Z(z)) for z in self.atom_types]
+                        atom1 = atom_symbols[blist_original[i][0]]
+                        atom2 = atom_symbols[blist_original[i][1]]
+                        estimated_length_bohr = BondParameterFallback.estimate_bond_length(atom1, atom2)
+                        # Convert to Angstrom and apply scaling
+                        estimated_length_angstrom = estimated_length_bohr * 0.529177 * bond_scaling
+                        inner_p_target[i,i] = round(estimated_length_angstrom**2, 5)
+                        bond_weight.append(1.0)  # Default weight for estimated bonds
+                        logging.warning(f"Using fallback bond length for {atom1}-{atom2}: {estimated_length_angstrom:.3f} Å")
+                        continue
+                    except (ImportError, Exception) as e:
+                        logging.warning(f"Cannot find bond and fallback failed: {e}")
+                        continue
                 if np.isnan(data['vbond'][index][2]):
                     bond_weight.append(1)
                     data['vbond'][index][2]=1
@@ -1857,8 +1936,20 @@ class SLICES:
             
             # Step 3: Analyze graph topology
             net.simple_cycle_basis()
-            net.get_lattice_basis()
-            net.get_cocycle_basis()
+            try:
+                net.get_lattice_basis()
+            except LatticeBasisError as e:
+                raise GraphTopologyError(
+                    "Failed to obtain lattice basis from cycle vectors. "
+                    "This structure may have incompatible graph topology for SLICES decoding."
+                ) from e
+            try:
+                net.get_cocycle_basis()
+            except CocycleBasisError as e:
+                raise GraphTopologyError(
+                    "Failed to compute cocycle basis. "
+                    "This structure may have incompatible graph topology for SLICES decoding."
+                ) from e
             
             # Step 4: Generate inner product target
             # Since we are not scaling lattice vectors, we can bypass inner_p_target calculations
@@ -1960,10 +2051,20 @@ class SLICES:
             fig.savefig("graph.png")
         # check the graph first (super fast)
         net.simple_cycle_basis()
-        lattice_basis_result = net.get_lattice_basis()
-        if lattice_basis_result == -1:
-            raise RuntimeError("Failed to obtain lattice basis from cycle vectors. This structure may have incompatible graph topology for SLICES decoding.")
-        net.get_cocycle_basis()
+        try:
+            net.get_lattice_basis()
+        except LatticeBasisError as e:
+            raise LatticeBasisError(
+                "Failed to obtain lattice basis from cycle vectors. "
+                "This structure may have incompatible graph topology for SLICES decoding."
+            ) from e
+        try:
+            net.get_cocycle_basis()
+        except CocycleBasisError as e:
+            raise GraphTopologyError(
+                "Failed to compute cocycle basis. "
+                "This structure may have incompatible graph topology for SLICES decoding."
+            ) from e
         # then calculate inner_p_target (slower)
         if self.check_results:
             inner_p_target, colattice_inds, colattice_weights = self.get_inner_p_target_debug(bond_scaling)
@@ -2035,12 +2136,49 @@ class SLICES:
                 if metric_tensor_std[2,2]==metric_tensor_std[1,1]:
                     lattice_type=21
             x,bounds = self.initialize_x_bounds(net.ndim,net.cocycle_rep,metric_tensor_std,lattice_type,delta_theta,delta_x,lattice_expand,lattice_shrink)
-            x=fmin_l_bfgs_b(self.func, x, fprime=None, args= \
-            (net.ndim,net.order,inner_p_target,colattice_inds,colattice_weights,net.cycle_rep,net.cycle_cocycle_I, \
-            num_nodes,shortest_path,spanning,uncovered_pair,uncovered_pair_lj,covered_pair_lj,vbond_param_ave_covered,vbond_param_ave, \
-            lattice_vectors_scaled,atom_symbols,angle_weight,repul,lattice_type,metric_tensor_std), \
-            approx_grad=True, bounds=bounds, m=10, factr=10000000.0, pgtol=1e-05, \
-            epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
+            
+            # Use adaptive convergence parameters and multi-start optimization
+            try:
+                from slices.decoding_improvements import AdaptiveConvergence, MultiStartOptimizer
+                conv_params = AdaptiveConvergence.get_convergence_params(num_nodes)
+                
+                # Create objective function with arguments
+                def objective_func(x_opt):
+                    return self.func(x_opt, net.ndim, net.order, inner_p_target, colattice_inds, 
+                                   colattice_weights, net.cycle_rep, net.cycle_cocycle_I,
+                                   num_nodes, shortest_path, spanning, uncovered_pair, 
+                                   uncovered_pair_lj, covered_pair_lj, vbond_param_ave_covered,
+                                   vbond_param_ave, lattice_vectors_scaled, atom_symbols,
+                                   angle_weight, repul, lattice_type, metric_tensor_std)
+                
+                # Multi-start optimization
+                x_opt, f_opt, info = MultiStartOptimizer.optimize(
+                    objective_func, x, bounds,
+                    n_starts=3,  # Reduced from 5 for speed
+                    fprime=None,
+                    args=(),
+                    approx_grad=True,
+                    m=10,
+                    factr=conv_params['factr'],
+                    pgtol=conv_params['pgtol'],
+                    epsilon=1e-08,
+                    iprint=-1,
+                    maxfun=15000,
+                    maxiter=15000,
+                    disp=None,
+                    callback=None,
+                    maxls=20
+                )
+                # Format to match expected tuple: (x, f, info_dict) - same as fmin_l_bfgs_b
+                x = (x_opt, f_opt, info)
+            except ImportError:
+                # Fallback to original single-start optimization
+                x=fmin_l_bfgs_b(self.func, x, fprime=None, args= \
+                (net.ndim,net.order,inner_p_target,colattice_inds,colattice_weights,net.cycle_rep,net.cycle_cocycle_I, \
+                num_nodes,shortest_path,spanning,uncovered_pair,uncovered_pair_lj,covered_pair_lj,vbond_param_ave_covered,vbond_param_ave, \
+                lattice_vectors_scaled,atom_symbols,angle_weight,repul,lattice_type,metric_tensor_std), \
+                approx_grad=True, bounds=bounds, m=10, factr=10000000.0, pgtol=1e-05, \
+                epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
             #get optimized structure
             net.metric_tensor, net.cocycle_rep = self.convert_params(x[0], net.ndim, int(net.order - 1),lattice_type,metric_tensor_std)
             lattice_vectors_new=np.linalg.cholesky(net.metric_tensor)
@@ -2057,15 +2195,56 @@ class SLICES:
                 num_nodes,shortest_path,spanning,uncovered_pair,uncovered_pair_lj,covered_pair_lj,vbond_param_ave_covered,vbond_param_ave, \
                 lattice_vectors_scaled,atom_symbols,angle_weight,repul,lattice_type,metric_tensor_std))
         try:
-            if num_nodes <= 20:
-                structure_recreated_opt2, final_energy_per_atom=self.relax(structure_recreated_opt)
-            elif 20 < num_nodes <= 40:
-                structure_recreated_opt2, final_energy_per_atom=self.relax_large_cell1(structure_recreated_opt)
-            else:
-                structure_recreated_opt2, final_energy_per_atom=self.relax_large_cell2(structure_recreated_opt)                                
-            return [structure_recreated_std, structure_recreated_opt,  structure_recreated_opt2 ],final_energy_per_atom
+            # Use progressive relaxation strategy
+            try:
+                from slices.decoding_improvements import ProgressiveRelaxer
+                strategies = ProgressiveRelaxer.get_relaxation_strategies()
+                
+                structure_recreated_opt2 = None
+                final_energy_per_atom = 0.0
+                
+                for strategy in strategies:
+                    try:
+                        # Temporarily update fmax and steps
+                        old_fmax = self.fmax
+                        old_steps = self.steps
+                        self.fmax = strategy['fmax']
+                        self.steps = strategy['steps']
+                        
+                        if num_nodes <= 20:
+                            structure_recreated_opt2, final_energy_per_atom = self.relax(structure_recreated_opt)
+                        elif 20 < num_nodes <= 40:
+                            structure_recreated_opt2, final_energy_per_atom = self.relax_large_cell1(structure_recreated_opt)
+                        else:
+                            structure_recreated_opt2, final_energy_per_atom = self.relax_large_cell2(structure_recreated_opt)
+                        
+                        # Restore original settings
+                        self.fmax = old_fmax
+                        self.steps = old_steps
+                        break  # Success, exit loop
+                    except (TimeoutException, MLIPRelaxationError, Exception) as e:
+                        # Restore original settings
+                        self.fmax = old_fmax
+                        self.steps = old_steps
+                        logging.debug(f"Relaxation with {strategy['name']} failed: {e}")
+                        continue
+                
+                if structure_recreated_opt2 is None:
+                    # All strategies failed, return without MLIP relaxation
+                    return [structure_recreated_std, structure_recreated_opt], 0.0
+                
+                return [structure_recreated_std, structure_recreated_opt, structure_recreated_opt2], final_energy_per_atom
+            except ImportError:
+                # Fallback to original relaxation
+                if num_nodes <= 20:
+                    structure_recreated_opt2, final_energy_per_atom=self.relax(structure_recreated_opt)
+                elif 20 < num_nodes <= 40:
+                    structure_recreated_opt2, final_energy_per_atom=self.relax_large_cell1(structure_recreated_opt)
+                else:
+                    structure_recreated_opt2, final_energy_per_atom=self.relax_large_cell2(structure_recreated_opt)                                
+                return [structure_recreated_std, structure_recreated_opt,  structure_recreated_opt2 ],final_energy_per_atom
         except Exception as e:
-            print(e)
+            logging.warning(f"MLIP relaxation failed: {e}")
             return [structure_recreated_std, structure_recreated_opt],0
 
     def SLICES2structure(self,SLICES,strategy=4,fix_duplicate_edge=True):
@@ -2081,6 +2260,92 @@ class SLICES:
         self.from_SLICES(SLICES,strategy,fix_duplicate_edge)
         structures,final_energy_per_atom = self.to_structures()
         return structures[-1],final_energy_per_atom
+    
+    def robust_SLICES2structure(self, SLICES, strategy=4, fix_duplicate_edge=True, max_attempts=3):
+        """
+        Robust decoding with multiple fallback strategies to maximize success rate.
+        
+        This method implements a comprehensive error recovery pipeline that tries
+        multiple strategies when standard decoding fails:
+        1. Standard decoding
+        2. Alternative encoding strategies
+        3. Fallback bond parameters
+        4. Progressive relaxation
+        5. Return structure without MLIP relaxation if all else fails
+        
+        Args:
+            SLICES (str): A SLICES string.
+            strategy (int): Encoding strategy (1-4).
+            fix_duplicate_edge (bool): Fix duplicate edges if present.
+            max_attempts (int): Maximum number of alternative strategy attempts.
+            
+        Returns:
+            tuple: (Structure, float) - Reconstructed structure and energy per atom.
+                   If MLIP relaxation fails, returns ZL*-optimized structure with energy 0.0.
+        
+        References:
+            - Boyd & Woo (2016): Graph theory methods for crystal structures
+            - Lenstra et al. (1982): Lattice basis reduction algorithms
+        """
+        # Attempt 1: Standard decoding
+        try:
+            return self.SLICES2structure(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+        except LatticeBasisError as e:
+            logging.warning(f"Lattice basis error, trying alternative strategies: {e}")
+            
+            # Attempt 2: Try different encoding strategies
+            for alt_strategy in [3, 2, 1]:
+                if alt_strategy == strategy:
+                    continue
+                try:
+                    # Re-encode with alternative strategy
+                    self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+                    alt_slices = self.to_SLICES(strategy=alt_strategy)
+                    return self.SLICES2structure(alt_slices, strategy=alt_strategy)
+                except Exception as e2:
+                    logging.debug(f"Alternative strategy {alt_strategy} failed: {e2}")
+                    continue
+        
+        except XTBExecutionError as e:
+            logging.warning(f"XTB execution error, using fallback bond parameters: {e}")
+            # Attempt 3: Use fallback bond parameters (handled in get_inner_p_target)
+            try:
+                self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+                structures, _ = self.to_structures()
+                # Return best available structure (ZL*-optimized if MLIP failed)
+                if len(structures) >= 2:
+                    return structures[1], 0.0  # Return ZL*-optimized structure
+                else:
+                    return structures[0], 0.0  # Return barycentric embedding
+            except Exception as e2:
+                logging.error(f"Fallback bond parameters failed: {e2}")
+        
+        except (TimeoutException, MLIPRelaxationError) as e:
+            logging.warning(f"MLIP relaxation failed, returning ZL*-optimized structure: {e}")
+            # Attempt 4: Return structure without MLIP relaxation
+            try:
+                self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+                structures, _ = self.to_structures()
+                if len(structures) >= 2:
+                    return structures[1], 0.0  # Return ZL*-optimized structure
+                else:
+                    return structures[0], 0.0  # Return barycentric embedding
+            except Exception as e2:
+                logging.error(f"Failed to get ZL*-optimized structure: {e2}")
+        
+        except Exception as e:
+            logging.error(f"Unexpected error in robust decoding: {e}")
+        
+        # Final fallback: Return barycentric embedding
+        try:
+            self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
+            structures, _ = self.to_structures()
+            return structures[0], 0.0  # Return initial structure
+        except Exception as e:
+            raise SLICESDecodingError(
+                f"All decoding strategies failed for SLICES string. "
+                f"Last error: {str(e)[:200]}"
+            ) from e
 
     def to_relaxed_structure(self, bond_scaling=1.05, delta_theta=0.005, delta_x=0.45,lattice_shrink=1,lattice_expand=1.25,angle_weight=0.5,vbond_param_ave_covered=0.000,vbond_param_ave=0.01,repul=True):
         """
@@ -2093,7 +2358,10 @@ class SLICES:
         if len(structures)==3:        
             return structures[-1],final_energy_per_atom
         else:
-            raise Exception("relax failed")
+            raise MLIPRelaxationError(
+                "MLIP relaxation failed for structure. "
+                "This may be due to convergence issues or incompatible structure."
+            )
 
     def to_4structures(self, bond_scaling=1.05, delta_theta=0.005, delta_x=0.45,lattice_shrink=1,lattice_expand=1.25,angle_weight=0.5,vbond_param_ave_covered=0.000,vbond_param_ave=0.01,repul=True):
         """

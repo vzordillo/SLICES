@@ -11,6 +11,20 @@ from contextlib import contextmanager
 import sys
 import os
 
+# Enable Keras 2 compatibility mode for M3GNet (must be done before any TensorFlow imports)
+if "TF_USE_LEGACY_KERAS" not in os.environ:
+    os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
+# Try to use tf_keras (legacy Keras 2) if available - must be done before any keras imports
+try:
+    import tf_keras
+    # Monkey-patch keras to use tf_keras before any other modules import keras
+    if 'keras' not in sys.modules:
+        sys.modules['keras'] = tf_keras
+except ImportError:
+    # tf_keras not available, rely on TF_USE_LEGACY_KERAS env var
+    pass
+
 
 class MLIPRelaxer(ABC):
     """Abstract base class for MLIP relaxers"""
@@ -38,10 +52,41 @@ class M3GNetRelaxer(MLIPRelaxer):
     
     def __init__(self, optimizer="BFGS"):
         try:
+            # Ensure TF_USE_LEGACY_KERAS is set
+            if "TF_USE_LEGACY_KERAS" not in os.environ:
+                os.environ["TF_USE_LEGACY_KERAS"] = "1"
+            
+            # Try to use tf_keras (legacy Keras 2) if available
+            # This must be done before importing TensorFlow or M3GNet
+            try:
+                import tf_keras
+                # Patch both keras and tensorflow.keras to use tf_keras
+                if 'keras' not in sys.modules:
+                    sys.modules['keras'] = tf_keras
+                # Also patch tensorflow.keras after TensorFlow is imported
+                import tensorflow as tf
+                if not hasattr(tf, 'keras') or not isinstance(tf.keras, type(tf_keras)):
+                    tf.keras = tf_keras
+            except ImportError:
+                # tf_keras not available, rely on TF_USE_LEGACY_KERAS env var
+                pass
+            
             from m3gnet.models import Relaxer
             self.relaxer = Relaxer(optimizer=optimizer)
         except ImportError:
             raise ImportError("M3GNet is not installed. Install with: pip install m3gnet")
+        except Exception as e:
+            error_str = str(e).lower()
+            # If still getting Keras 3 errors, try installing tf_keras
+            if "file format not supported" in error_str or "keras 3" in error_str or "only supports v3" in error_str or "keras cannot be imported" in error_str:
+                raise RuntimeError(
+                    f"M3GNet failed with Keras 3 compatibility issue: {str(e)[:200]}\n\n"
+                    "Workaround: Install tf_keras (legacy Keras 2) package in the conda environment:\n"
+                    "  conda activate slices\n"
+                    "  /opt/miniconda3/envs/slices/bin/pip install tf_keras\n"
+                    "Then try again. The TF_USE_LEGACY_KERAS environment variable is already set."
+                ) from e
+            raise
     
     def relax(self, structure: Structure, fmax: float = 0.2, steps: int = 100):
         return self.relaxer.relax(structure, fmax=fmax, steps=steps)
