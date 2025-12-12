@@ -69,9 +69,22 @@ logs/
 *.h5
 *.pb
 
-# Data files (large datasets)
-*.csv
-*.json
+# Large data files (exclude specific directories, not all CSV/JSON)
+# Ignore large generated/temporary data files
+benchmark/**/*.csv
+benchmark/**/*.json
+HTS/**/*.csv
+HTS/**/*.json
+MatterGPT/**/raw_*.csv
+MatterGPT_no_flash/**/raw_*.csv
+# But keep important project files
+!data/**/*.csv
+!data/**/*.json
+!docs/benchmarks/*.csv
+!docs/benchmarks/*.json
+!src/slices/**/*.json
+!MatterGPT/**/model/*_vocab.json
+!MatterGPT_no_flash/**/model/*_vocab.json
 !pyproject.toml
 !package.json
 !package-lock.json

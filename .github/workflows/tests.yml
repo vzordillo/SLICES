@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD workflow
 # Automatically runs tests on push/PR to main branch
-# Tests against Python 3.9, 3.10, 3.11
+# Tests against Python 3.9, 3.10
 # 
 # To disable: delete this file or set 'on:' to empty
 # To modify: edit the python-version matrix or test commands
