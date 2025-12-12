@@ -2,6 +2,8 @@
 
 This document contains all technical documentation for SLICES: API reference, system architecture, and algorithm enhancements.
 
+**SLICES** (Simplified Line-Input Crystal-Encoding System) is an invertible crystal structure representation system that converts 3D crystal structures into compact text strings and reconstructs them back to atomic coordinates. It uses graph theory for topology encoding, machine learning interatomic potentials (MLIPs) for structure relaxation, and XTB quantum chemistry for bond parameter prediction.
+
 ---
 
 ## Table of Contents

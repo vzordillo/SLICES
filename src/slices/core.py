@@ -17,25 +17,48 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["OMP_NUM_THREADS"] = "1"
 # Use the custom XTB binary from xiaohang007/xtb repository
 # This is a modified version with specific flags (noring, nooutput, nostdout, noCN)
-# For macOS/Windows users: You may need to build from source from https://github.com/xiaohang007/xtb
+# Binaries are organized in platform-specific subdirectories: bin/linux, bin/macos, bin/windows
 import platform
 import shutil
 
-# Determine XTB binary name based on platform
+# Determine platform and binary name
 _platform = platform.system()
 if _platform == 'Windows':
+    platform_dir = "windows"
     xtb_binary_name = "xtb_noring_nooutput_nostdout_noCN.exe"
-else:
+elif _platform == 'Darwin':
+    platform_dir = "macos"
+    xtb_binary_name = "xtb_noring_nooutput_nostdout_noCN"
+else:  # Linux
+    platform_dir = "linux"
     xtb_binary_name = "xtb_noring_nooutput_nostdout_noCN"
 
-xtb_custom = os.path.join(os.path.abspath(os.path.dirname(__file__)), xtb_binary_name)
+# Check platform-specific binary directory first (recommended location)
+_slices_dir = os.path.abspath(os.path.dirname(__file__))
+xtb_platform_path = os.path.join(_slices_dir, "bin", platform_dir, xtb_binary_name)
 
-if os.path.exists(xtb_custom):
+# Fallback to old location for backward compatibility
+xtb_legacy_path = os.path.join(_slices_dir, xtb_binary_name)
+
+# Try platform-specific path first, then legacy path
+xtb_custom = None
+if os.path.exists(xtb_platform_path):
+    xtb_custom = xtb_platform_path
+elif os.path.exists(xtb_legacy_path):
+    xtb_custom = xtb_legacy_path
+
+if xtb_custom and os.path.exists(xtb_custom):
     # Check if binary is executable and compatible
     import stat
     # On Windows, executables don't need X_OK permission, just existence
     if _platform != 'Windows':
         is_executable = os.access(xtb_custom, os.X_OK)
+        if not is_executable:
+            # Try to make it executable
+            try:
+                os.chmod(xtb_custom, os.stat(xtb_custom).st_mode | stat.S_IEXEC)
+            except (OSError, PermissionError):
+                pass
     else:
         is_executable = True
     
@@ -43,24 +66,32 @@ if os.path.exists(xtb_custom):
     if _platform == 'Darwin':
         try:
             import subprocess
-            # Try to check file type (only works on Unix-like systems)
+            # Check file type to verify it's a macOS binary
             result = subprocess.run(['file', xtb_custom], capture_output=True, text=True, timeout=2)
-            if result.returncode == 0 and 'Linux' in result.stdout and 'x86-64' in result.stdout:
-                # Linux binary on macOS - try to use system XTB as fallback
-                system_xtb = shutil.which("xtb")
-                if system_xtb:
-                    os.environ["XTB_MOD_PATH"] = system_xtb
+            if result.returncode == 0:
+                file_output = result.stdout
+                # Check if it's a Linux binary (incompatible on macOS)
+                if 'Linux' in file_output and 'x86-64' in file_output:
+                    # Linux binary on macOS - try to use system XTB as fallback
+                    system_xtb = shutil.which("xtb")
+                    if system_xtb:
+                        os.environ["XTB_MOD_PATH"] = system_xtb
+                        print("WARNING: Found Linux binary on macOS. Using system XTB instead.")
+                        print("Please build macOS binary from https://github.com/xiaohang007/xtb for best compatibility.")
+                    else:
+                        os.environ["XTB_MOD_PATH"] = xtb_custom
+                        print("WARNING: Using Linux-only XTB binary on macOS. Decoding may fail.")
+                        print("Please build XTB from https://github.com/xiaohang007/xtb for macOS compatibility.")
                 else:
+                    # Valid macOS binary
                     os.environ["XTB_MOD_PATH"] = xtb_custom
-                    print("WARNING: Using Linux-only XTB binary on macOS. Decoding may fail.")
-                    print("Please build XTB from https://github.com/xiaohang007/xtb for macOS compatibility.")
-                # Note: The system XTB may not have the same flags, so decoding might still fail
             else:
                 os.environ["XTB_MOD_PATH"] = xtb_custom
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError, KeyError, AttributeError):
-            # 'file' command not available (e.g., on Windows) or other error
+            # 'file' command not available or other error - assume binary is valid
             os.environ["XTB_MOD_PATH"] = xtb_custom
     else:
+        # Linux or Windows - use binary directly
         os.environ["XTB_MOD_PATH"] = xtb_custom
 else:
     # Fallback to system XTB
@@ -220,9 +251,15 @@ class SLICES:
         Initialize SLICES encoder/decoder.
         
         Args:
-            atom_types (np.array, optional): Atomic numbers of atoms in a SLICES string. Defaults to None.
-            edge_indices (np.array, optional): Edge indices connecting atoms in a SLICES string. Defaults to None.
-            to_jimages (np.array, optional): Periodic boundary condition labels for edges in a SLICES string. Defaults to None.
+            atom_types (np.array, optional): Atomic numbers (Z) of atoms in a SLICES string. Each element is an integer
+                representing the atomic number (e.g., 1 for H, 6 for C, 8 for O). Used when initializing with pre-parsed
+                graph data instead of a structure. If provided along with edge_indices and to_jimages, allows direct use
+                of graph representation without structure parsing. Defaults to None.
+            edge_indices (np.array, optional): Edge indices connecting atoms in a SLICES string. Used when initializing
+                with pre-parsed graph data. Each edge is represented as [atom_i, atom_j]. Defaults to None.
+            to_jimages (np.array, optional): Periodic boundary condition labels for edges in a SLICES string.
+                Used when initializing with pre-parsed graph data. Specifies periodic translations for each edge.
+                Defaults to None.
             graph_method (str, optional): Method for analyzing local chemical environments to generate labeled quotient graphs.
                 Options: 'econnn', 'crystalnn', 'brunnernn', 'mininn'. Defaults to 'econnn'.
             check_results (bool, optional): If True, outputs intermediate results to files for debugging. Defaults to False.

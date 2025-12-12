@@ -1,29 +1,33 @@
 # -*- coding: UTF-8 -*-
 # Hang Xiao 2024.03
 # xiaohang07@live.cn
-import os,sys,glob,json,io
-import re,time
-import numpy as np
-import math,json
-import tempfile
-from tqdm import tqdm
-from pymatgen.core.structure import Structure
-import warnings
-warnings.filterwarnings("ignore")
-import contextlib
-from itertools import zip_longest
-import configparser
-from contextlib import redirect_stdout
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
+import os
+import sys
+import glob
+import json
+import io
+import re
+import time
 import math
-import shutil  # Used to check if SLURM commands exist
+import tempfile
+import shutil
 import logging
 import subprocess
 import getpass
+import configparser
+import contextlib
+from contextlib import redirect_stdout
+from itertools import zip_longest
 from multiprocessing import Pool, cpu_count
 from functools import partial
+
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
+from sklearn.model_selection import train_test_split
+from pymatgen.core.structure import Structure
+import warnings
+warnings.filterwarnings("ignore")
 @contextlib.contextmanager
 def temporaryWorkingDirectory(path):
     """
