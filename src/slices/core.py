@@ -814,10 +814,23 @@ class SLICES:
         return True
 
     def get_canonical_SLICES(self,SLICES,strategy=4):
-        """Convert a SLICES to its canonical form.
+        """Convert a SLICES string to its canonical form.
+        
+        The canonical form is a unique representation of a crystal structure that is
+        independent of atom ordering. Multiple SLICES strings representing the same
+        structure will all reduce to the same canonical form.
+        
+        The canonicalization process:
+        1. Sorts atoms by atomic number
+        2. Sorts edges by atom indices
+        3. Sorts edge labels (periodic boundary conditions) consistently
+        
+        This ensures that identical crystal structures always produce identical
+        canonical SLICES strings, regardless of how they were originally encoded.
 
         Args:
-            SLICES (str): A SLICES string.
+            SLICES (str): A SLICES string to canonicalize.
+            strategy (int, optional): Encoding strategy used. Defaults to 4.
 
         Returns:
             str: The canonical SLICES string.
@@ -1052,19 +1065,27 @@ class SLICES:
     def structure2SLICESAug_atom_order(self, structure, strategy=4, num=50):
         """
         Generate augmented SLICES strings by randomly shuffling atom order.
-        Alias for structure2randomSLICES with atom order shuffling enabled.
         
-        This method generates multiple SLICES representations of the same structure
-        by permuting the atom ordering. All augmented strings represent the same
-        crystal structure but with different atom indices.
+        This method generates multiple SLICES representations of the same crystal
+        structure by permuting the atom ordering. All augmented strings represent
+        the same structure but with different atom indices in the SLICES encoding.
+        
+        Augmentation is useful for:
+        - Data augmentation in machine learning training
+        - Testing canonicalization (all augmented strings should reduce to same canonical form)
+        - Exploring different representations of the same structure
+        
+        The method randomly shuffles atom order while preserving the structure topology
+        (bonds and periodic boundary conditions are remapped to match new atom indices).
         
         Args:
-            structure: pymatgen Structure object
+            structure: pymatgen Structure object to augment
             strategy: Encoding strategy (1, 2, 3, or 4). Defaults to 4.
             num: Number of unique SLICES strings to generate. Defaults to 50.
             
         Returns:
-            List of unique SLICES strings (includes original)
+            List of unique SLICES strings. Includes the original SLICES string plus
+            augmented variations. All strings represent the same crystal structure.
         """
         return self.structure2randomSLICES(
             structure=structure,
@@ -1074,7 +1095,6 @@ class SLICES:
             shuffle_bond_order=False,
             flip_bonds=False
         )
-        return SLICES_list[:num]
         
     def get_dim(self,structure):
         """Get the dimension of a Structure.
