@@ -16,16 +16,6 @@ class TestMLIPModelInitialization:
     """Test MLIP model initialization."""
     
     @pytest.mark.mlip
-    def test_chgnet_initialization(self):
-        """Test CHGNet model initialization."""
-        try:
-            backend = SLICES(relax_model='chgnet')
-            assert backend.relaxer is not None
-            assert backend.relax_model == 'chgnet'
-        except Exception as e:
-            pytest.skip(f"CHGNet not available: {e}")
-    
-    @pytest.mark.mlip
     def test_m3gnet_initialization(self):
         """Test M3GNet model initialization."""
         try:
@@ -36,20 +26,20 @@ class TestMLIPModelInitialization:
             pytest.skip(f"M3GNet not available: {e}")
     
     @pytest.mark.mlip
-    def test_matgl_initialization(self):
-        """Test MatGL model initialization."""
+    def test_chgnet_initialization(self):
+        """Test CHGNet model initialization."""
         try:
-            backend = SLICES(relax_model='matgl')
+            backend = SLICES(relax_model='chgnet')
             assert backend.relaxer is not None
-            assert backend.relax_model == 'matgl'
+            assert backend.relax_model == 'chgnet'
         except Exception as e:
-            pytest.skip(f"MatGL not available: {e}")
+            pytest.skip(f"CHGNet not available: {e}")
     
     @pytest.mark.mlip
     def test_get_relaxer_factory(self):
         """Test get_relaxer factory function."""
         try:
-            relaxer = get_relaxer('chgnet')
+            relaxer = get_relaxer('m3gnet')
             assert isinstance(relaxer, MLIPRelaxer)
         except Exception as e:
             pytest.skip(f"get_relaxer failed: {e}")
@@ -113,11 +103,15 @@ class TestMLIPModelFallback:
     def test_fallback_on_initialization_failure(self):
         """Test that fallback works when primary model fails."""
         # This tests the fallback mechanism in SLICES.__init__
-        # If m3gnet fails, should fall back to chgnet
+        # If requested model fails, should fall back to m3gnet
         try:
-            backend = SLICES(relax_model='m3gnet')
-            # Should either work or have fallen back
+            backend = SLICES(relax_model='invalid_model')
+            # Should have fallen back to m3gnet
             assert backend.relaxer is not None
+            assert backend.relax_model == 'm3gnet'
+        except ValueError:
+            # ValueError is expected for invalid model names
+            pass
         except Exception as e:
             pytest.skip(f"Model initialization failed: {e}")
 

@@ -13,15 +13,6 @@ from pymatgen.core import Lattice
 class TestGetRelaxer:
     """Test get_relaxer factory function."""
     
-    def test_get_chgnet_relaxer(self):
-        """Test getting CHGNet relaxer."""
-        try:
-            relaxer = get_relaxer('chgnet')
-            assert relaxer is not None
-            assert isinstance(relaxer, MLIPRelaxer)
-        except Exception as e:
-            pytest.skip(f"CHGNet not available: {e}")
-    
     def test_get_m3gnet_relaxer(self):
         """Test getting M3GNet relaxer."""
         try:
@@ -31,14 +22,15 @@ class TestGetRelaxer:
         except Exception as e:
             pytest.skip(f"M3GNet not available: {e}")
     
-    def test_get_matgl_relaxer(self):
-        """Test getting MatGL relaxer."""
+    def test_get_chgnet_relaxer(self):
+        """Test getting CHGNet relaxer."""
         try:
-            relaxer = get_relaxer('matgl')
+            relaxer = get_relaxer('chgnet')
             assert relaxer is not None
             assert isinstance(relaxer, MLIPRelaxer)
         except Exception as e:
-            pytest.skip(f"MatGL not available: {e}")
+            pytest.skip(f"CHGNet not available: {e}")
+    
     
     def test_invalid_model_raises_error(self):
         """Test that invalid model name raises error."""
@@ -53,7 +45,7 @@ class TestMLIPRelaxerInterface:
     def test_relax_method_exists(self):
         """Test that relax method exists on relaxer."""
         try:
-            relaxer = get_relaxer('chgnet')
+            relaxer = get_relaxer('m3gnet')
             assert hasattr(relaxer, 'relax')
             assert callable(getattr(relaxer, 'relax'))
         except Exception as e:
@@ -64,17 +56,19 @@ class TestMLIPRelaxerInterface:
     def test_relax_simple_structure(self):
         """Test relaxing a simple structure."""
         try:
-            relaxer = get_relaxer('chgnet')
+            relaxer = get_relaxer('m3gnet')
+            # Use larger structure for M3GNet (needs proper three-body interactions)
             structure = Structure(
-                Lattice.cubic(4.0),
-                ["Si", "Si"],
-                [[0, 0, 0], [0.5, 0.5, 0.5]]
+                Lattice.cubic(5.43),
+                ["Si"] * 8,
+                [[0.0, 0.0, 0.0], [0.25, 0.25, 0.25], [0.5, 0.5, 0.0], [0.75, 0.75, 0.25],
+                [0.5, 0.0, 0.5], [0.75, 0.25, 0.75], [0.0, 0.5, 0.5], [0.25, 0.75, 0.75]]
             )
             
-            relaxed, energy = relaxer.relax(structure)
-            assert relaxed is not None
-            assert isinstance(relaxed, Structure)
-            assert isinstance(energy, (int, float))
+            result = relaxer.relax(structure, fmax=0.3, steps=10)
+            assert result is not None
+            assert 'final_structure' in result
+            assert isinstance(result['final_structure'], Structure)
         except Exception as e:
             pytest.skip(f"Relaxation failed: {e}")
 

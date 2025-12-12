@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Unified interface for multiple Machine Learning Interatomic Potential (MLIP) models
-Supports: M3GNet, MatGL, CHGNet, MatterSim, ORBv3
+Supports: M3GNet, CHGNet, MatterSim, ORBv3
+
+Note: MatGL has been removed due to model download/cache issues.
 """
 
 import warnings
@@ -27,28 +29,44 @@ except ImportError:
 
 
 class MLIPRelaxer(ABC):
-    """Abstract base class for MLIP relaxers"""
+    """
+    Abstract base class for machine learning interatomic potential (MLIP) relaxers.
+    
+    Provides a unified interface for different MLIP models to perform structure relaxation.
+    All relaxers must implement the relax() method which optimizes atomic positions and
+    optionally the unit cell to minimize the potential energy.
+    """
     
     @abstractmethod
     def relax(self, structure: Structure, fmax: float = 0.2, steps: int = 100):
         """
-        Relax a structure using the MLIP model.
+        Relax a crystal structure using the MLIP model.
+        
+        Performs energy minimization by optimizing atomic positions and optionally the unit cell
+        until forces on all atoms are below the convergence threshold or maximum steps are reached.
         
         Args:
-            structure: pymatgen Structure object
-            fmax: Maximum force convergence criterion (eV/Angstrom)
-            steps: Maximum number of optimization steps
+            structure (Structure): pymatgen Structure object to relax
+            fmax (float, optional): Maximum force convergence criterion in eV/Å. Optimization stops
+                when all atomic forces are below this value. Defaults to 0.2.
+            steps (int, optional): Maximum number of optimization steps. Defaults to 100.
             
         Returns:
-            dict with keys:
-                - 'final_structure': Optimized Structure object
-                - 'trajectory': Object with 'energies' attribute (list of energies)
+            dict: Dictionary containing:
+                - 'final_structure' (Structure): Optimized Structure object
+                - 'trajectory' (object): Trajectory object with 'energies' attribute (list of
+                  energies at each optimization step)
         """
         pass
 
 
 class M3GNetRelaxer(MLIPRelaxer):
-    """M3GNet relaxer adapter"""
+    """
+    Adapter for M3GNet (Materials Project 3D Graph Network) MLIP model.
+    
+    M3GNet is a graph neural network-based interatomic potential developed by the Materials Project.
+    This adapter handles TensorFlow/Keras compatibility issues and provides a unified interface.
+    """
     
     def __init__(self, optimizer="BFGS"):
         try:
@@ -89,52 +107,27 @@ class M3GNetRelaxer(MLIPRelaxer):
             raise
     
     def relax(self, structure: Structure, fmax: float = 0.2, steps: int = 100):
+        """
+        Relax structure using M3GNet model.
+        
+        Args:
+            structure (Structure): pymatgen Structure object
+            fmax (float, optional): Maximum force convergence criterion (eV/Å). Defaults to 0.2.
+            steps (int, optional): Maximum optimization steps. Defaults to 100.
+            
+        Returns:
+            dict: Dictionary with 'final_structure' and 'trajectory' keys
+        """
         return self.relaxer.relax(structure, fmax=fmax, steps=steps)
 
 
-class MatGLRelaxer(MLIPRelaxer):
-    """MatGL relaxer adapter"""
-    
-    def __init__(self, model_name="MP3-2024.2.8-PES", optimizer="FIRE"):
-        try:
-            from matgl.ext.ase import Relaxer
-            from matgl import load_model
-            # Try to load the MatGL model
-            # If model_name fails, try default model
-            try:
-                potential, state = load_model(model_name)
-            except Exception:
-                # Try with default model name
-                try:
-                    potential, state = load_model()
-                except Exception:
-                    # Try alternative model names
-                    potential, state = load_model("MP3-2024.2.8-PES")
-            # Create relaxer with potential
-            self.relaxer = Relaxer(potential=potential, optimizer=optimizer, relax_cell=True)
-        except ImportError:
-            raise ImportError("MatGL is not installed. Install with: pip install matgl")
-    
-    def relax(self, structure: Structure, fmax: float = 0.2, steps: int = 100):
-        # MatGL Relaxer uses fmax in eV/Angstrom (same as M3GNet)
-        result = self.relaxer.relax(structure, fmax=fmax, steps=steps)
-        # MatGL returns dict with 'final_structure' and 'trajectory'
-        # Ensure trajectory has energies attribute
-        if 'trajectory' in result and hasattr(result['trajectory'], 'energies'):
-            return result
-        else:
-            # Create a compatible trajectory object
-            class Trajectory:
-                def __init__(self, energies):
-                    self.energies = energies
-            return {
-                'final_structure': result.get('final_structure', result.get('structure')),
-                'trajectory': Trajectory(result.get('energies', [result.get('energy', 0.0)]))
-            }
-
-
 class CHGNetRelaxer(MLIPRelaxer):
-    """CHGNet relaxer adapter"""
+    """
+    Adapter for CHGNet (Charge-informed Graph Neural Network) MLIP model.
+    
+    CHGNet incorporates charge information into the graph neural network architecture
+    for structure relaxation.
+    """
     
     def __init__(self):
         try:
@@ -165,7 +158,12 @@ class CHGNetRelaxer(MLIPRelaxer):
 
 
 class MatterSimRelaxer(MLIPRelaxer):
-    """MatterSim relaxer adapter"""
+    """
+    Adapter for MatterSim MLIP model from Microsoft.
+    
+    MatterSim is a deep learning-based interatomic potential that uses ASE interface
+    for structure optimization.
+    """
     
     def __init__(self, device="cpu"):
         try:
@@ -209,7 +207,12 @@ class MatterSimRelaxer(MLIPRelaxer):
 
 
 class ORBv3Relaxer(MLIPRelaxer):
-    """ORBv3 relaxer adapter"""
+    """
+    Adapter for ORBv3 (Orbital Materials) MLIP model.
+    
+    ORBv3 is an interatomic potential from Orbital Materials that supports multiple
+    model variants. Uses ASE interface for structure optimization.
+    """
     
     def __init__(self, model_name="orb-v3-direct-inf-mpa", device="cpu"):
         try:
@@ -263,29 +266,37 @@ class ORBv3Relaxer(MLIPRelaxer):
 
 def get_relaxer(model_name: str = "m3gnet", **kwargs):
     """
-    Factory function to get the appropriate relaxer based on model name.
+    Factory function to create the appropriate MLIP relaxer instance.
+    
+    Creates and returns a relaxer adapter for the specified MLIP model. Handles model
+    initialization, error handling, and falls back to M3GNet if the requested model is
+    unavailable.
     
     Args:
-        model_name: Name of the MLIP model. Options: 'm3gnet', 'matgl', 'chgnet', 'mattersim', 'orbv3'
-        **kwargs: Additional arguments passed to the relaxer constructor
+        model_name (str, optional): Name of the MLIP model. Options:
+            - 'm3gnet': M3GNet (Materials Project, default)
+            - 'chgnet': CHGNet (charge-informed GNN)
+            - 'mattersim': MatterSim (Microsoft)
+            - 'orbv3': ORBv3 (Orbital Materials)
+            Defaults to "m3gnet".
+        **kwargs: Additional arguments passed to the relaxer constructor:
+            - optimizer (str): Optimizer algorithm ("BFGS", "FIRE", etc.)
+            - model_name (str): Specific model variant name (for MatGL, ORBv3)
+            - device (str): Computing device ("cpu", "cuda", "mps", etc.)
         
     Returns:
-        MLIPRelaxer instance
+        MLIPRelaxer: Instance of the appropriate relaxer class
         
     Raises:
-        ValueError: If model_name is not supported
-        ImportError: If required package is not installed
+        ValueError: If model_name is not in the list of supported models
+        ImportError: If the required package for the model is not installed
+        RuntimeError: If model initialization fails (e.g., Keras compatibility issues)
     """
     model_name = model_name.lower()
     
     if model_name == "m3gnet":
         optimizer = kwargs.get("optimizer", "BFGS")
         return M3GNetRelaxer(optimizer=optimizer)
-    
-    elif model_name == "matgl":
-        model_name_arg = kwargs.get("model_name", "MP3-2024.2.8-PES")
-        optimizer = kwargs.get("optimizer", "FIRE")
-        return MatGLRelaxer(model_name=model_name_arg, optimizer=optimizer)
     
     elif model_name == "chgnet":
         return CHGNetRelaxer()
@@ -300,5 +311,5 @@ def get_relaxer(model_name: str = "m3gnet", **kwargs):
         return ORBv3Relaxer(model_name=model_name_arg, device=device)
     
     else:
-        raise ValueError(f"Unsupported model: {model_name}. Supported models: m3gnet, matgl, chgnet, mattersim, orbv3")
+        raise ValueError(f"Unsupported model: {model_name}. Supported models: m3gnet, chgnet, mattersim, orbv3")
 

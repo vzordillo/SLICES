@@ -94,7 +94,6 @@ from collections import defaultdict, deque
 from io import StringIO
 import pandas as pd
 import matplotlib.pyplot as plt
-from m3gnet.models import Relaxer
 import logging
 import tensorflow as tf
 import signal,gc
@@ -203,25 +202,35 @@ def function_timeout(seconds: int):
 
 
 class SLICES:
-    """Invertible Crystal Representation (SLICES and labeled quotient graph)
+    """
+    Main class for encoding crystal structures to SLICES strings and decoding SLICES strings back to structures.
+    
+    SLICES (Simplified Line-Input Crystal-Encoding System) is an invertible representation that converts
+    crystal structures into compact text strings. The encoding process involves:
+    1. Converting structure to a labeled quotient graph (atoms as nodes, bonds as edges)
+    2. Extracting cycle and cocycle basis information
+    3. Computing lattice vectors from cycle information
+    4. Encoding to text format
+    
+    The decoding process reverses this: parsing the string, reconstructing the graph, computing initial
+    coordinates, optimizing with ZL* algorithm, and relaxing with MLIP models.
     """    
     def __init__(self, atom_types=None, edge_indices=None, to_jimages=None, graph_method='econnn', check_results=False, optimizer="BFGS",fmax=0.2,steps=100,relax_model="m3gnet"):
-        """__init__
-
+        """
+        Initialize SLICES encoder/decoder.
+        
         Args:
-            atom_types (np.array, optional): Atom types in a SLICES string. Defaults to None.
-            edge_indices (np.array, optional): Edge indices in a SLICES string. Defaults to None.
-            to_jimages (np.array, optional): Edge labels in a SLICES string. Defaults to None.
-            graph_method (str, optional): The method used for analyzing the local chemical environments 
-                to generate labeled quotient graphs. Defaults to 'econnn'.
-            check_results (bool, optional): Flag to indicate whether to output intermediate results for 
-                debugging purposes. Defaults to False.
-            optimizer (str, optional): Optimizer used in MLIP optimization. Defaults to "BFGS".
-            fmax (float, optional): Convergence criterion of maximum allowable force on each atom. 
-                Defaults to 0.2.
-            steps (int, optional): Max steps. Defaults to 100.
-            relax_model (str, optional): MLIP model to use for relaxation. Options: 'm3gnet', 'matgl', 
-                'chgnet', 'mattersim', 'orbv3'. Defaults to "m3gnet".
+            atom_types (np.array, optional): Atomic numbers of atoms in a SLICES string. Defaults to None.
+            edge_indices (np.array, optional): Edge indices connecting atoms in a SLICES string. Defaults to None.
+            to_jimages (np.array, optional): Periodic boundary condition labels for edges in a SLICES string. Defaults to None.
+            graph_method (str, optional): Method for analyzing local chemical environments to generate labeled quotient graphs.
+                Options: 'econnn', 'crystalnn', 'brunnernn', 'mininn'. Defaults to 'econnn'.
+            check_results (bool, optional): If True, outputs intermediate results to files for debugging. Defaults to False.
+            optimizer (str, optional): Optimizer algorithm for MLIP relaxation. Options: "BFGS", "FIRE". Defaults to "BFGS".
+            fmax (float, optional): Maximum force convergence criterion in eV/Å. Lower values require stricter convergence. Defaults to 0.2.
+            steps (int, optional): Maximum number of optimization steps during MLIP relaxation. Defaults to 100.
+            relax_model (str, optional): Machine learning interatomic potential model for structure relaxation.
+                Options: 'm3gnet', 'chgnet', 'mattersim', 'orbv3'. Defaults to "m3gnet".
         """        
         tf.keras.backend.clear_session()
         gc.collect()
@@ -280,21 +289,40 @@ class SLICES:
 
     @staticmethod 
     def get_index_list_allow_duplicates(ori, mod):
+        """
+        Map elements from original list to indices in modified list, allowing duplicates.
+        
+        For each element in the original list, finds the first matching element in the modified list
+        and returns its index. Handles duplicate values by tracking which indices have been used.
+        
+        Args:
+            ori: Original list of elements to find indices for
+            mod: Modified list to search for matching elements
+            
+        Returns:
+            List of indices mapping ori elements to their positions in mod
+        """
         indexes = defaultdict(deque)
+        # Build index map: for each value, store all positions where it appears
         for i, x in enumerate(mod):
             indexes[x].append(i)
+        # For each element in original list, get first available index from modified list
         ids = [indexes[x].popleft() for x in ori]
         return ids
 
     @staticmethod
     def check_element(structure):
-        """Make sure no atoms with atomic numbers higher than 86 (due to GFN-FF's limitation).
-
+        """
+        Check if all atoms in structure have atomic numbers less than 87.
+        
+        The XTB binary used for bond parameter calculation (GFN-FF) supports elements
+        with atomic numbers up to 86. Structures with heavier elements may fail during decoding.
+        
         Args:
-            structure (Structure): A pymatgen Structure.
+            structure (Structure): A pymatgen Structure object.
 
         Returns:
-            bool: Return True if all atoms with Z < 87.
+            bool: True if all atoms have atomic numbers < 87, False otherwise.
         """
         atom_types = np.array(structure.atomic_numbers)
         if atom_types.max() < 87:
@@ -303,25 +331,53 @@ class SLICES:
             return False
 
     def check_2D(self, structure):
+        """
+        Check if structure is 2-dimensional (all components are 2D).
+        
+        Uses pymatgen's dimensionality analysis to determine if all structural
+        components are 2-dimensional.
+        
+        Args:
+            structure (Structure): A pymatgen Structure object.
+            
+        Returns:
+            bool: True if all components are 2D, False otherwise.
+        """
         structure_graph=self.structure2structure_graph(structure)
         structure_components=get_structure_components(structure_graph)
         dim=[component['dimensionality']  for component in structure_components]
         return all(b==2 for b in dim)
         
     def check_3D(self, structure):
+        """
+        Check if structure is 3-dimensional (single 3D component).
+        
+        Uses pymatgen's dimensionality analysis to determine if the structure
+        consists of a single 3-dimensional component.
+        
+        Args:
+            structure (Structure): A pymatgen Structure object.
+            
+        Returns:
+            bool: True if structure has exactly one 3D component, False otherwise.
+        """
         structure_graph=self.structure2structure_graph(structure)
         structure_components=get_structure_components(structure_graph)
         dim=[component['dimensionality']  for component in structure_components]
         return all(b==3 for b in dim) and len(structure_components)==1
 
     def cif2structure_graph(self,string):
-        """Convert a cif string to a structure_graph.
-
+        """
+        Convert a CIF file string to a StructureGraph using the configured graph method.
+        
+        Parses the CIF string into a Structure object, then converts it to a StructureGraph
+        using the local environment analysis method specified by self.graph_method.
+        
         Args:
-            string (str): String of a cif file.
+            string (str): String content of a CIF file.
 
         Returns:
-            StructureGraph: Pymatgen structure_graph object.
+            tuple: (StructureGraph, Structure) - Pymatgen StructureGraph and Structure objects.
         """
         structure = Structure.from_str(string,'cif')
         if self.graph_method == 'brunnernn':
@@ -341,13 +397,17 @@ class SLICES:
         return structure_graph,structure
 
     def structure2structure_graph(self,structure):
-        """Convert a pymatgen structure to a structure_graph.
-
+        """
+        Convert a pymatgen Structure to a StructureGraph using the configured graph method.
+        
+        Creates a labeled quotient graph representation where atoms are nodes and bonds are edges.
+        The graph method determines how bonds are identified based on local chemical environments.
+        
         Args:
-            structure (Structure): A pymatgen Structure.
+            structure (Structure): A pymatgen Structure object.
 
         Returns:
-            StructureGraph: A Pymatgen StructureGraph object.
+            StructureGraph: A Pymatgen StructureGraph object with nodes (atoms) and edges (bonds).
         """
         if self.graph_method == 'brunnernn':
             structure_graph = StructureGraph.with_local_env_strategy(
@@ -862,20 +922,32 @@ class SLICES:
                               flip_bonds=True,
                               batch_multiplier=10):
         """
-        将 Structure 转换为随机增强的 SLICES 字符串，避免重复并提高生成效率。
-        包含原始的 SLICES 字符串和增强的 SLICES 字符串。
+        Convert Structure to randomly augmented SLICES strings, avoiding duplicates and improving generation efficiency.
+        Includes original SLICES string and augmented SLICES strings.
+        
+        Args:
+            structure: pymatgen Structure object
+            num: Number of unique SLICES strings to generate
+            strategy: Encoding strategy (1, 2, 3, or 4)
+            shuffle_atom_order: Whether to randomly shuffle atom order
+            shuffle_bond_order: Whether to randomly shuffle bond order
+            flip_bonds: Whether to randomly flip bond directions
+            batch_multiplier: Multiplier for generating candidates (to ensure uniqueness)
+            
+        Returns:
+            List of unique SLICES strings
         """
-        # 提取晶体图表示
+        # Extract crystal graph representation
         crystal_graph_rep = self.structure2crystal_graph_rep(structure)
         atom_types = crystal_graph_rep[0]
         atom_symbols = [str(Element.from_Z(i)) for i in atom_types]
         edge_indices = crystal_graph_rep[1]
         to_jimages = crystal_graph_rep[2]
         space_group_num = crystal_graph_rep[3]
-        # 初始化 SLICES 字符串集合以确保唯一性
+        # Initialize SLICES string set to ensure uniqueness
         SLICES_set = set()
 
-        # 生成并添加原始的 SLICES 字符串
+        # Generate and add original SLICES string
         try:
             original_SLICES = self.get_slices_by_strategy(
                 strategy,
@@ -885,36 +957,34 @@ class SLICES:
                 space_group_num)
             SLICES_set.add(original_SLICES)
         except Exception as e:
-            print(f"生成原始 SLICES 时出错: {e}")
-            # 根据需要，可以选择是否继续生成增强的 SLICES
-            # 这里选择继续
-        
+            print(f"Error generating original SLICES: {e}")
+            # Continue generating augmented SLICES even if original fails
 
-        # 计算需要生成的总排列数
-        total_permutations = num * batch_multiplier  # 确保这行代码存在
+        # Calculate total number of permutations to generate
+        total_permutations = num * batch_multiplier
 
         for _ in range(total_permutations):
-            # 创建可操作的副本
+            # Create mutable copies
             atom_symbols_aug = copy.deepcopy(atom_symbols)
             edge_indices_aug = copy.deepcopy(edge_indices)
             to_jimages_aug = copy.deepcopy(to_jimages)
 
-            # 随机打乱原子顺序（如果启用）
+            # Randomly shuffle atom order (if enabled)
             if shuffle_atom_order:
                 num_atoms = len(atom_symbols_aug)
                 shuffled_indices = random.sample(range(num_atoms), num_atoms)
                 atom_symbols_aug = [atom_symbols_aug[i] for i in shuffled_indices]
-                # 创建原始索引到新索引的映射，考虑重复原子类型
+                # Create index mapping from original to new order, handling duplicate atom types
                 index_mapping = self.get_index_list_allow_duplicates(
                     [str(Element.from_Z(i)) for i in atom_types],
                     atom_symbols_aug
                 )
-                # 重新映射键的原子索引
+                # Remap bond atom indices
                 edge_indices_aug = np.array([[index_mapping[edge[0]], index_mapping[edge[1]]] for edge in edge_indices_aug])
 
-            # 随机打乱键的顺序（如果启用）
+            # Randomly shuffle bond order (if enabled)
             if shuffle_bond_order:
-                # 打乱化学键顺序
+                # Shuffle chemical bond order
                 bond_order = list(zip(edge_indices_aug, to_jimages_aug))
                 random.shuffle(bond_order)
                 if bond_order:
@@ -924,17 +994,17 @@ class SLICES:
                 else:
                     edge_indices_aug, to_jimages_aug = ([], [])
 
-            # 随机翻转键（如果启用）
+            # Randomly flip bonds (if enabled)
             if flip_bonds:
-                # 翻转化学键
+                # Flip chemical bonds
                 for i in range(len(edge_indices_aug)):
                     if random.choice([True, False]):
-                        # 交换原子索引
+                        # Swap atom indices
                         edge_indices_aug[i] = edge_indices_aug[i][::-1]
-                        # 反转周期边界条件
+                        # Reverse periodic boundary conditions
                         to_jimages_aug[i] = -to_jimages_aug[i]
 
-            # 将原子符号转换为原子编号
+            # Convert atom symbols to atomic numbers
             atom_types_aug = []
             invalid_symbols = []
             for symbol in atom_symbols_aug:
@@ -945,12 +1015,12 @@ class SLICES:
                     invalid_symbols.append(symbol)
 
             if invalid_symbols:
-                print(f"警告: 找不到以下原子符号的原子编号: {invalid_symbols}")
-                continue  # 跳过此次循环
+                print(f"Warning: Cannot find atomic numbers for symbols: {invalid_symbols}")
+                continue  # Skip this iteration
 
             atom_types_aug = np.array(atom_types_aug)
 
-            # 生成增强后的 SLICES 字符串
+            # Generate augmented SLICES string
             try:
                 SLICES_aug = self.get_slices_by_strategy(
                     strategy,
@@ -959,22 +1029,22 @@ class SLICES:
                     to_jimages_aug,
                     space_group_num)
             except Exception as e:
-                # 如果生成过程中出错，跳过此次循环
-                print(f"生成 SLICES 时出错: {e}")
+                # Skip this iteration if generation fails
+                print(f"Error generating SLICES: {e}")
                 continue
 
-            # 添加到 SLICES 集合中以确保唯一性
+            # Add to SLICES set to ensure uniqueness
             SLICES_set.add(SLICES_aug)
 
-            # 如果已经达到所需数量，提前退出
+            # Exit early if we've reached the required number
             if len(SLICES_set) >= num:
                 break
 
-        # 如果生成的唯一 SLICES 数量不足，提示并返回尽可能多的字符串
+        # Warn if generated fewer unique SLICES than requested
         if len(SLICES_set) < num:
-            print(f"警告: 仅生成了 {len(SLICES_set)} 个唯一的增强 SLICES 字符串，目标数量为 {num}。可能的增强组合不足。")
+            print(f"Warning: Only generated {len(SLICES_set)} unique augmented SLICES strings, target was {num}. Possible insufficient augmentation combinations.")
 
-        # 随机选择所需数量的 SLICES 字符串
+        # Randomly select the required number of SLICES strings
         SLICES_list = list(SLICES_set)
         random.shuffle(SLICES_list)
         return SLICES_list[:num]
@@ -1066,12 +1136,20 @@ class SLICES:
 # ============================================================================
 
     def get_nbf_blist(self):
-        """ (1) Get nbf(neighbor list with atom types for xtb_mod).
-            (2) Get blist(node indexes of the central unit cell edges in the 3*3*3 supercell). 
-
+        """
+        Generate neighbor list (nbf) and bond list (blist) for XTB calculation.
+        
+        Creates a 3x3x3 supercell representation and generates:
+        1. nbf: Neighbor list format required by XTB, containing atom symbols and neighbor indices
+        2. blist: List of bond indices in the central unit cell for XTB topology analysis
+        
+        The supercell is used to handle periodic boundary conditions. Atoms with no neighbors
+        are removed from the neighbor list to avoid XTB errors.
+        
         Returns:
-            str: nbf.
-            np.array: blist.
+            tuple: (nbf, blist)
+                - nbf (str): Neighbor list string in XTB format
+                - blist (np.array): Array of bond indices [atom1_idx, atom2_idx] in central cell
         """
         if self.atom_types is not None and self.edge_indices is not None and self.to_jimages is not None:
             n_atom=len(self.atom_types)
@@ -1168,19 +1246,26 @@ class SLICES:
         return nbf, blist
 
     def get_inner_p_target_debug(self, bond_scaling=1.05):
-        """ Get inner product matrix, colattice indices, colattice weights with debug outputs.
-
-        (1) Get inner_p_target(inner_p matrix obtained by gfnff).
-        (2) Get colattice_inds(keep track of all the valid colattice dot indices).
-        (3) Get colattice_weights(colattice weights for bond or angle).
-
+        """
+        Compute inner product target matrix from XTB GFN-FF calculation with debug file outputs.
+        
+        Uses XTB's GFN-FF method to predict bond lengths and angles, then constructs an inner
+        product matrix that serves as the target for ZL* optimization. Also outputs intermediate
+        files for debugging.
+        
+        The inner product matrix encodes:
+        - Diagonal elements: squared bond lengths (in Angstrom^2)
+        - Off-diagonal elements: bond angle constraints via dot products
+        
         Args:
-            bond_scaling (float, optional): Bond scaling factor. Defaults to 1.05.
+            bond_scaling (float, optional): Empirical scaling factor applied to XTB bond lengths.
+                Defaults to 1.05.
 
         Returns:
-            np.array: Inner product matrix.
-            list: Colattice indices.
-            list: Colattice weights.
+            tuple: (inner_p_target, colattice_inds, colattice_weights)
+                - inner_p_target (np.array): Inner product matrix (n_bonds x n_bonds)
+                - colattice_inds (list): List of [i, j] pairs for off-diagonal elements
+                - colattice_weights (list): Weights for each constraint (normalized)
         """
         nbf, blist = self.get_nbf_blist()
         # Use /dev/shm on Linux, system temp on macOS/Windows
@@ -1311,19 +1396,29 @@ class SLICES:
         return inner_p_target, colattice_inds, colattice_weights
 
     def get_inner_p_target(self, bond_scaling=1.05):
-        """ Get inner product matrix, colattice indices, colattice weights.
-
-        (1) Get inner_p_target(inner_p matrix obtained by gfnff).
-        (2) Get colattice_inds(keep track of all the valid colattice dot indices).
-        (3) Get colattice_weights(colattice weights for bond or angle).
-
+        """
+        Compute inner product target matrix from XTB GFN-FF calculation.
+        
+        Uses XTB's GFN-FF method to predict bond lengths and angles, then constructs an inner
+        product matrix that serves as the target for ZL* optimization. If XTB fails, falls back
+        to empirical bond length estimation using covalent radii.
+        
+        The inner product matrix encodes:
+        - Diagonal elements: squared bond lengths (in Angstrom^2)
+        - Off-diagonal elements: bond angle constraints via dot products
+        
         Args:
-            bond_scaling (float, optional): Bond scaling factor. Defaults to 1.05.
+            bond_scaling (float, optional): Empirical scaling factor applied to XTB bond lengths.
+                Defaults to 1.05.
 
         Returns:
-            np.array: Inner product matrix.
-            list: Colattice indices.
-            list: Colattice weights.
+            tuple: (inner_p_target, colattice_inds, colattice_weights)
+                - inner_p_target (np.array): Inner product matrix (n_bonds x n_bonds)
+                - colattice_inds (list): List of [i, j] pairs for off-diagonal elements
+                - colattice_weights (list): Weights for each constraint (normalized)
+                
+        Raises:
+            XTBExecutionError: If XTB execution fails and fallback estimation is unavailable
         """
         nbf, blist = self.get_nbf_blist()
         # Use /dev/shm on Linux, system temp on macOS/Windows
@@ -1339,7 +1434,7 @@ class SLICES:
             
             # Calculate adaptive timeout based on structure complexity
             try:
-                from slices.decoding_improvements import calculate_xtb_timeout
+                from slices.decoding_strategies import calculate_xtb_timeout
                 num_atoms = len(self.atom_types)
                 num_bonds = len(blist)
                 timeout = calculate_xtb_timeout(num_atoms, num_bonds)
@@ -1404,7 +1499,7 @@ class SLICES:
                 else:
                     # Use fallback bond parameter estimation
                     try:
-                        from slices.decoding_improvements import BondParameterFallback
+                        from slices.decoding_strategies import BondParameterFallback
                         atom_symbols = [str(ElementBase.from_Z(z)) for z in self.atom_types]
                         atom1 = atom_symbols[blist_original[i][0]]
                         atom2 = atom_symbols[blist_original[i][1]]
@@ -1850,7 +1945,7 @@ class SLICES:
             i=colattice_inds[0][k]
             j=colattice_inds[1][k]
             if i==j:
-                square_diff += (inner_p[i][j]-mat_target[i][j])**2 + 4*vbond_param_ave_covered*(covered_pair_lj[i][1]/np.sqrt(max(inner_p[i][j], epsilon2)))**12  # inner_p单位是 Angstrom的平方
+                square_diff += (inner_p[i][j]-mat_target[i][j])**2 + 4*vbond_param_ave_covered*(covered_pair_lj[i][1]/np.sqrt(max(inner_p[i][j], epsilon2)))**12  # inner_p units are Angstrom squared
             else:
                 square_diff += angle_weight*colattice_weights[k]*(inner_p[i][j]-mat_target[i][j])**2  # divide angle weight by 3
         # repulsive part of LJ potential to prevent atom collision
@@ -1917,7 +2012,7 @@ class SLICES:
             i=colattice_inds[0][k]
             j=colattice_inds[1][k]
             if i==j:
-                square_diff += (inner_p[i][j]-mat_target[i][j])**2 + 4*vbond_param_ave_covered*(covered_pair_lj[i][1]/np.sqrt(inner_p[i][j]))**12  # inner_p单位是 Angstrom的平方
+                square_diff += (inner_p[i][j]-mat_target[i][j])**2 + 4*vbond_param_ave_covered*(covered_pair_lj[i][1]/np.sqrt(inner_p[i][j]))**12  # inner_p units are Angstrom squared
                 print("bond:"+str(i)+','+str(j)+','+str(round(np.sqrt(inner_p[i][j]),2))+','+str(round(np.sqrt(mat_target[i][j]),2))+','+str(round((inner_p[i][j]-mat_target[i][j])**2,5))+','+str(round(4*vbond_param_ave_covered*(covered_pair_lj[i][1]/np.sqrt(inner_p[i][j]))**12,5)))
             else:
                 square_diff += angle_weight*colattice_weights[k]*(inner_p[i][j]-mat_target[i][j])**2  # divide angle weight by 3
@@ -2040,35 +2135,46 @@ class SLICES:
 
 
     def to_structures(self, bond_scaling=1.05, delta_theta=0.005, delta_x=0.45,lattice_shrink=1,lattice_expand=1.25,angle_weight=0.5,vbond_param_ave_covered=0.00,vbond_param_ave=0.01,repul=True):        
-        """The inverse transform of the crystal graph of a SLICES string to its crystal structure.
-        Convert edge_indices, to_jimages and atom_types stored in the InvCryRep instance back to 
-        3 pymatgen structure objects and the energy per atom predicted with M3GNet.
-
-        (1) barycentric embedding net with rescaled lattice based on the average bond scaling factors
-         calculated with modified GFN-FF predicted geometry 
-        (2) non-barycentric net embedding that matches bond lengths and bond angles predicted with
-         modified GFN-FF
-        (3) non-barycentric net embedding undergone cell optimization using MLIP models
-        if cell optimization failed, then output (1) and (2)
-
+        """
+        Convert graph representation (edge_indices, to_jimages, atom_types) to crystal structures.
+        
+        Performs the inverse transformation from labeled quotient graph to crystal structure,
+        generating three progressively refined structures:
+        
+        1. Barycentric embedding: Initial structure with rescaled lattice based on XTB-predicted
+           bond lengths. Uses average bond scaling factors from GFN-FF calculations.
+        
+        2. ZL*-optimized structure: Non-barycentric embedding optimized to match XTB-predicted
+           bond lengths and angles using the ZL* optimization algorithm.
+        
+        3. MLIP-relaxed structure: Final structure after cell optimization using machine learning
+           interatomic potentials. If MLIP relaxation fails, only structures (1) and (2) are returned.
+        
         Args:
-            bond_scaling (float, optional): Bond scaling factor. Defaults to 1.05.
-            delta_theta (float): Angle change limit(deprecated! not deleted due to compatibility of HTS 
-                scripts, will be deleted in future).
-            delta_x (float, optional): Maximum x change allowed. Defaults to 0.45.
-            lattice_shrink (int, optional): Maximum lattice shrinkage allowed. Defaults to 1.
-            lattice_expand (float, optional): Maximum lattice expansion allowed. Defaults to 1.25.
-            angle_weight (float, optional): Weight of angular terms in the object function. Defaults to 0.5.
-            vbond_param_ave_covered (float, optional): Repulsive potential well depth of atom pairs covered 
-                by edges of the structure graph. Defaults to 0.00.
-            vbond_param_ave (float, optional): Repulsive potential well depth of atom pairs not covered by 
-                edges of the structure graph. Defaults to 0.01.
-            repul (bool, optional): Flag to indicate whether repulsive potential is considered in the object 
-                function. Defaults to True.
+            bond_scaling (float, optional): Empirical scaling factor applied to XTB bond lengths.
+                Defaults to 1.05.
+            delta_theta (float, optional): Angle change limit (deprecated, kept for compatibility).
+                Defaults to 0.005.
+            delta_x (float, optional): Maximum allowed change in cocycle representation during optimization.
+                Defaults to 0.45.
+            lattice_shrink (float, optional): Maximum lattice shrinkage factor allowed during optimization.
+                Defaults to 1.0 (no shrinkage).
+            lattice_expand (float, optional): Maximum lattice expansion factor allowed during optimization.
+                Defaults to 1.25.
+            angle_weight (float, optional): Weight of angular constraint terms in ZL* objective function.
+                Defaults to 0.5.
+            vbond_param_ave_covered (float, optional): Repulsive potential well depth (epsilon) for atom
+                pairs connected by bonds. Defaults to 0.00 (no repulsion for bonded pairs).
+            vbond_param_ave (float, optional): Repulsive potential well depth (epsilon) for atom pairs
+                not connected by bonds. Prevents atom collisions. Defaults to 0.01.
+            repul (bool, optional): If True, includes Lennard-Jones repulsive potential in objective
+                function to prevent atom collisions. Defaults to True.
 
         Returns:
-            list: [Rescaled Structure, ZL*-optimized Structure,  IAP-optimized Structure]
-            float: Energy per atom predicted with M3GNet.
+            tuple: (list, float)
+                - list: List of Structure objects. Contains 2 structures if MLIP relaxation fails,
+                  or 3 structures if successful: [barycentric, ZL*-optimized, MLIP-relaxed]
+                - float: Energy per atom in eV/atom from MLIP model (0.0 if MLIP relaxation failed)
         """
         x_dat, net_voltage = self.convert_graph()
         net = Net(x_dat,dim=3)
@@ -2167,7 +2273,7 @@ class SLICES:
             
             # Use adaptive convergence parameters and multi-start optimization
             try:
-                from slices.decoding_improvements import AdaptiveConvergence, MultiStartOptimizer
+                from slices.decoding_strategies import AdaptiveConvergence, MultiStartOptimizer
                 conv_params = AdaptiveConvergence.get_convergence_params(num_nodes)
                 
                 # Create objective function with arguments
@@ -2225,7 +2331,7 @@ class SLICES:
         try:
             # Use progressive relaxation strategy
             try:
-                from slices.decoding_improvements import ProgressiveRelaxer
+                from slices.decoding_strategies import ProgressiveRelaxer
                 strategies = ProgressiveRelaxer.get_relaxation_strategies()
                 
                 structure_recreated_opt2 = None
@@ -2276,14 +2382,34 @@ class SLICES:
             return [structure_recreated_std, structure_recreated_opt],0
 
     def SLICES2structure(self,SLICES,strategy=4,fix_duplicate_edge=True):
-        """Convert a SLICES string back to its original crystal structure.
-
+        """
+        Decode a SLICES string back to a crystal structure.
+        
+        This is the main decoding method that performs the inverse transformation of structure2SLICES.
+        The process involves:
+        1. Parsing the SLICES string to extract graph topology (atoms, bonds, periodic labels)
+        2. Reconstructing the labeled quotient graph
+        3. Computing lattice basis from cycle vectors
+        4. Generating initial coordinates using barycentric embedding
+        5. Optimizing coordinates with ZL* algorithm to match XTB-predicted bond lengths/angles
+        6. Relaxing structure with MLIP model
+        
         Args:
-            SLICES (str): A SLICES string.
+            SLICES (str): A SLICES string encoding the crystal structure.
+            strategy (int, optional): Encoding strategy used (1, 2, 3, or 4). Defaults to 4.
+            fix_duplicate_edge (bool, optional): If True, removes duplicate edges that may occur
+                due to RNN generation errors. Defaults to True.
 
         Returns:
-            Structure: A pymatgen Structure object.
-            float: Energy per atom predicted with M3GNet.
+            tuple: (Structure, float)
+                - Structure: Reconstructed pymatgen Structure object (MLIP-relaxed)
+                - float: Energy per atom in eV/atom predicted by the MLIP model
+                
+        Raises:
+            SLICESDecodingError: If decoding fails at any stage
+            LatticeBasisError: If lattice basis cannot be computed from cycle vectors
+            XTBExecutionError: If XTB bond parameter calculation fails
+            MLIPRelaxationError: If MLIP relaxation fails
         """
         self.from_SLICES(SLICES,strategy,fix_duplicate_edge)
         structures,final_energy_per_atom = self.to_structures()
@@ -2291,9 +2417,9 @@ class SLICES:
     
     def robust_SLICES2structure(self, SLICES, strategy=4, fix_duplicate_edge=True, max_attempts=3):
         """
-        Robust decoding with multiple fallback strategies to maximize success rate.
+        Robust decoding with multiple fallback strategies.
         
-        This method implements a comprehensive error recovery pipeline that tries
+        This method implements an error recovery pipeline that tries
         multiple strategies when standard decoding fails:
         1. Standard decoding
         2. Alternative encoding strategies

@@ -1,2 +1,38 @@
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Build artifacts
+docs/_build/
+docs/.buildinfo
+docs/.nojekyll
+build/
+dist/
+*.egg-info/
+
+# Environment
+.env
+.venv
+venv/
+ENV/

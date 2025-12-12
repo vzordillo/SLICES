@@ -69,7 +69,7 @@ def test_encoding(dataset_path, num_samples=100, batch_size=10):
     print(f"  ✓ Selected {num_samples} random samples for testing")
     print()
     
-    # Initialize SLICES backend (use CHGNet to avoid M3GNet issues)
+    # Initialize SLICES backend
     print("Initializing SLICES backend...")
     try:
         backend = SLICES(relax_model="chgnet")

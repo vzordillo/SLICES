@@ -55,14 +55,10 @@ def sample_structure_sr3ru2o7():
 
 @pytest.fixture
 def slices_backend():
-    """Create SLICES backend with default settings (CHGNet)."""
-    return SLICES(relax_model='chgnet')
-
-
-@pytest.fixture
-def slices_backend_m3gnet():
-    """Create SLICES backend with M3GNet."""
+    """Create SLICES backend with default settings (M3GNet)."""
     return SLICES(relax_model='m3gnet')
+
+
 
 
 @pytest.fixture

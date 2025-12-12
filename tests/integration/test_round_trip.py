@@ -82,7 +82,7 @@ class TestRoundTrip:
     @pytest.mark.mlip
     def test_round_trip_different_mlip_models(self, sample_structure):
         """Test round-trip with different MLIP models."""
-        models = ['chgnet', 'm3gnet']  # Test most common models
+        models = ['m3gnet', 'chgnet']  # Test most common models
         
         for model in models:
             try:

@@ -625,6 +625,23 @@ class Net:
         return R_independent
 
     def get_lattice_basis(self) -> None:
+        """
+        Compute lattice basis vectors from cycle representation.
+        
+        The lattice basis is determined by finding the nullspace of the cycle representation
+        matrix. This method uses SymPy for exact rational arithmetic to find integral lattice
+        vectors. If cycle basis optimization is available, it attempts multiple cycle orderings
+        to maximize the probability of finding valid lattice vectors.
+        
+        The method modifies self.lattice_basis in place. If computation fails, raises
+        LatticeBasisError.
+        
+        Returns:
+            None: Modifies self.lattice_basis in place
+            
+        Raises:
+            LatticeBasisError: If lattice basis cannot be computed from cycle vectors
+        """
         """Compute the lattice basis vectors from cycle representation.
         
         Uses SymPy for nullspace computation.
@@ -643,10 +660,10 @@ class Net:
             )
         
         L = []
-        # Enhanced cycle basis selection for better lattice basis computation
+        # Cycle basis selection for lattice basis computation
         # Try to find cycle ordering that maximizes linear independence
         try:
-            from slices.decoding_improvements import CycleBasisOptimizer
+            from slices.decoding_strategies import CycleBasisOptimizer
             inds = CycleBasisOptimizer.select_optimal_cycle_basis(
                 self.cycle_rep, max_attempts=50
             )
