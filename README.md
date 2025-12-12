@@ -176,6 +176,51 @@ print(f"Energy: {energy:.4f} eV/atom")
 1. **Encoding**: Structure → Graph → Cycles → SLICES String
 2. **Decoding**: SLICES String → Graph → Coordinates → MLIP Relaxation → Structure
 
+### Augment and Canonicalize SLICES
+
+The same crystal structure can be represented by multiple SLICES strings due to different atom orderings. Augmentation generates multiple representations, and canonicalization reduces them to a unique form.
+
+**Why This Matters:**
+- **Data Augmentation**: Generate multiple training examples from one structure
+- **Uniqueness**: Canonical form ensures identical structures have identical SLICES strings
+- **Comparison**: Compare structures by comparing canonical SLICES strings
+
+**Example:**
+```python
+from slices.core import SLICES
+from pymatgen.core.structure import Structure
+
+# Load crystal structure
+structure = Structure.from_file('examples/Sr3Ru2O7.cif')
+backend = SLICES(graph_method='econnn')
+
+# Generate augmented SLICES (50 variations with random atom order)
+slices_list = backend.structure2SLICESAug_atom_order(
+    structure=structure, 
+    strategy=4, 
+    num=50
+)
+
+# Remove duplicates
+slices_list_unique = list(set(slices_list))
+print(f"Generated {len(slices_list)} SLICES, {len(slices_list_unique)} unique")
+
+# Convert all to canonical form
+canonical_slices_list = []
+for slices_str in slices_list_unique:
+    canonical = backend.get_canonical_SLICES(slices_str, strategy=4)
+    canonical_slices_list.append(canonical)
+
+# All canonical forms should be identical
+canonical_set = set(canonical_slices_list)
+print(f"Canonical forms: {len(canonical_set)} unique")
+# Output: All augmented SLICES reduce to 1 canonical SLICES
+```
+
+**How It Works:**
+- **Augmentation**: Randomly permutes atom order while preserving structure topology
+- **Canonicalization**: Sorts atoms by atomic number, edges by indices, and edge labels consistently
+
 ---
 
 ## How It Works

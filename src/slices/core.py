@@ -1048,6 +1048,33 @@ class SLICES:
         SLICES_list = list(SLICES_set)
         random.shuffle(SLICES_list)
         return SLICES_list[:num]
+    
+    def structure2SLICESAug_atom_order(self, structure, strategy=4, num=50):
+        """
+        Generate augmented SLICES strings by randomly shuffling atom order.
+        Alias for structure2randomSLICES with atom order shuffling enabled.
+        
+        This method generates multiple SLICES representations of the same structure
+        by permuting the atom ordering. All augmented strings represent the same
+        crystal structure but with different atom indices.
+        
+        Args:
+            structure: pymatgen Structure object
+            strategy: Encoding strategy (1, 2, 3, or 4). Defaults to 4.
+            num: Number of unique SLICES strings to generate. Defaults to 50.
+            
+        Returns:
+            List of unique SLICES strings (includes original)
+        """
+        return self.structure2randomSLICES(
+            structure=structure,
+            strategy=strategy,
+            num=num,
+            shuffle_atom_order=True,
+            shuffle_bond_order=False,
+            flip_bonds=False
+        )
+        return SLICES_list[:num]
         
     def get_dim(self,structure):
         """Get the dimension of a Structure.
