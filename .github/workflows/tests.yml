@@ -35,6 +35,8 @@ jobs:
         pip install pytest pytest-cov || true
     
     - name: Run tests
+      continue-on-error: true
       run: |
-        # Run tests but continue on failure (some tests require XTB binary/MLIP models not available in CI)
-        pytest tests/ -v --tb=short || true
+        # Some tests require XTB binary/MLIP models not available in CI
+        # continue-on-error prevents workflow failure emails
+        pytest tests/ -v --tb=short
