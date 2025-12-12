@@ -7,14 +7,15 @@ from pymatgen.core.structure import Structure
 original_structure = Structure.from_file(filename='NdSiRu.cif')
 
 # Initialize SLICES with MLIP model for relaxation
-# Supported models: 'm3gnet' (default), 'chgnet', 'matgl', 'mattersim', 'orbv3'
-# Example: Using CHGNet (recommended alternative to M3GNet)
-backend = SLICES(relax_model="chgnet")
+# Supported models: 'm3gnet' (default), 'chgnet', 'mattersim', 'orbv3'
+# Example: Using M3GNet (default)
+backend = SLICES(relax_model="m3gnet")
 
 # Alternative options:
-# backend = SLICES(relax_model="m3gnet")  # Default M3GNet
-# backend = SLICES(relax_model="matgl")   # MatGL model
 # backend = SLICES()                       # Defaults to m3gnet
+# backend = SLICES(relax_model="chgnet")  # CHGNet model
+# backend = SLICES(relax_model="mattersim")  # MatterSim model
+# backend = SLICES(relax_model="orbv3")   # ORBv3 model
 
 # Convert crystal structure to SLICES string
 slices_NdSiRu = backend.structure2SLICES(original_structure) 

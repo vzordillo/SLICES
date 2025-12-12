@@ -494,8 +494,8 @@ if __name__ == "__main__":
     parser.add_argument('--samples', type=int, default=50,
                        help='Number of samples to test (default: 50)')
     parser.add_argument('--models', type=str, nargs='+', 
-                       default=['chgnet'],
-                       help='MLIP models to test (default: chgnet)')
+                       default=['m3gnet'],
+                       help='MLIP models to test (default: m3gnet)')
     parser.add_argument('--batch-size', type=int, default=5,
                        help='Batch size for processing structures (default: 5, lower = less memory. Recommended: 3-5 for M3GNet)')
     

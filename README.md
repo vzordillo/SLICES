@@ -3,7 +3,7 @@
 **An invertible crystal structure representation system for materials science**
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-LGPL--2.1-blue.svg)](LICENSE)
 
 ## Quick Start
 
@@ -157,8 +157,8 @@ from pymatgen.core.structure import Structure
 # Load a crystal structure
 structure = Structure.from_file('examples/NdSiRu.cif')
 
-# Initialize SLICES
-backend = SLICES(relax_model='chgnet')
+# Initialize SLICES (M3GNet is default)
+backend = SLICES(relax_model='m3gnet')
 
 # Encode structure to SLICES string
 slices_string = backend.structure2SLICES(structure)
@@ -186,22 +186,22 @@ print(f"Energy: {energy:.4f} eV/atom")
 4. **Generate Coordinates**: Create initial atomic positions
 5. **Optimize Structure**: Use machine learning models to refine the structure
 
-### Theory
+### Core Concepts
 
-**Graph Representation**: A crystal structure is represented as a labeled quotient graph:
-- **Nodes** = atoms
-- **Edges** = bonds between atoms
-- **Edge labels** = periodic boundary conditions (how atoms connect across unit cells)
+**Graph Representation**: A crystal structure is represented as a labeled quotient graph where:
+- **Nodes** represent atoms
+- **Edges** represent bonds between atoms
+- **Edge labels** encode periodic boundary conditions (how atoms connect across unit cells)
 
-**Cycle Basis**: Independent cycles in the graph determine the lattice vectors. We need at least 3 independent cycles for a 3D structure.
+**Cycle Basis**: Independent cycles in the graph determine the lattice vectors. A 3D structure requires at least 3 independent cycles.
 
 **Lattice Basis**: Computed from cycle vectors using linear algebra (nullspace computation).
 
 **Barycentric Embedding**: Initial atomic coordinates are generated from the graph structure.
 
-**ZL* Optimization**: Coordinates are optimized to match predicted bond lengths and angles.
+**ZL* Optimization**: Coordinates are optimized to match predicted bond lengths and angles from XTB calculations.
 
-**MLIP Relaxation**: Final structure is refined using machine learning interatomic potentials.
+**MLIP Relaxation**: Final structure is refined using machine learning interatomic potentials (M3GNet, CHGNet, MatterSim, or ORBv3).
 
 ## Configuration
 
@@ -268,64 +268,23 @@ pytest tests/integration/test_round_trip.py
 
 ### Validate Installation
 
-   ```bash
+```bash
 python scripts/utilities/validate_installation.py
 ```
 
-## Code Structure
-
-```
-SLICES/
-├── src/slices/          # Core package
-│   ├── core.py         # Main SLICES class
-│   ├── mlip_relaxer.py # MLIP model adapters
-│   ├── tobascco_net.py # Graph theory operations
-│   └── ...
-├── tests/              # Test suite
-├── examples/           # Example scripts
-├── scripts/            # Utility scripts
-└── docs/               # Documentation
-```
-
-## How to Apply Changes
-
-### Making Code Changes
-
-1. **Create a branch**
-```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Make changes**
-   - Edit code files
-   - Add tests for new features
-   - Update documentation if needed
-
-3. **Test your changes**
-```bash
-   pytest tests/
-   python scripts/utilities/validate_installation.py
-   ```
-
-4. **Commit and push**
-```bash
-   git add .
-   git commit -m "Description of changes"
-   git push origin feature/your-feature-name
-   ```
-
-### Adding New MLIP Models
+## Adding New MLIP Models
 
 1. Create a new class in `src/slices/mlip_relaxer.py`:
+
 ```python
-   class YourModelRelaxer(MLIPRelaxer):
-       def __init__(self, **kwargs):
-           # Initialize your model
-           
-       def relax(self, structure, fmax=0.2, steps=100):
-           # Implement relaxation
-           return {'final_structure': ..., 'trajectory': ...}
-   ```
+class YourModelRelaxer(MLIPRelaxer):
+    def __init__(self, **kwargs):
+        # Initialize your model
+        
+    def relax(self, structure, fmax=0.2, steps=100):
+        # Implement relaxation
+        return {'final_structure': ..., 'trajectory': ...}
+```
 
 2. Register in `get_relaxer()` function
 
@@ -385,13 +344,23 @@ See `examples/` directory for:
 ### Benchmark Dataset
 
 The benchmark dataset is located at `docs/benchmarks/train_encoded_decoded_orbv3.csv`:
-- Contains 1.3M+ encoded/decoded structures
+- Contains encoded/decoded structures with ORBv3 energy calculations
 - Used for testing and validation
-- Format: CSV with columns for SLICES strings, structures, energies, etc.
+- Format: CSV with columns for SLICES strings, structures, energies, space group, formula, and POSCAR format
 
 ### Running Benchmarks
 
 **Compare Standard vs Robust Decoding:**
+
+Standard decoding (`SLICES2structure`) uses the basic decoding workflow. Robust decoding (`robust_SLICES2structure`) implements multiple fallback strategies when standard decoding fails:
+
+1. **Standard decoding** - Basic workflow with single attempt
+2. **Alternative encoding strategies** - Tries different encoding strategy parameters
+3. **Fallback bond parameters** - Uses alternative bond parameters if XTB fails
+4. **Progressive relaxation** - Tries multiple convergence criteria (tight → loose)
+5. **Graceful degradation** - Returns ZL*-optimized structure if MLIP relaxation fails
+
+**Usage:**
 ```bash
 conda activate slices
 python scripts/tests/run_comparison_test.py \
@@ -399,7 +368,15 @@ python scripts/tests/run_comparison_test.py \
     --samples 500
 ```
 
-**Test Robust Decoding:**
+**Output:**
+- Generates `decoding_comparison_report_*.txt` and `.json` files with:
+  - Success rates for both methods
+  - Error breakdown by type
+  - Performance metrics (time per structure)
+  - Comparison statistics
+- Report location: Current working directory with timestamp
+
+**Test Robust Decoding Only:**
 ```bash
 conda activate slices
 python scripts/tests/test_improved_decoding.py \
@@ -408,48 +385,41 @@ python scripts/tests/test_improved_decoding.py \
     --use-robust
 ```
 
-**Note**: Robust decoding uses additional fallback strategies. See `TECHNICAL.md` for details on the enhancements.
+See `TECHNICAL.md` for detailed information on decoding strategies.
 
-**Output Files:**
-- `decoding_comparison_report_*.txt/json` - Test comparison results
-- `baseline_test_results.txt` - Baseline performance metrics
-- `formation_energy_comparison.png` - Visualization of results
+### Encode/Decode Benchmark Workflow
 
-### ORBv3 Benchmark Workflow
+**Encode and Decode Training Dataset:**
 
-**Encode/Decode Training Dataset:**
-  ```bash
+This workflow encodes structures to SLICES strings, decodes them back, and calculates formation energies using the specified MLIP model.
+
+```bash
 # Quick test (5 samples)
 python scripts/benchmarks/encode_decode_orbv3_benchmark.py \
     --train_csv data/mp20/train.csv \
-    --output_csv train_encoded_decoded_orbv3.csv \
+    --output_csv train_encoded_decoded.csv \
     --threads 8 \
     --max_samples 5
 
 # Full dataset
 python scripts/benchmarks/encode_decode_orbv3_benchmark.py \
     --train_csv data/mp20/train.csv \
-    --output_csv train_encoded_decoded_orbv3.csv \
+    --output_csv train_encoded_decoded.csv \
     --threads 8
 ```
 
-**Benchmark MatterGPT Generated Structures:**
-```bash
-python scripts/benchmarks/encode_decode_orbv3_benchmark.py \
-    --skip_encode_decode \
-    --benchmark_csv path/to/mattergpt_generated_slices.csv
-```
+**Note:** The script currently uses ORBv3 by default. To use other MLIP models, modify the script or use the SLICES API directly.
 
-**Output:** The script generates CSV files with:
-- SLICES strings
-- ORBv3 calculated energy per atom (eV/atom)
-- Formation energy per atom (eV/atom)
-- Space group number
-- Chemical formula
-- POSCAR format structure
+**Output CSV Format:**
+- `slices` - SLICES string representation
+- `energy_per_atom_<model>` - Energy per atom from MLIP model (eV/atom)
+- `formation_energy_per_atom_<model>` - Formation energy per atom (eV/atom)
+- `space_group` - Space group number
+- `formula` - Chemical formula
+- `poscar` - Structure in POSCAR format
 
 **Notes:**
-- Processing 1M+ structures can take several hours
+- Processing large datasets can take several hours
 - Adjust `--threads` based on available memory
 - Some structures may fail due to incompatible graph topology (normal)
 
@@ -539,22 +509,6 @@ SLICES/
 
 **`docker/`** - Docker containerization files including Dockerfile and Docker Compose configuration.
 
-### Research Directories
-
-The following directories contain research-specific code and may not be part of the core SLICES functionality:
-- `benchmark/`: Benchmark workflows and experiments
-- `HTS/`: High-throughput screening workflows
-- `MatterGPT/`: MatterGPT model integration
-- `MatterGPT_no_flash/`: MatterGPT variant without flash attention
-
-### File Naming Conventions
-
-- **Python modules**: `snake_case.py`
-- **Test files**: `test_*.py`
-- **Documentation**: `*.md` (Markdown)
-- **Configuration**: `*.ini`, `*.conf`, `*.toml`
-- **Scripts**: `*.py`, `*.sh`
-
 ### Import Paths
 
 All SLICES functionality is imported from `slices` package:
@@ -577,25 +531,6 @@ from slices.decoding_strategies import CycleBasisOptimizer
 - **Technical Documentation**: See `TECHNICAL.md` for system architecture and algorithm details
 - **Changelog**: See `CHANGELOG.md` for version history
 
-## Citation
-
-If you use SLICES in your research, please cite:
-
-```bibtex
-@article{xiao2023slices,
-  title={},
-  author={},
-  journal={},
-  year={}
-}
-```
-
 ## License
 
-MIT License - see LICENSE file for details
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/xiaohang007/SLICES/issues)
-- **Documentation**: [Online Docs](https://xiaohang007.github.io/SLICES/)
-- **Paper**: [Nature Communications](https://www.nature.com/articles/s41467-023-42870-7)
+LGPL-2.1 License - see LICENSE file for details

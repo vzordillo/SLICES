@@ -281,7 +281,7 @@ def get_relaxer(model_name: str = "m3gnet", **kwargs):
             Defaults to "m3gnet".
         **kwargs: Additional arguments passed to the relaxer constructor:
             - optimizer (str): Optimizer algorithm ("BFGS", "FIRE", etc.)
-            - model_name (str): Specific model variant name (for MatGL, ORBv3)
+            - model_name (str): Specific model variant name (for ORBv3)
             - device (str): Computing device ("cpu", "cuda", "mps", etc.)
         
     Returns:
