@@ -756,7 +756,7 @@ def parallel_process_json(process_func, data, n_processes=16, output_file='resul
     # Use Pool for parallel processing
     results = []
     with Pool(processes=n_processes) as pool:
-        # Use imap_unordered for better performance and add progress bar
+        # Use imap_unordered for performance and add progress bar
         with tqdm(total=len(data), position=0, leave=True,
                   bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}') as pbar:
             for result in pool.imap_unordered(func_with_kwargs, data, chunksize=1):
@@ -815,7 +815,7 @@ def parallel_process_csv(process_func, filename, n_processes=16, output_file='re
     # Use Pool for parallel processing
     results = []
     with Pool(processes=n_processes) as pool:
-        # Use imap_unordered for better performance and add progress bar
+        # Use imap_unordered for performance and add progress bar
         with tqdm(total=len(lines), position=0, leave=True,
                   bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}') as pbar:
             for result in pool.imap_unordered(func_with_kwargs, lines, chunksize=1):

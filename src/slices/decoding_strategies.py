@@ -169,7 +169,7 @@ class MultiStartOptimizer:
     Multi-start optimization for ZL* algorithm to improve convergence.
     
     Runs optimization from multiple random starting points and selects
-    the best result, helping escape local minima.
+    the result with lowest objective function value, helping escape local minima.
     """
     
     @staticmethod

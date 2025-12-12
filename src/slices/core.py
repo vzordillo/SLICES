@@ -2513,7 +2513,7 @@ class SLICES:
             try:
                 self.from_SLICES(SLICES, strategy=strategy, fix_duplicate_edge=fix_duplicate_edge)
                 structures, _ = self.to_structures()
-                # Return best available structure (ZL*-optimized if MLIP failed)
+                # Return available structure (ZL*-optimized if MLIP failed)
                 if len(structures) >= 2:
                     return structures[1], 0.0  # Return ZL*-optimized structure
                 else:

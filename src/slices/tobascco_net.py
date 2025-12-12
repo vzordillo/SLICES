@@ -675,7 +675,7 @@ class Net:
         
         # Create views with shuffled indices to avoid full copies
         # This reduces memory usage for large arrays
-        cycle_rep = self.cycle_rep[inds]  # Advanced indexing creates a copy, but only of the selected rows
+        cycle_rep = self.cycle_rep[inds]  # Indexing creates a copy of the selected rows
         cycle = self.cycle[inds]  # Advanced indexing creates a copy, but only of the selected rows
         # determine the null space of the cycle_rep w.r.t. the lattice unit vectors.
         lattice = []
