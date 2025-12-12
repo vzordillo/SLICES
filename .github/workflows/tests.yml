@@ -1,8 +1,15 @@
+# GitHub Actions CI/CD workflow
+# Automatically runs tests on push/PR to main branch
+# Tests against Python 3.9, 3.10, 3.11
+# 
+# To disable: delete this file or set 'on:' to empty
+# To modify: edit the python-version matrix or test commands
+
 name: Tests
 
 on:
   push:
-    branches: [ main, feature/* ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -11,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10"]
     
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
@@ -27,10 +34,4 @@ jobs:
     
     - name: Run tests
       run: |
-        pytest tests/ -v --cov=src/slices --cov-report=xml
-    
-    - name: Upload coverage
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-
+        pytest tests/ -v

@@ -1,15 +1,23 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
+*.egg-info/
+*.egg
+dist/
+build/
 
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
 .hypothesis/
+.pytest_cache/
+*.cover
 
 # IDE
 .vscode/
@@ -18,21 +26,64 @@ htmlcov/
 *.swp
 *.swo
 *~
+.project
+.pydevproject
+.settings/
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
-
-# Build artifacts
-docs/_build/
-docs/.buildinfo
-docs/.nojekyll
-build/
-dist/
-*.egg-info/
+ehthumbs.db
+Desktop.ini
 
 # Environment
 .env
 .venv
 venv/
 ENV/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# Model files and checkpoints (large files)
+*.ckpt
+*.pt
+*.pth
+*.h5
+*.pb
+
+# Data files (large datasets)
+*.csv
+*.json
+!pyproject.toml
+!package.json
+!package-lock.json
+
+# Documentation build
+docs/_build/
+docs/.buildinfo
+docs/.nojekyll
+docs/_static/
+docs/_sources/
+docs/*.html
+docs/*.js
+docs/*.inv
+docs/searchindex.js
+docs/objects.inv
