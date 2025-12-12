@@ -17,23 +17,36 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["OMP_NUM_THREADS"] = "1"
 # Use the custom XTB binary from xiaohang007/xtb repository
 # This is a modified version with specific flags (noring, nooutput, nostdout, noCN)
-# For macOS users: You may need to build from source from https://github.com/xiaohang007/xtb
-xtb_custom = os.path.abspath(os.path.dirname(__file__))+"/xtb_noring_nooutput_nostdout_noCN"
+# For macOS/Windows users: You may need to build from source from https://github.com/xiaohang007/xtb
+import platform
+import shutil
+
+# Determine XTB binary name based on platform
+_platform = platform.system()
+if _platform == 'Windows':
+    xtb_binary_name = "xtb_noring_nooutput_nostdout_noCN.exe"
+else:
+    xtb_binary_name = "xtb_noring_nooutput_nostdout_noCN"
+
+xtb_custom = os.path.join(os.path.abspath(os.path.dirname(__file__)), xtb_binary_name)
+
 if os.path.exists(xtb_custom):
     # Check if binary is executable and compatible
-    import platform
     import stat
-    is_executable = os.access(xtb_custom, os.X_OK)
+    # On Windows, executables don't need X_OK permission, just existence
+    if _platform != 'Windows':
+        is_executable = os.access(xtb_custom, os.X_OK)
+    else:
+        is_executable = True
     
     # On macOS, check if it's a Linux binary (won't work natively)
-    if platform.system() == 'Darwin':
+    if _platform == 'Darwin':
         try:
             import subprocess
-            # Try to check file type
-            result = subprocess.run(['file', xtb_custom], capture_output=True, text=True)
-            if 'Linux' in result.stdout and 'x86-64' in result.stdout:
+            # Try to check file type (only works on Unix-like systems)
+            result = subprocess.run(['file', xtb_custom], capture_output=True, text=True, timeout=2)
+            if result.returncode == 0 and 'Linux' in result.stdout and 'x86-64' in result.stdout:
                 # Linux binary on macOS - try to use system XTB as fallback
-                import shutil
                 system_xtb = shutil.which("xtb")
                 if system_xtb:
                     os.environ["XTB_MOD_PATH"] = system_xtb
@@ -44,13 +57,13 @@ if os.path.exists(xtb_custom):
                 # Note: The system XTB may not have the same flags, so decoding might still fail
             else:
                 os.environ["XTB_MOD_PATH"] = xtb_custom
-        except (KeyError, AttributeError):
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError, KeyError, AttributeError):
+            # 'file' command not available (e.g., on Windows) or other error
             os.environ["XTB_MOD_PATH"] = xtb_custom
     else:
         os.environ["XTB_MOD_PATH"] = xtb_custom
 else:
     # Fallback to system XTB
-    import shutil
     system_xtb = shutil.which("xtb")
     if system_xtb:
         os.environ["XTB_MOD_PATH"] = system_xtb
@@ -230,12 +243,19 @@ class SLICES:
         try:
             if self.relax_model == "m3gnet":
                 # Copy m3gnet model file if needed
-                model_path=m3gnet.models.__path__[0]+'/MP-2021.2.8-EFS/'
+                model_path = os.path.join(m3gnet.models.__path__[0], 'MP-2021.2.8-EFS')
                 if not os.path.isdir(model_path):
-                    data_path=os.path.dirname(__file__)+'/MP-2021.2.8-EFS'
-                    subprocess.call(['mkdir','-p', model_path])
-                    subprocess.call(['cp',data_path+'/checkpoint',data_path+'/m3gnet.data-00000-of-00001',\
-                    data_path+'/m3gnet.index',data_path+'/m3gnet.json',model_path])
+                    data_path = os.path.join(os.path.dirname(__file__), 'MP-2021.2.8-EFS')
+                    # Create directory (cross-platform)
+                    os.makedirs(model_path, exist_ok=True)
+                    # Copy files (cross-platform)
+                    import shutil
+                    files_to_copy = ['checkpoint', 'm3gnet.data-00000-of-00001', 'm3gnet.index', 'm3gnet.json']
+                    for filename in files_to_copy:
+                        src_file = os.path.join(data_path, filename)
+                        dst_file = os.path.join(model_path, filename)
+                        if os.path.exists(src_file):
+                            shutil.copy2(src_file, dst_file)
                 self.relaxer = get_relaxer("m3gnet", optimizer=optimizer)
             else:
                 # Use unified relaxer interface for other models
@@ -1169,19 +1189,22 @@ class SLICES:
             temp_dir = tempfile.TemporaryDirectory(dir="/dev/shm")
         else:
             temp_dir = tempfile.TemporaryDirectory()
-        with open(temp_dir.name+'/testBonds_cut.top','w') as f:
+        top_file_path = os.path.join(temp_dir.name, 'testBonds_cut.top')
+        with open(top_file_path, 'w') as f:
             f.write(nbf)
         
         # Run XTB with timeout (30 seconds should be enough for most structures)
+        # Use list format for subprocess to avoid shell injection and improve cross-platform compatibility
+        xtb_cmd = [os.environ["XTB_MOD_PATH"], '--gfnff', 'testBonds_cut.top', '--wrtopo', 'blist,vbond,alist,vangl']
         try:
-            result = subprocess.run(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
-            cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=30)
+            result = subprocess.run(xtb_cmd, cwd=temp_dir.name, shell=False, stdout=subprocess.DEVNULL, 
+                                  stderr=subprocess.PIPE, text=True, timeout=30)
         except subprocess.TimeoutExpired:
             temp_dir.cleanup()
             raise XTBExecutionError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
         
         # Check if XTB output file exists
-        gfnff_json_path = temp_dir.name+'/gfnff_lists.json'
+        gfnff_json_path = os.path.join(temp_dir.name, 'gfnff_lists.json')
         if not os.path.exists(gfnff_json_path):
             error_msg = f"XTB failed to generate output file. Exit code: {result.returncode}"
             if result.stderr:
@@ -1196,9 +1219,10 @@ class SLICES:
             raise XTBExecutionError(error_msg)
         
         if self.check_results:
-            os.system("cp "+temp_dir.name+'/testBonds_cut.top '+os.getcwd())
+            import shutil
+            shutil.copy2(top_file_path, os.getcwd())
             if os.path.exists(gfnff_json_path):
-                os.system("cp "+gfnff_json_path+' '+os.getcwd())
+                shutil.copy2(gfnff_json_path, os.getcwd())
         
         with open(gfnff_json_path, 'r') as fgfn:
             txt=fgfn.read()
@@ -1305,11 +1329,12 @@ class SLICES:
         # Use /dev/shm on Linux, system temp on macOS/Windows
         import platform
         if platform.system() == 'Linux' and os.path.exists("/dev/shm"):
-                                    temp_dir = tempfile.TemporaryDirectory(dir="/dev/shm")
+            temp_dir = tempfile.TemporaryDirectory(dir="/dev/shm")
         else:
             temp_dir = tempfile.TemporaryDirectory()
         try:
-            with open(temp_dir.name+'/testBonds_cut.top','w') as f:
+            top_file_path = os.path.join(temp_dir.name, 'testBonds_cut.top')
+            with open(top_file_path, 'w') as f:
                 f.write(nbf)
             
             # Calculate adaptive timeout based on structure complexity
@@ -1322,15 +1347,17 @@ class SLICES:
                 timeout = 30  # Fallback to default
             
             # Run XTB with adaptive timeout
+            # Use list format for subprocess to avoid shell injection and improve cross-platform compatibility
+            xtb_cmd = [os.environ["XTB_MOD_PATH"], '--gfnff', 'testBonds_cut.top', '--wrtopo', 'blist,vbond,alist,vangl']
             try:
-                result = subprocess.run(os.environ["XTB_MOD_PATH"]+' --gfnff testBonds_cut.top --wrtopo blist,vbond,alist,vangl', \
-                cwd=temp_dir.name, shell=True,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE, text=True, timeout=timeout)
+                result = subprocess.run(xtb_cmd, cwd=temp_dir.name, shell=False, stdout=subprocess.DEVNULL, 
+                                      stderr=subprocess.PIPE, text=True, timeout=timeout)
             except subprocess.TimeoutExpired:
                 temp_dir.cleanup()
                 raise XTBExecutionError("XTB execution timed out after 30 seconds. The structure may be too complex or XTB may be hanging.")
             
             # Check if XTB output file exists
-            gfnff_json_path = temp_dir.name+'/gfnff_lists.json'
+            gfnff_json_path = os.path.join(temp_dir.name, 'gfnff_lists.json')
             if not os.path.exists(gfnff_json_path):
                 error_msg = f"XTB failed to generate output file. Exit code: {result.returncode}"
                 if result.stderr:
@@ -1345,9 +1372,10 @@ class SLICES:
                 raise XTBExecutionError(error_msg)
             
             if self.check_results:
-                os.system("cp "+temp_dir.name+'/testBonds_cut.top '+os.getcwd())
+                import shutil
+                shutil.copy2(top_file_path, os.getcwd())
                 if os.path.exists(gfnff_json_path):
-                    os.system("cp "+gfnff_json_path+' '+os.getcwd())
+                    shutil.copy2(gfnff_json_path, os.getcwd())
             
             with open(gfnff_json_path, 'r') as fgfn:
                 txt=fgfn.read()
