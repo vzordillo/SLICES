@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Script to encode/decode training dataset and calculate orbv3 formation energies,
-then run benchmark on mattergpt_no_flash.
+Generic script to encode/decode structures and calculate formation energies with any MLIP model.
+Supports default/canonical SLICES and standard/robust decoding strategies.
+Works with any MLIP model: m3gnet, chgnet, mattersim, orbv3.
 """
 
 import os
@@ -61,14 +62,17 @@ def calculate_formation_energy(structure, energy_per_atom, chem_pot):
     
     return enthalpy_form / comp.num_atoms
 
-def encode_decode_with_orbv3(input_csv, output_csv, threads=8, max_samples=None):
+def encode_decode_benchmark(input_csv, output_csv, model="m3gnet", use_canonical=False, use_robust=False, threads=8, max_samples=None):
     """
-    Encode structures to SLICES, decode back, and calculate orbv3 formation energies.
+    Generic encode/decode benchmark with configurable model and decoding strategies.
     
     Args:
         input_csv: Path to input CSV file with CIF structures
         output_csv: Path to output CSV file with results
-        threads: Number of threads for parallel processing
+        model: MLIP model name ('m3gnet', 'chgnet', 'mattersim', 'orbv3')
+        use_canonical: If True, use canonical SLICES instead of default
+        use_robust: If True, use robust decoding instead of standard
+        threads: Number of threads for parallel processing (not used currently)
         max_samples: Maximum number of samples to process (None for all)
     """
     print(f"Loading dataset from {input_csv}...")
@@ -92,15 +96,24 @@ def encode_decode_with_orbv3(input_csv, output_csv, threads=8, max_samples=None)
     # Load chemical potentials
     chem_pot = load_chemical_potentials()
     
-    # Initialize SLICES with orbv3
-    print("Initializing SLICES with orbv3...")
-    backend = SLICES(relax_model="orbv3", check_results=False)
+    # Initialize SLICES with specified model
+    print(f"Initializing SLICES with {model}...")
+    backend = SLICES(relax_model=model, check_results=False)
+    
+    # Determine SLICES and decoding method names for output columns
+    slices_type = "canonical" if use_canonical else "default"
+    decoding_type = "robust" if use_robust else "standard"
+    model_key = model.lower()
     
     results = []
     successful = 0
     failed = 0
     
     print(f"Processing {len(df)} structures...")
+    print(f"  SLICES type: {slices_type}")
+    print(f"  Decoding: {decoding_type}")
+    print(f"  Model: {model}")
+    
     for idx, row in df.iterrows():
         try:
             cif_string = row[cif_column]
@@ -114,11 +127,23 @@ def encode_decode_with_orbv3(input_csv, output_csv, threads=8, max_samples=None)
             # Parse structure from CIF
             structure = Structure.from_str(cif_string, fmt="cif")
             
-            # Encode to SLICES
-            slices_string = backend.structure2SLICES(structure)
+            # Encode to SLICES (default or canonical)
+            if use_canonical:
+                slices_string = backend.structure2SLICES(structure)
+                slices_string = backend.get_canonical_SLICES(slices_string, strategy=4)
+            else:
+                slices_string = backend.structure2SLICES(structure)
             
-            # Decode back to structure and get energy
-            decoded_structure, energy_per_atom = backend.SLICES2structure(slices_string)
+            # Decode back to structure and get energy (standard or robust)
+            if use_robust:
+                decoded_structure, energy_per_atom = backend.robust_SLICES2structure(slices_string)
+            else:
+                decoded_structure, energy_per_atom = backend.SLICES2structure(slices_string)
+            
+            if decoded_structure is None or energy_per_atom is None:
+                print(f"Decoding failed for row {idx}")
+                failed += 1
+                continue
             
             # Get space group
             finder = SpacegroupAnalyzer(decoded_structure, symprec=0.1, angle_tolerance=15)
@@ -132,26 +157,25 @@ def encode_decode_with_orbv3(input_csv, output_csv, threads=8, max_samples=None)
             else:
                 formation_energy = None
             
-            # Store results
+            # Store results with model-specific column names (essential columns only)
             result_row = {
-                'original_index': idx,
                 'slices': slices_string,
-                'energy_per_atom_orbv3': energy_per_atom,
-                'formation_energy_per_atom_orbv3': formation_energy,
+                f'energy_per_atom_{model_key}': energy_per_atom,
+                f'formation_energy_per_atom_{model_key}': formation_energy,
                 'space_group': space_group,
                 'formula': decoded_structure.formula,
-                'poscar': decoded_structure.to(fmt="poscar")
+                'slices_type': slices_type,
+                'decoding_type': decoding_type
             }
             
-            # Preserve original columns
-            for col in df.columns:
-                if col not in result_row:
-                    result_row[col] = row[col]
+            # Optionally preserve original formation_energy_per_atom for comparison
+            if 'formation_energy_per_atom' in df.columns:
+                result_row['formation_energy_per_atom'] = row.get('formation_energy_per_atom')
             
             results.append(result_row)
             successful += 1
             
-            if (idx + 1) % 10 == 0:
+            if (idx + 1) % 100 == 0:
                 print(f"Processed {idx + 1}/{len(df)} structures (successful: {successful}, failed: {failed})")
                 
         except Exception as e:
@@ -167,9 +191,44 @@ def encode_decode_with_orbv3(input_csv, output_csv, threads=8, max_samples=None)
     print(f"\nCompleted!")
     print(f"  Successful: {successful}")
     print(f"  Failed: {failed}")
+    print(f"  Success rate: {successful/(successful+failed)*100:.2f}%")
     print(f"  Results saved to: {output_csv}")
     
     return output_csv
+
+def combine_datasets(train_csv, val_csv, test_csv, output_csv):
+    """Combine train, val, and test CSV files into a single dataset."""
+    print(f"Combining datasets...")
+    print(f"  Train: {train_csv}")
+    print(f"  Val: {val_csv}")
+    print(f"  Test: {test_csv}")
+    
+    dfs = []
+    for csv_file, split_name in [(train_csv, 'train'), (val_csv, 'val'), (test_csv, 'test')]:
+        if not Path(csv_file).exists():
+            print(f"Warning: {csv_file} not found, skipping...")
+            continue
+        df = pd.read_csv(csv_file)
+        df['split'] = split_name
+        dfs.append(df)
+        print(f"  Loaded {len(df)} structures from {split_name}")
+    
+    if not dfs:
+        raise ValueError("No datasets found to combine")
+    
+    combined_df = pd.concat(dfs, ignore_index=True)
+    print(f"\nCombined dataset: {len(combined_df)} structures")
+    
+    # Save combined dataset
+    combined_df.to_csv(output_csv, index=False)
+    print(f"Combined dataset saved to: {output_csv}")
+    
+    return output_csv
+
+# Backward compatibility wrapper
+def encode_decode_with_orbv3(input_csv, output_csv, threads=8, max_samples=None):
+    """Backward compatibility wrapper for ORBv3 benchmark."""
+    return encode_decode_benchmark(input_csv, output_csv, model="orbv3", use_canonical=False, use_robust=False, threads=threads, max_samples=max_samples)
 
 def run_benchmark_mattergpt_no_flash(input_csv, output_dir="benchmark_orbv3_results"):
     """
@@ -283,7 +342,7 @@ def run_benchmark_mattergpt_no_flash(input_csv, output_dir="benchmark_orbv3_resu
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Encode/decode training dataset with orbv3 and run benchmark"
+        description="Generic encode/decode benchmark with any MLIP model"
     )
     parser.add_argument(
         "--train_csv",
@@ -292,10 +351,51 @@ def main():
         help="Path to training dataset CSV file"
     )
     parser.add_argument(
+        "--val_csv",
+        type=str,
+        default=None,
+        help="Path to validation dataset CSV file (optional, for combining datasets)"
+    )
+    parser.add_argument(
+        "--test_csv",
+        type=str,
+        default=None,
+        help="Path to test dataset CSV file (optional, for combining datasets)"
+    )
+    parser.add_argument(
+        "--combined_csv",
+        type=str,
+        default=None,
+        help="Path to save combined dataset (if combining train/val/test)"
+    )
+    parser.add_argument(
+        "--input_csv",
+        type=str,
+        default=None,
+        help="Path to input CSV file (if not combining datasets, use this or --train_csv)"
+    )
+    parser.add_argument(
         "--output_csv",
         type=str,
-        default="train_encoded_decoded_orbv3.csv",
+        default="train_encoded_decoded.csv",
         help="Path to output CSV file with encoded/decoded results"
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="m3gnet",
+        choices=["m3gnet", "chgnet", "mattersim", "orbv3"],
+        help="MLIP model to use"
+    )
+    parser.add_argument(
+        "--use_canonical",
+        action="store_true",
+        help="Use canonical SLICES instead of default"
+    )
+    parser.add_argument(
+        "--use_robust",
+        action="store_true",
+        help="Use robust decoding instead of standard"
     )
     parser.add_argument(
         "--threads",
@@ -323,14 +423,30 @@ def main():
     
     args = parser.parse_args()
     
+    # Determine input CSV
+    input_csv = args.input_csv
+    if input_csv is None:
+        # Check if we need to combine datasets
+        if args.val_csv and args.test_csv:
+            combined_path = args.combined_csv or "data/mp20/combined.csv"
+            combine_datasets(args.train_csv, args.val_csv, args.test_csv, combined_path)
+            input_csv = combined_path
+        else:
+            input_csv = args.train_csv
+    
     # Step 1: Encode/decode training dataset
     if not args.skip_encode_decode:
-        print("=" * 60)
-        print("Step 1: Encoding/Decoding Training Dataset with orbv3")
-        print("=" * 60)
-        encode_decode_with_orbv3(
-            args.train_csv,
+        print("=" * 70)
+        print(f"Encoding/Decoding Dataset with {args.model.upper()}")
+        print(f"  SLICES: {'canonical' if args.use_canonical else 'default'}")
+        print(f"  Decoding: {'robust' if args.use_robust else 'standard'}")
+        print("=" * 70)
+        encode_decode_benchmark(
+            input_csv,
             args.output_csv,
+            model=args.model,
+            use_canonical=args.use_canonical,
+            use_robust=args.use_robust,
             threads=args.threads,
             max_samples=args.max_samples
         )
@@ -338,7 +454,7 @@ def main():
     # Step 2: Run benchmark if benchmark CSV is provided
     if args.benchmark_csv:
         print("\n" + "=" * 60)
-        print("Step 2: Running Benchmark on mattergpt_no_flash with orbv3")
+        print(f"Step 2: Running Benchmark on mattergpt_no_flash with {args.model}")
         print("=" * 60)
         run_benchmark_mattergpt_no_flash(args.benchmark_csv)
     elif not args.skip_encode_decode:

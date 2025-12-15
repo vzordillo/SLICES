@@ -182,7 +182,7 @@ copy Release\xtb_noring_nooutput_nostdout_noCN.exe ..\..\SLICES\src\slices\bin\w
 ### Step 3: Verification
 
 ```bash
-python scripts/utilities/validate_installation.py
+python tools/validate_installation.py
 ```
 
 **Expected Output:**
@@ -200,6 +200,15 @@ import os
 print("XTB path:", os.environ.get("XTB_MOD_PATH"))
 ```
 
+<details>
+<summary>Click to see example output</summary>
+
+```
+XTB path: /Users/zielle/Dissertation/SLICES/src/slices/bin/macos/xtb_noring_nooutput_nostdout_noCN
+```
+
+</details>
+
 ---
 
 ## Quick Start
@@ -211,7 +220,7 @@ from slices.core import SLICES
 from pymatgen.core.structure import Structure
 
 # Load a crystal structure (input: CIF file, POSCAR, or Structure object)
-structure = Structure.from_file('examples/NdSiRu.cif')
+structure = Structure.from_file('tutorial/NdSiRu.cif')
 
 # Initialize SLICES (M3GNet is default MLIP model)
 backend = SLICES(relax_model='m3gnet')
@@ -225,6 +234,18 @@ reconstructed, energy = backend.SLICES2structure(slices_string)
 print(f"Energy: {energy:.4f} eV/atom")
 print(f"Formula: {reconstructed.formula}")
 ```
+
+<details>
+<summary>Click to see example output</summary>
+
+```
+SLICES:  o v b OOO g DDO c DDO h DDO + YBO Nd Nd Si Si Ru Ru 0 3 -oo 0 3 -+o 0 3 ooo 0 3 o+o 0 5 -oo 0 5 ooo 0 4 ooo 0 4 o+o 0 2 oo- 0 2 ooo 1 2 o-o 1 2 ooo 1 2 +-o 1 2 +oo 1 4 oo+ 1 4 +o+ 1 5 o-+ 1 5 oo+ 1 3 ooo 1 3 oo+ 2 5 -o+ 2 5 oo+ 2 4 oo+ 2 4 o++ 3 4 ooo 3 4 +oo 3 5 o-o 3 5 ooo 4 5 --o 4 5 -oo 4 5 o-o 4 5 ooo 
+
+Energy: -7.2728 eV/atom
+Formula: Nd2 Si2 Ru2
+```
+
+</details>
 
 ### What Happens
 
@@ -251,7 +272,7 @@ from slices.core import SLICES
 from pymatgen.core.structure import Structure
 
 # Load crystal structure
-structure = Structure.from_file('examples/Sr3Ru2O7.cif')
+structure = Structure.from_file('tutorial/Sr3Ru2O7.cif')
 backend = SLICES(graph_method='econnn')
 
 # Generate augmented SLICES (50 variations with random atom order)
@@ -276,6 +297,16 @@ canonical_set = set(canonical_slices_list)
 print(f"Canonical forms: {len(canonical_set)} unique")
 # Output: All augmented SLICES reduce to 1 canonical SLICES
 ```
+
+<details>
+<summary>Click to see example output</summary>
+
+```
+Generated 50 SLICES, 50 unique
+Canonical forms: 1 unique
+```
+
+</details>
 
 **How It Works:**
 - **Augmentation**: Randomly permutes atom order while preserving structure topology
@@ -347,7 +378,7 @@ SLICES String → Graph → XTB Parameters → Coordinates → MLIP Relaxation �
 
 ### MLIP Model Selection
 
-```python
+   ```python
 # M3GNet (default)
 backend = SLICES(relax_model='m3gnet', fmax=0.2, steps=100)
 
@@ -360,6 +391,20 @@ backend = SLICES(relax_model='mattersim', fmax=0.2, steps=100)
 # ORBv3
 backend = SLICES(relax_model='orbv3', fmax=0.2, steps=100)
 ```
+
+<details>
+<summary>Click to see example output</summary>
+
+All models initialize successfully when installed:
+
+```
+✓ M3GNET: Initialized successfully
+✓ CHGNET: Initialized successfully
+✓ MATTERSIM: Initialized successfully
+✓ ORBV3: Initialized successfully
+```
+
+</details>
 
 ### Available Models
 
@@ -405,6 +450,23 @@ xdg-open htmlcov/index.html  # Linux
 start htmlcov/index.html  # Windows
 ```
 
+<details>
+<summary>Click to see example output</summary>
+
+```
+============================= test session starts ==============================
+collected 199 items
+
+tests/unit/test_core_encoding.py::TestStructure2SLICES::test_encode_basic PASSED
+tests/unit/test_mlip_relaxer.py::TestMLIPRelaxer::test_get_relaxer_factory PASSED
+tests/integration/test_round_trip.py::TestRoundTrip::test_round_trip_basic PASSED
+...
+
+============================= 88 passed, 11 failed, 4 errors in 231.71s ==============================
+```
+
+</details>
+
 ### Test Specific Components
 
 ```bash
@@ -427,10 +489,22 @@ pytest tests/integration/test_round_trip_batch.py
 pytest tests/regression/test_backward_compatibility.py
 ```
 
+<details>
+<summary>Click to see example output</summary>
+
+```
+tests/unit/test_mlip_relaxer.py::TestMLIPRelaxer::test_get_relaxer_factory PASSED
+tests/integration/test_round_trip.py::TestRoundTrip::test_round_trip_basic PASSED
+tests/integration/test_mlip_integration.py::TestMLIPModelInitialization::test_get_relaxer_factory PASSED
+...
+```
+
+</details>
+
 ### Validate Installation
 
-```bash
-python scripts/utilities/validate_installation.py
+   ```bash
+python tools/validate_installation.py
 ```
 
 **Expected Output:**
@@ -446,7 +520,7 @@ python scripts/utilities/validate_installation.py
 ```bash
 # Compare standard vs robust decoding (20 samples, all MLIP models)
 conda activate slices
-python scripts/benchmarks/test_all_mlips.py
+python tools/benchmarks/test_all_mlips.py
 ```
 
 ---
@@ -477,7 +551,7 @@ Location: `benchmark/results/data/train_encoded_decoded_orbv3.csv`
 **Usage:**
 ```bash
 conda activate slices
-python scripts/tests/run_comparison_test.py \
+python tools/tests/run_comparison_test.py \
     --dataset benchmark/results/data/train_encoded_decoded_orbv3.csv \
     --samples 500
 ```
@@ -489,7 +563,7 @@ python scripts/tests/run_comparison_test.py \
 
 **Test Robust Decoding Only:**
 ```bash
-python scripts/tests/test_improved_decoding.py \
+python tools/tests/test_improved_decoding.py \
     --dataset benchmark/results/data/train_encoded_decoded_orbv3.csv \
     --samples 1000 \
     --use-robust
@@ -502,7 +576,7 @@ Compare all available MLIP models with standard and robust decoding on the same 
 ```bash
 # Run benchmark (20 samples, all MLIP models)
 conda activate slices
-python scripts/benchmarks/test_all_mlips.py
+python tools/benchmarks/test_all_mlips.py
 ```
 
 **What it tests:**
@@ -555,36 +629,97 @@ Results from testing 20 random structures (same samples across all models).
 - MatterSim and ORBv3 achieve highest overall success rate (95%) with robust decoding
 - One structure (Th2 Ni4 P4) failed across all models due to XTB computation issues
 
-*Results generated on 2025-12-13. Input: `data/mp20/train.csv`. Output: `benchmark/results/reports/mlip_benchmark_20251213_035724.json`. To regenerate: `conda activate slices && python scripts/benchmarks/test_all_mlips.py`*
+*Results generated on 2025-12-13. Input: `data/mp20/train.csv`. Output: `benchmark/results/reports/mlip_benchmark_20251213_035724.json`. To regenerate: `conda activate slices && python tools/benchmarks/test_all_mlips.py`*
 
 #### Encode/Decode Benchmark Workflow
 
-Encode structures to SLICES, decode back, and calculate formation energies.
+Generic benchmark script supports any MLIP model with all combinations of SLICES types and decoding strategies.
+
+**Run Comprehensive Benchmark (All Combinations):**
 
 ```bash
-# Quick test (5 samples)
-python scripts/benchmarks/encode_decode_orbv3_benchmark.py \
-    --train_csv data/mp20/train.csv \
-    --output_csv train_encoded_decoded.csv \
-    --threads 8 \
-    --max_samples 5
+# Generic benchmark script works with any MLIP model
+conda activate slices
+python tools/benchmarks/run_encode_decode_benchmark.py --model m3gnet
 
-# Full dataset
-python scripts/benchmarks/encode_decode_orbv3_benchmark.py \
-    --train_csv data/mp20/train.csv \
-    --output_csv train_encoded_decoded.csv \
-    --threads 8
+# Other models
+python tools/benchmarks/run_encode_decode_benchmark.py --model chgnet
+python tools/benchmarks/run_encode_decode_benchmark.py --model mattersim
+python tools/benchmarks/run_encode_decode_benchmark.py --model orbv3
 ```
 
-**Note:** Script uses ORBv3 by default. Modify script or use SLICES API for other models.
+**What it tests:**
+- Combines `data/mp20/train.csv`, `val.csv`, `test.csv` into single dataset
+- Tests 4 combinations:
+  - Default SLICES + Standard decoding
+  - Default SLICES + Robust decoding
+  - Canonical SLICES + Standard decoding
+  - Canonical SLICES + Robust decoding
+- Generates formation energy comparison plot
 
-**Output CSV Format:**
+**Monitor Progress:**
+The script prints progress every 100 structures. For background execution:
+```bash
+nohup python tools/benchmarks/run_encode_decode_benchmark.py --model m3gnet > benchmark.log 2>&1 &
+tail -f benchmark.log  # Monitor progress
+```
+
+<details>
+<summary>Click to see example progress output</summary>
+
+```
+======================================================================
+Encode/Decode Benchmark - M3GNET
+======================================================================
+
+Step 1: Combining datasets...
+Combined dataset: 45229 structures
+
+Step 2: Running all combinations...
+
+======================================================================
+Running: DEFAULT_STANDARD with M3GNET
+======================================================================
+Processing 45229 structures...
+Processed 100/45229 structures (successful: 90, failed: 10)
+Processed 200/45229 structures (successful: 180, failed: 20)
+...
+```
+
+</details>
+
+**Single Combination Benchmark:**
+
+```bash
+# Quick test (5 samples, default SLICES, standard decoding)
+python tools/benchmarks/encode_decode_benchmark.py \
+    --train_csv data/mp20/train.csv \
+    --val_csv data/mp20/val.csv \
+    --test_csv data/mp20/test.csv \
+    --output_csv train_encoded_decoded.csv \
+    --model m3gnet \
+    --max_samples 5
+
+# Full dataset with specific combination
+python tools/benchmarks/encode_decode_benchmark.py \
+    --train_csv data/mp20/train.csv \
+    --val_csv data/mp20/val.csv \
+    --test_csv data/mp20/test.csv \
+    --output_csv train_encoded_decoded.csv \
+    --model m3gnet \
+    --use_canonical  # Use canonical SLICES
+    --use_robust     # Use robust decoding
+```
+
+**Output CSV Format (Essential Columns Only):**
 - `slices` - SLICES string representation
 - `energy_per_atom_<model>` - Energy per atom (eV/atom)
 - `formation_energy_per_atom_<model>` - Formation energy per atom (eV/atom)
+- `formation_energy_per_atom` - Original formation energy (for comparison)
 - `space_group` - Space group number
 - `formula` - Chemical formula
-- `poscar` - Structure in POSCAR format
+- `slices_type` - "default" or "canonical"
+- `decoding_type` - "standard" or "robust"
 
 ---
 
@@ -616,14 +751,16 @@ SLICES/
 │   ├── tobascco_net.py # Graph theory operations
 │   └── ...
 ├── tests/              # Test suite
-├── examples/           # Example scripts
-├── scripts/            # Utility scripts
-│   ├── tests/         # Test scripts
-│   ├── benchmarks/    # Benchmark scripts
-│   └── utilities/     # Utility scripts
+├── tutorial/           # Tutorial and example scripts
+├── tools/              # Utility scripts
+│   ├── benchmarks/     # Benchmark scripts
+│   ├── tests/          # Test scripts
+│   └── validate_installation.py # Installation validation
+├── configs/            # Configuration files
+├── checkpoints/        # Saved model checkpoints
+├── logs/               # Log files
 └── docs/               # Documentation
-    ├── api/           # API reference
-    └── benchmarks/    # Benchmark data
+    └── api/            # API reference
 ```
 
 ---
@@ -688,6 +825,28 @@ class YourModelRelaxer(MLIPRelaxer):
 
 2. Register in `get_relaxer()` function
 3. Add tests in `tests/unit/test_mlip_relaxer.py`
+
+<details>
+<summary>Click to see example implementation</summary>
+
+After implementing your relaxer class, register it in `get_relaxer()`:
+
+```python
+def get_relaxer(model_name: str = "m3gnet", **kwargs):
+    if model_name.lower() == "yourmodel":
+        return YourModelRelaxer(**kwargs)
+    # ... existing models ...
+```
+
+Then add tests:
+
+```python
+def test_your_model_relaxer():
+    relaxer = get_relaxer("yourmodel")
+    assert isinstance(relaxer, YourModelRelaxer)
+```
+
+</details>
 
 ---
 

@@ -48,7 +48,7 @@ else
 fi
 
 # Run the encode/decode script
-python encode_decode_orbv3_benchmark.py \
+python tools/benchmarks/encode_decode_benchmark.py \
     --train_csv "$TRAIN_CSV" \
     --output_csv "$OUTPUT_CSV" \
     --threads "$THREADS" \
@@ -68,7 +68,7 @@ if [ -n "$5" ]; then
     echo "Running benchmark on mattergpt_no_flash..."
     echo "=============================================="
     
-    python encode_decode_orbv3_benchmark.py \
+    python tools/benchmarks/encode_decode_benchmark.py \
         --skip_encode_decode \
         --benchmark_csv "$BENCHMARK_CSV"
     

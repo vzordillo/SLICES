@@ -249,7 +249,7 @@ class SLICES:
     def __init__(self, atom_types=None, edge_indices=None, to_jimages=None, graph_method='econnn', check_results=False, optimizer="BFGS",fmax=0.2,steps=100,relax_model="m3gnet"):
         """
         Initialize SLICES encoder/decoder.
-        
+
         Args:
             atom_types (np.array, optional): Atomic numbers (Z) of atoms in a SLICES string. Each element is an integer
                 representing the atomic number (e.g., 1 for H, 6 for C, 8 for O). Used when initializing with pre-parsed
@@ -354,7 +354,7 @@ class SLICES:
         
         The XTB binary used for bond parameter calculation (GFN-FF) supports elements
         with atomic numbers up to 86. Structures with heavier elements may fail during decoding.
-        
+
         Args:
             structure (Structure): A pymatgen Structure object.
 
@@ -409,7 +409,7 @@ class SLICES:
         
         Parses the CIF string into a Structure object, then converts it to a StructureGraph
         using the local environment analysis method specified by self.graph_method.
-        
+
         Args:
             string (str): String content of a CIF file.
 
@@ -439,7 +439,7 @@ class SLICES:
         
         Creates a labeled quotient graph representation where atoms are nodes and bonds are edges.
         The graph method determines how bonds are identified based on local chemical environments.
-        
+
         Args:
             structure (Structure): A pymatgen Structure object.
 
@@ -1009,7 +1009,7 @@ class SLICES:
         except Exception as e:
             print(f"Error generating original SLICES: {e}")
             # Continue generating augmented SLICES even if original fails
-
+        
         # Calculate total number of permutations to generate
         total_permutations = num * batch_multiplier
 
@@ -1229,7 +1229,7 @@ class SLICES:
         
         The supercell is used to handle periodic boundary conditions. Atoms with no neighbors
         are removed from the neighbor list to avoid XTB errors.
-        
+
         Returns:
             tuple: (nbf, blist)
                 - nbf (str): Neighbor list string in XTB format
@@ -1340,7 +1340,7 @@ class SLICES:
         The inner product matrix encodes:
         - Diagonal elements: squared bond lengths (in Angstrom^2)
         - Off-diagonal elements: bond angle constraints via dot products
-        
+
         Args:
             bond_scaling (float, optional): Empirical scaling factor applied to XTB bond lengths.
                 Defaults to 1.05.
@@ -1490,7 +1490,7 @@ class SLICES:
         The inner product matrix encodes:
         - Diagonal elements: squared bond lengths (in Angstrom^2)
         - Off-diagonal elements: bond angle constraints via dot products
-        
+
         Args:
             bond_scaling (float, optional): Empirical scaling factor applied to XTB bond lengths.
                 Defaults to 1.05.
@@ -2233,7 +2233,7 @@ class SLICES:
         
         3. MLIP-relaxed structure: Final structure after cell optimization using machine learning
            interatomic potentials. If MLIP relaxation fails, only structures (1) and (2) are returned.
-        
+
         Args:
             bond_scaling (float, optional): Empirical scaling factor applied to XTB bond lengths.
                 Defaults to 1.05.
@@ -2477,7 +2477,7 @@ class SLICES:
         4. Generating initial coordinates using barycentric embedding
         5. Optimizing coordinates with ZL* algorithm to match XTB-predicted bond lengths/angles
         6. Relaxing structure with MLIP model
-        
+
         Args:
             SLICES (str): A SLICES string encoding the crystal structure.
             strategy (int, optional): Encoding strategy used (1, 2, 3, or 4). Defaults to 4.

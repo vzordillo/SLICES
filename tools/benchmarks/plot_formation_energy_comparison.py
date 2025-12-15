@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Plot and compare distributions of original and ORBv3-predicted formation energies.
-Simple histogram version with statistics.
+Generic script to plot and compare distributions of original and MLIP-predicted formation energies.
+Supports any MLIP model (m3gnet, chgnet, mattersim, orbv3).
 """
 
 import pandas as pd
@@ -14,25 +14,34 @@ import argparse
 plt.rcParams['figure.figsize'] = (12, 8)
 plt.rcParams['font.size'] = 12
 
-def load_data(csv_path):
+def load_data(csv_path, model="m3gnet"):
     """Load the dataset and extract formation energies."""
     print(f"Loading data from {csv_path}...")
     df = pd.read_csv(csv_path)
     
     # Extract relevant columns
     original = df['formation_energy_per_atom'].dropna()
-    orbv3 = df['formation_energy_per_atom_orbv3'].dropna()
+    model_key = model.lower()
+    predicted_col = f'formation_energy_per_atom_{model_key}'
+    
+    if predicted_col not in df.columns:
+        raise ValueError(f"Column '{predicted_col}' not found in CSV. Available columns: {list(df.columns)}")
+    
+    predicted = df[predicted_col].dropna()
     
     print(f"Loaded {len(df):,} structures")
     print(f"Original: {len(original):,} values")
-    print(f"ORBv3: {len(orbv3):,} values")
+    print(f"{model.upper()}: {len(predicted):,} values")
     
-    return original, orbv3, df
+    return original, predicted, df, model
 
-def calculate_statistics(original, orbv3, df):
+def calculate_statistics(original, predicted, df, model="m3gnet"):
     """Calculate statistical measures."""
+    model_key = model.lower()
+    predicted_col = f'formation_energy_per_atom_{model_key}'
+    
     # Get paired data for correlation
-    paired_df = df[['formation_energy_per_atom', 'formation_energy_per_atom_orbv3']].dropna()
+    paired_df = df[['formation_energy_per_atom', predicted_col]].dropna()
     
     stats = {
         'original': {
@@ -45,38 +54,38 @@ def calculate_statistics(original, orbv3, df):
             'q75': original.quantile(0.75),
             'count': len(original)
         },
-        'orbv3': {
-            'mean': orbv3.mean(),
-            'std': orbv3.std(),
-            'median': orbv3.median(),
-            'min': orbv3.min(),
-            'max': orbv3.max(),
-            'q25': orbv3.quantile(0.25),
-            'q75': orbv3.quantile(0.75),
-            'count': len(orbv3)
+        'predicted': {
+            'mean': predicted.mean(),
+            'std': predicted.std(),
+            'median': predicted.median(),
+            'min': predicted.min(),
+            'max': predicted.max(),
+            'q25': predicted.quantile(0.25),
+            'q75': predicted.quantile(0.75),
+            'count': len(predicted)
         }
     }
     
     # Correlation and error metrics
     if len(paired_df) > 0:
         stats['correlation'] = paired_df['formation_energy_per_atom'].corr(
-            paired_df['formation_energy_per_atom_orbv3']
+            paired_df[predicted_col]
         )
         stats['mae'] = np.abs(
-            paired_df['formation_energy_per_atom'] - paired_df['formation_energy_per_atom_orbv3']
+            paired_df['formation_energy_per_atom'] - paired_df[predicted_col]
         ).mean()
         stats['rmse'] = np.sqrt(
-            ((paired_df['formation_energy_per_atom'] - paired_df['formation_energy_per_atom_orbv3'])**2).mean()
+            ((paired_df['formation_energy_per_atom'] - paired_df[predicted_col])**2).mean()
         )
     
     return stats
 
-def create_histogram_plot(original, orbv3, stats, output_path):
+def create_histogram_plot(original, predicted, stats, output_path, model="m3gnet"):
     """Create histogram plot with statistics and inset for positive region."""
     fig, ax = plt.subplots(figsize=(12, 8))
     
     # Determine bin range from both distributions for main plot (show full range)
-    all_values = np.concatenate([original.values, orbv3.values])
+    all_values = np.concatenate([original.values, predicted.values])
     bin_min = min(all_values.min(), -6)
     bin_max = max(all_values.max(), 8)  # Show full range including positive values
     bins = np.linspace(bin_min, bin_max, 100)  # More bins for better resolution
@@ -86,8 +95,8 @@ def create_histogram_plot(original, orbv3, stats, output_path):
                                   label='Original (Reference)', 
                                   color='blue', edgecolor='black', linewidth=0.5,
                                   density=True)
-    n2, bins2, patches2 = ax.hist(orbv3, bins=bins, alpha=0.6, 
-                                 label='ORBv3 (Predicted)', 
+    n2, bins2, patches2 = ax.hist(predicted, bins=bins, alpha=0.6, 
+                                 label=f'{model.upper()} (Predicted)', 
                                  color='red', edgecolor='black', linewidth=0.5,
                                  density=True)
     
@@ -103,9 +112,9 @@ def create_histogram_plot(original, orbv3, stats, output_path):
     stats_text += f"  μ = {stats['original']['mean']:.3f} eV/atom\n"
     stats_text += f"  σ = {stats['original']['std']:.3f} eV/atom\n\n"
     
-    stats_text += f"ORBv3:\n"
-    stats_text += f"  μ = {stats['orbv3']['mean']:.3f} eV/atom\n"
-    stats_text += f"  σ = {stats['orbv3']['std']:.3f} eV/atom\n\n"
+    stats_text += f"{model.upper()}:\n"
+    stats_text += f"  μ = {stats['predicted']['mean']:.3f} eV/atom\n"
+    stats_text += f"  σ = {stats['predicted']['std']:.3f} eV/atom\n\n"
     
     if 'correlation' in stats:
         stats_text += f"Pearson r = {stats['correlation']:.4f}\n"
@@ -126,7 +135,7 @@ def create_histogram_plot(original, orbv3, stats, output_path):
     
     return fig
 
-def print_summary(stats):
+def print_summary(stats, model="m3gnet"):
     """Print summary statistics to console."""
     print("\n" + "="*70)
     print("FORMATION ENERGY DISTRIBUTION COMPARISON")
@@ -138,12 +147,12 @@ def print_summary(stats):
     print(f"  Median: {stats['original']['median']:.4f} eV/atom")
     print(f"  Range: [{stats['original']['min']:.4f}, {stats['original']['max']:.4f}] eV/atom")
     
-    print("\nORBv3 (Predicted) Formation Energy:")
-    print(f"  Count: {stats['orbv3']['count']:,}")
-    print(f"  Mean: {stats['orbv3']['mean']:.4f} eV/atom")
-    print(f"  Std: {stats['orbv3']['std']:.4f} eV/atom")
-    print(f"  Median: {stats['orbv3']['median']:.4f} eV/atom")
-    print(f"  Range: [{stats['orbv3']['min']:.4f}, {stats['orbv3']['max']:.4f}] eV/atom")
+    print(f"\n{model.upper()} (Predicted) Formation Energy:")
+    print(f"  Count: {stats['predicted']['count']:,}")
+    print(f"  Mean: {stats['predicted']['mean']:.4f} eV/atom")
+    print(f"  Std: {stats['predicted']['std']:.4f} eV/atom")
+    print(f"  Median: {stats['predicted']['median']:.4f} eV/atom")
+    print(f"  Range: [{stats['predicted']['min']:.4f}, {stats['predicted']['max']:.4f}] eV/atom")
     
     if 'correlation' in stats:
         print("\nComparison Metrics:")
@@ -155,37 +164,48 @@ def print_summary(stats):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Plot and compare formation energy distributions'
+        description='Plot and compare formation energy distributions for any MLIP model'
     )
     parser.add_argument(
         '--input', '-i',
         type=str,
-        default='docs/benchmarks/train_encoded_decoded_orbv3.csv',
+        default='benchmark/results/data/train_encoded_decoded_orbv3.csv',
         help='Path to input CSV file'
     )
     parser.add_argument(
         '--output', '-o',
         type=str,
-        default='docs/benchmarks/formation_energy_comparison.png',
-        help='Path to output plot file'
+        default=None,
+        help='Path to output plot file (auto-generated if not specified)'
+    )
+    parser.add_argument(
+        '--model', '-m',
+        type=str,
+        default='m3gnet',
+        choices=['m3gnet', 'chgnet', 'mattersim', 'orbv3'],
+        help='MLIP model name'
     )
     
     args = parser.parse_args()
     
+    # Auto-generate output path if not specified
+    if args.output is None:
+        args.output = f'benchmark/results/images/formation_energy_comparison_{args.model}.png'
+    
     # Load data
-    original, orbv3, df = load_data(args.input)
+    original, predicted, df, model = load_data(args.input, args.model)
     
     # Calculate statistics
-    stats = calculate_statistics(original, orbv3, df)
+    stats = calculate_statistics(original, predicted, df, args.model)
     
     # Print summary
-    print_summary(stats)
+    print_summary(stats, args.model)
     
     # Create plot
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    create_histogram_plot(original, orbv3, stats, output_path)
+    create_histogram_plot(original, predicted, stats, output_path, args.model)
     
     print(f"Analysis complete! Plot saved to: {output_path}")
 

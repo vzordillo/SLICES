@@ -4,7 +4,7 @@ from slices.core import SLICES
 from pymatgen.core.structure import Structure
 
 # Load crystal structure
-original_structure = Structure.from_file(filename='NdSiRu.cif')
+original_structure = Structure.from_file(filename='../NdSiRu.cif')
 
 # Initialize SLICES with MLIP model for relaxation
 # Supported models: 'm3gnet' (default), 'chgnet', 'mattersim', 'orbv3'
