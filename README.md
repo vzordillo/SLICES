@@ -204,7 +204,7 @@ print("XTB path:", os.environ.get("XTB_MOD_PATH"))
 <summary>Click to see example output</summary>
 
 ```
-XTB path: /Users/zielle/Dissertation/SLICES/src/slices/bin/macos/xtb_noring_nooutput_nostdout_noCN
+XTB path: /path/to/SLICES/src/slices/bin/macos/xtb_noring_nooutput_nostdout_noCN
 ```
 
 </details>
