@@ -89,8 +89,43 @@ class M3GNetRelaxer(MLIPRelaxer):
                 # tf_keras not available, rely on TF_USE_LEGACY_KERAS env var
                 pass
             
-            from m3gnet.models import Relaxer
-            self.relaxer = Relaxer(optimizer=optimizer)
+            # Load M3GNet Relaxer
+            # TensorFlow GPU configuration is handled in core.py with memory growth settings
+            # to prevent initialization crashes while still allowing GPU usage.
+            try:
+                from m3gnet.models import Relaxer
+                self.relaxer = Relaxer(optimizer=optimizer)
+            except (SystemExit, KeyboardInterrupt):
+                # Re-raise these immediately
+                raise
+            except Exception as e:
+                # Check if this looks like a GPU initialization crash
+                error_str = str(e).lower() if e else ""
+                error_type = type(e).__name__
+                
+                # Check for signs of GPU/device initialization crashes
+                is_device_crash = (
+                    "aborted" in error_str or 
+                    "segmentation" in error_str or 
+                    "core dumped" in error_str or
+                    "fatal python error" in error_str or
+                    error_type in ["AbortedError", "SystemError"]
+                )
+                
+                if is_device_crash:
+                    raise RuntimeError(
+                        f"M3GNet model loading crashed due to TensorFlow device initialization issue.\n\n"
+                        f"Error type: {error_type}\n"
+                        f"This typically happens when TensorFlow tries to access GPU devices.\n\n"
+                        "Solutions:\n"
+                        "1. Ensure CUDA_VISIBLE_DEVICES is set before importing:\n"
+                        "   export CUDA_VISIBLE_DEVICES=\"\"\n"
+                        "   pytest ...\n\n"
+                        "2. Or run with environment variable:\n"
+                        "   CUDA_VISIBLE_DEVICES=\"\" pytest ...\n\n"
+                        "3. Check that CUDA drivers are properly configured if GPU access is needed.\n"
+                    ) from e
+                raise
         except ImportError:
             raise ImportError("M3GNet is not installed. Install with: pip install m3gnet")
         except Exception as e:

@@ -11,7 +11,6 @@ from pymatgen.core.structure import Structure
 from pymatgen.analysis.structure_matcher import StructureMatcher
 from pathlib import Path
 from slices.core import SLICES
-from tests.conftest import structures_dir
 
 
 # Known good structures and their expected properties
@@ -35,7 +34,7 @@ class TestKnownStructuresEncoding:
     """Test encoding of known structures."""
     
     @pytest.mark.regression
-    def test_encode_ndsiru(self, slices_backend):
+    def test_encode_ndsiru(self, slices_backend, structures_dir):
         """Test encoding NdSiRu structure."""
         cif_path = structures_dir / "NdSiRu.cif"
         if not cif_path.exists():
@@ -51,7 +50,7 @@ class TestKnownStructuresEncoding:
         assert any(elem in slices_string for elem in ['Nd', 'Si', 'Ru'])
     
     @pytest.mark.regression
-    def test_encode_sr3ru2o7(self, slices_backend):
+    def test_encode_sr3ru2o7(self, slices_backend, structures_dir):
         """Test encoding Sr3Ru2O7 structure."""
         cif_path = structures_dir / "Sr3Ru2O7.cif"
         if not cif_path.exists():
@@ -65,7 +64,7 @@ class TestKnownStructuresEncoding:
         assert len(slices_string) > 0
     
     @pytest.mark.regression
-    def test_encode_consistency(self, slices_backend):
+    def test_encode_consistency(self, slices_backend, structures_dir):
         """Test that encoding known structures is consistent."""
         cif_path = structures_dir / "NdSiRu.cif"
         if not cif_path.exists():
@@ -86,7 +85,7 @@ class TestKnownStructuresRoundTrip:
     
     @pytest.mark.regression
     @pytest.mark.slow
-    def test_round_trip_ndsiru(self, slices_backend):
+    def test_round_trip_ndsiru(self, slices_backend, structures_dir):
         """Test round-trip with NdSiRu."""
         cif_path = structures_dir / "NdSiRu.cif"
         if not cif_path.exists():
@@ -105,7 +104,7 @@ class TestKnownStructuresRoundTrip:
     
     @pytest.mark.regression
     @pytest.mark.slow
-    def test_round_trip_structure_match(self, slices_backend):
+    def test_round_trip_structure_match(self, slices_backend, structures_dir):
         """Test that round-trip produces matching structure."""
         cif_path = structures_dir / "NdSiRu.cif"
         if not cif_path.exists():
@@ -134,7 +133,7 @@ class TestKnownStructuresTolerance:
     
     @pytest.mark.regression
     @pytest.mark.slow
-    def test_round_trip_energy_tolerance(self, slices_backend):
+    def test_round_trip_energy_tolerance(self, slices_backend, structures_dir):
         """Test that round-trip energy is within reasonable range."""
         cif_path = structures_dir / "NdSiRu.cif"
         if not cif_path.exists():
@@ -154,7 +153,7 @@ class TestKnownStructuresTolerance:
             assert -20 < energy < 20, f"Energy {energy} seems unreasonable"
     
     @pytest.mark.regression
-    def test_encoding_success_rate(self, slices_backend):
+    def test_encoding_success_rate(self, slices_backend, structures_dir):
         """Test that encoding succeeds for known structures."""
         success_count = 0
         total_count = 0

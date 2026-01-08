@@ -4,11 +4,12 @@ pyproject.toml
 src/slices/__init__.py
 src/slices/config.py
 src/slices/core.py
+src/slices/decoding_strategies.py
+src/slices/mlip_relaxer.py
 src/slices/nlopt.h
 src/slices/tobascco_net.py
 src/slices/utils.py
 src/slices/utils_wyckoff.py
-src/slices/xtb_noring_nooutput_nostdout_noCN
 src/slices.egg-info/PKG-INFO
 src/slices.egg-info/SOURCES.txt
 src/slices.egg-info/dependency_links.txt

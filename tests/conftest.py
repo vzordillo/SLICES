@@ -2,6 +2,15 @@
 Pytest configuration and shared fixtures for SLICES tests.
 """
 
+# Set environment variables BEFORE any imports for TensorFlow configuration
+# This must be done at the very top, before importing anything that might load TensorFlow
+import os
+# Allow GPU usage - only disable if explicitly set by user
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""  # Commented out to allow GPU usage
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+if "TF_USE_LEGACY_KERAS" not in os.environ:
+    os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
 import pytest
 import numpy as np
 from pathlib import Path

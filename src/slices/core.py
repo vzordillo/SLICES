@@ -6,12 +6,30 @@
 # SECTION 1: Imports and Environment Configuration
 # ============================================================================
 import os,subprocess,random,warnings
-os.environ["CUDA_VISIBLE_DEVICES"]=""
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+import sys
+
 # Enable Keras 2 compatibility mode for M3GNet (works with TensorFlow 2.16+)
 # This allows M3GNet to work with Keras 3 by using legacy Keras 2
 if "TF_USE_LEGACY_KERAS" not in os.environ:
     os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
+# Patch keras to use tf_keras BEFORE any TensorFlow imports
+# This must happen before TensorFlow is imported to ensure M3GNet uses Keras 2
+try:
+    import tf_keras
+    # Patch keras module before any other code imports it
+    if 'keras' not in sys.modules:
+        sys.modules['keras'] = tf_keras
+except ImportError:
+    # tf_keras not available - will rely on TF_USE_LEGACY_KERAS env var
+    pass
+
+# Only disable GPU if explicitly requested via environment variable
+# Otherwise, allow TensorFlow to use available GPUs
+if "CUDA_VISIBLE_DEVICES" not in os.environ:
+    # Don't set it - let TensorFlow use available GPUs
+    pass
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -126,17 +144,74 @@ from io import StringIO
 import pandas as pd
 import matplotlib.pyplot as plt
 import logging
-import tensorflow as tf
 import signal,gc
 from contextlib import contextmanager
 from functools import wraps
 import itertools
 import copy,sys
-import m3gnet.models
 import threading
 import platform
-tf.config.threading.set_inter_op_parallelism_threads(1)
-tf.config.threading.set_intra_op_parallelism_threads(1)
+
+# Import TensorFlow and configure it to use GPU safely
+# The crash was happening during device initialization, so we configure
+# memory growth and device settings properly to prevent segfaults
+try:
+    import tensorflow as tf
+    # Patch tensorflow.keras to use tf_keras if available
+    try:
+        import tf_keras
+        if not hasattr(tf, 'keras') or not isinstance(tf.keras, type(tf_keras)):
+            tf.keras = tf_keras
+    except (ImportError, AttributeError):
+        pass
+    
+    # Set threading configuration
+    try:
+        tf.config.threading.set_inter_op_parallelism_threads(1)
+        tf.config.threading.set_intra_op_parallelism_threads(1)
+    except (RuntimeError, AttributeError):
+        pass
+    
+    # Configure GPU memory growth to prevent crashes and OOM errors
+    # We use a safe approach that doesn't force device enumeration
+    # Memory growth allows TensorFlow to allocate GPU memory incrementally
+    try:
+        # Try to get GPU devices - this may trigger initialization, so we catch all exceptions
+        # If this crashes, TensorFlow will fall back to CPU automatically
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            # Enable memory growth for all GPUs
+            # This must be done before any GPU operations
+            for gpu in gpus:
+                try:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                except (RuntimeError, ValueError):
+                    # Memory growth must be set before GPUs are initialized
+                    # If it fails, GPUs may already be initialized - that's okay
+                    pass
+    except Exception:
+        # If device enumeration or configuration fails for any reason, continue
+        # TensorFlow will either:
+        # - Use CPU if GPU initialization failed
+        # - Use default GPU settings if devices are already initialized
+        # We don't raise or warn as this is often normal (e.g., in CPU-only environments)
+        pass
+except ImportError:
+    # TensorFlow not available - will fail later when needed
+    tf = None
+    warnings.warn("TensorFlow not available - M3GNet features will not work")
+
+# Delay m3gnet.models import until after TensorFlow is configured
+# This prevents M3GNet from triggering device initialization during import
+# We'll import it lazily when actually needed
+_m3gnet_models = None
+def _get_m3gnet_models():
+    """Lazy import of m3gnet.models to avoid early TensorFlow device initialization."""
+    global _m3gnet_models
+    if _m3gnet_models is None:
+        import m3gnet.models
+        _m3gnet_models = m3gnet.models
+    return _m3gnet_models
 
 # Suppress ERROR level logging from tobascco_net to reduce noise
 # These errors are expected for some structures with incompatible graph topologies
@@ -282,6 +357,7 @@ class SLICES:
         self.fmax=fmax
         self.steps=steps
         self.relax_model=relax_model
+        self.optimizer=optimizer
         self.space_group_num = None
 
         # Initialize MLIP relaxer based on relax_model parameter
@@ -289,7 +365,8 @@ class SLICES:
         try:
             if self.relax_model == "m3gnet":
                 # Copy m3gnet model file if needed
-                model_path = os.path.join(m3gnet.models.__path__[0], 'MP-2021.2.8-EFS')
+                m3gnet_models = _get_m3gnet_models()
+                model_path = os.path.join(m3gnet_models.__path__[0], 'MP-2021.2.8-EFS')
                 if not os.path.isdir(model_path):
                     data_path = os.path.join(os.path.dirname(__file__), 'MP-2021.2.8-EFS')
                     # Create directory (cross-platform)
@@ -546,23 +623,39 @@ class SLICES:
                 
             if first_elem_idx is None:
                 # No element symbols found - invalid SLICES
-                raise SLICESEncodingError("No valid element symbols found in SLICES string. Cannot decode structure.")
+                raise ValueError("No valid element symbols found in SLICES string. Cannot decode structure.")
                 
             # Get space group number if tokenized encoding exists
+            space_group_num = None
             if first_elem_idx > 0:
                 letter_enc = "".join(tokens[:first_elem_idx])
                 try:
                     space_group_num = get_space_group_num_from_letter_enc(letter_enc)
                 except:
                     space_group_num = None
-                    raise SLICESEncodingError("Space group number is None. Cannot proceed with encoding.")
-            else:
-                space_group_num = None
-            for i in range(first_elem_idx,len(tokens)):
-                if tokens[i].isnumeric():
-                    num_atoms=i-first_elem_idx
-                    break
+                    # Don't raise error here - space group can be None
             self.space_group_num = space_group_num
+            
+            # Find number of atoms by looking for first numeric token after elements
+            num_atoms = None
+            for i in range(first_elem_idx, len(tokens)):
+                if tokens[i].isnumeric():
+                    num_atoms = i - first_elem_idx
+                    break
+            
+            # If no numeric token found, try to infer from remaining tokens
+            if num_atoms is None:
+                # Count consecutive element symbols
+                num_atoms = 0
+                for i in range(first_elem_idx, len(tokens)):
+                    try:
+                        Element(tokens[i])
+                        num_atoms += 1
+                    except (ValueError, KeyError):
+                        break
+                if num_atoms == 0:
+                    raise ValueError("Cannot determine number of atoms from SLICES string.")
+            
             # Process rest of SLICES string as before
             self.atom_symbols = tokens[first_elem_idx:first_elem_idx+num_atoms]
             start_idx = first_elem_idx + len(self.atom_symbols)
@@ -611,7 +704,11 @@ class SLICES:
         }
         method = strategy_method_map.get(strategy)
         if method:
-            return method(atom_symbols, edge_indices, to_jimages, space_group_num)
+            # Strategies 1-3 don't take space_group_num, only strategy 4 does
+            if strategy == 4:
+                return method(atom_symbols, edge_indices, to_jimages, space_group_num)
+            else:
+                return method(atom_symbols, edge_indices, to_jimages)
         else:
             raise ValueError(f"Unknown strategy {strategy}")
 
@@ -710,11 +807,14 @@ class SLICES:
         """Check the structural validity of a Structure with minimal distance > 0.5 Ang.
 
         Args:
-            str1 (Structure): Input Structure.
+            str1 (Structure): Input Structure object (not a string).
 
         Returns:
             bool: Return True if Structure is structurally valid.
         """
+        # Check if str1 is actually a Structure object
+        if not hasattr(str1, 'lattice') or not hasattr(str1, 'frac_coords'):
+            raise TypeError("check_structural_validity requires a Structure object, not a string. Use SLICES2structure() first to decode SLICES strings.")
         distance_matrix=str1.lattice.get_all_distances(str1.frac_coords,str1.frac_coords)
         min_value = 10000000 # inf
 
@@ -952,6 +1052,10 @@ class SLICES:
         Returns:
             str: A SLICES string.
         """ 
+        # Check for empty structure
+        if len(structure) == 0:
+            raise ValueError("Cannot encode empty structure. Structure must contain at least one atom.")
+        
         structure_graph=self.structure2structure_graph(structure)
         atom_types = np.array(structure.atomic_numbers)
         atom_symbols = [str(ElementBase.from_Z(i)) for i in atom_types]

@@ -31,6 +31,9 @@ def parse_cif_from_csv_row(cif_string):
         cif_string = cif_string[1:-1]
     return cif_string
 
+import pytest
+
+@pytest.mark.skip(reason="This is a standalone script, not a pytest test. Run directly with: python test_encoding_only.py")
 def test_encoding(dataset_path, num_samples=100, batch_size=10):
     """Test structure2SLICES encoding on mp-20 dataset with memory-efficient processing"""
     

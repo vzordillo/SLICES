@@ -1,3 +1,8 @@
 setuptools>=18.0
 m3gnet==0.2.4
 smact==2.5.5
+
+[dev]
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0

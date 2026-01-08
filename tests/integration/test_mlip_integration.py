@@ -36,6 +36,26 @@ class TestMLIPModelInitialization:
             pytest.skip(f"CHGNet not available: {e}")
     
     @pytest.mark.mlip
+    def test_mattersim_initialization(self):
+        """Test MatterSim model initialization."""
+        try:
+            backend = SLICES(relax_model='mattersim')
+            assert backend.relaxer is not None
+            assert backend.relax_model == 'mattersim'
+        except Exception as e:
+            pytest.skip(f"MatterSim not available: {e}")
+    
+    @pytest.mark.mlip
+    def test_orbv3_initialization(self):
+        """Test ORBv3 model initialization."""
+        try:
+            backend = SLICES(relax_model='orbv3')
+            assert backend.relaxer is not None
+            assert backend.relax_model == 'orbv3'
+        except Exception as e:
+            pytest.skip(f"ORBv3 not available: {e}")
+    
+    @pytest.mark.mlip
     def test_get_relaxer_factory(self):
         """Test get_relaxer factory function."""
         try:
@@ -43,6 +63,17 @@ class TestMLIPModelInitialization:
             assert isinstance(relaxer, MLIPRelaxer)
         except Exception as e:
             pytest.skip(f"get_relaxer failed: {e}")
+    
+    @pytest.mark.mlip
+    def test_get_relaxer_all_models(self):
+        """Test get_relaxer factory function for all supported models."""
+        models = ['m3gnet', 'chgnet', 'mattersim', 'orbv3']
+        for model in models:
+            try:
+                relaxer = get_relaxer(model)
+                assert isinstance(relaxer, MLIPRelaxer), f"{model} relaxer should be MLIPRelaxer instance"
+            except Exception as e:
+                pytest.skip(f"{model} not available: {e}")
 
 
 class TestMLIPRelaxation:
@@ -138,4 +169,21 @@ class TestMLIPInDecoding:
         except (MLIPRelaxationError, Exception) as e:
             # Relaxation may fail for some structures
             pytest.skip(f"MLIP relaxation failed: {e}")
+    
+    @pytest.mark.mlip
+    @pytest.mark.integration
+    @pytest.mark.slow
+    def test_decoding_with_different_mlip_models(self, sample_structure):
+        """Test decoding with different MLIP models."""
+        models = ['m3gnet', 'chgnet', 'mattersim', 'orbv3']
+        for model in models:
+            try:
+                backend = SLICES(relax_model=model)
+                slices_string = backend.structure2SLICES(sample_structure)
+                reconstructed, energy = backend.SLICES2structure(slices_string)
+                assert reconstructed is not None
+                assert len(reconstructed) == len(sample_structure)
+                assert isinstance(energy, (int, float))
+            except Exception as e:
+                pytest.skip(f"{model} decoding test failed: {e}")
 

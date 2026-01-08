@@ -31,9 +31,11 @@ class TestGraphTopologyWorkflows:
         structure_graph = slices_backend.structure2structure_graph(sample_structure)
         
         # Extract graph data
+        # Net class expects edges with string labels like 'e0', 'e1', etc.
         x_dat = []
-        for i, j, data in structure_graph.graph.edges(data=True):
-            x_dat.append((str(i), str(j), {'label': data.get('to_jimage', [0, 0, 0])}))
+        for idx, (i, j, data) in enumerate(structure_graph.graph.edges(data=True)):
+            edge_label = f"e{idx}"  # Must be a string, not a list/tuple
+            x_dat.append((str(i), str(j), {'label': edge_label}))
         
         if len(x_dat) > 0:
             net = Net(x_dat, dim=3)
@@ -46,8 +48,11 @@ class TestGraphTopologyWorkflows:
         structure_graph = slices_backend.structure2structure_graph(sample_structure)
         
         x_dat = []
-        for i, j, data in structure_graph.graph.edges(data=True):
-            x_dat.append((str(i), str(j), {'label': data.get('to_jimage', [0, 0, 0])}))
+        # Net class expects edges with string labels like 'e0', 'e1', etc.
+        # The label format is critical: get_index() expects edge[2] to be a string like "e0"
+        for idx, (i, j, data) in enumerate(structure_graph.graph.edges(data=True)):
+            edge_label = f"e{idx}"  # Must be a string, not a list/tuple
+            x_dat.append((str(i), str(j), {'label': edge_label}))
         
         if len(x_dat) > 0:
             net = Net(x_dat, dim=3)
@@ -66,8 +71,11 @@ class TestGraphTopologyWorkflows:
         structure_graph = slices_backend.structure2structure_graph(sample_structure)
         
         x_dat = []
-        for i, j, data in structure_graph.graph.edges(data=True):
-            x_dat.append((str(i), str(j), {'label': data.get('to_jimage', [0, 0, 0])}))
+        # Net class expects edges with string labels like 'e0', 'e1', etc.
+        # The label format is critical: get_index() expects edge[2] to be a string like "e0"
+        for idx, (i, j, data) in enumerate(structure_graph.graph.edges(data=True)):
+            edge_label = f"e{idx}"  # Must be a string, not a list/tuple
+            x_dat.append((str(i), str(j), {'label': edge_label}))
         
         if len(x_dat) > 0:
             net = Net(x_dat, dim=3)

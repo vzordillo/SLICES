@@ -7,4 +7,8 @@ License-File: LICENSE
 Requires-Dist: setuptools>=18.0
 Requires-Dist: m3gnet==0.2.4
 Requires-Dist: smact==2.5.5
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.0.0; extra == "dev"
+Requires-Dist: pytest-mock>=3.10.0; extra == "dev"
 Dynamic: license-file

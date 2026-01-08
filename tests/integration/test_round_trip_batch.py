@@ -29,6 +29,7 @@ from pymatgen.analysis.structure_matcher import StructureMatcher
 from slices.core import SLICES
 import warnings
 import gc
+import pytest
 warnings.filterwarnings("ignore")
 
 # Try to import TensorFlow for memory management
@@ -49,10 +50,11 @@ def parse_cif_from_csv_row(cif_string):
         cif_string = cif_string[1:-1]
     return cif_string
 
-def test_structure2slices(backend, structure, material_id):
+@pytest.mark.skip(reason="Helper function, not a pytest test")
+def test_structure2slices(slices_backend, structure, material_id):
     """Test structure2SLICES function"""
     try:
-        slices_string = backend.structure2SLICES(structure)
+        slices_string = slices_backend.structure2SLICES(structure)
         if slices_string and len(slices_string) > 0:
             return True, slices_string, None
         else:
@@ -60,10 +62,11 @@ def test_structure2slices(backend, structure, material_id):
     except Exception as e:
         return False, None, str(e)
 
-def test_slices2structure(backend, slices_string, original_structure, material_id, matcher=None):
+@pytest.mark.skip(reason="Helper function, not a pytest test")
+def test_slices2structure(slices_backend, slices_string, original_structure, material_id, matcher=None):
     """Test SLICES2structure function"""
     try:
-        result = backend.SLICES2structure(slices_string)
+        result = slices_backend.SLICES2structure(slices_string)
         
         # Handle different return formats
         if result is None:
@@ -114,7 +117,8 @@ def test_slices2structure(backend, slices_string, original_structure, material_i
             error_msg = error_msg[:200] + "..."
         return False, None, None, error_msg
 
-def test_round_trip(backend, structure, material_id, mlip_model, matcher=None):
+@pytest.mark.skip(reason="Helper function, not a pytest test")
+def test_round_trip(slices_backend, structure, material_id, mlip_model, matcher=None):
     """Test complete round-trip: structure -> SLICES -> structure"""
     results = {
         'material_id': material_id,
@@ -133,7 +137,7 @@ def test_round_trip(backend, structure, material_id, mlip_model, matcher=None):
     }
     
     # Test encoding
-    encode_success, slices_string, encode_error = test_structure2slices(backend, structure, material_id)
+    encode_success, slices_string, encode_error = test_structure2slices(slices_backend, structure, material_id)
     results['encode_success'] = encode_success
     results['slices_string'] = slices_string
     
@@ -147,7 +151,7 @@ def test_round_trip(backend, structure, material_id, mlip_model, matcher=None):
     decode_success = False
     try:
         decode_success, reconstructed, energy, decode_error = test_slices2structure(
-            backend, slices_string, structure, material_id, matcher=matcher
+            slices_backend, slices_string, structure, material_id, matcher=matcher
         )
         results['decode_success'] = decode_success
         results['energy_per_atom'] = energy
@@ -210,7 +214,7 @@ def process_structure_batch(backend, structures_batch, mlip_model, batch_num):
         batch_stats['total'] += 1
         
         try:
-            result = test_round_trip(backend, structure, material_id, mlip_model, matcher=matcher)
+            result = test_round_trip(slices_backend, structure, material_id, mlip_model, matcher=matcher)
             
             if result['encode_success']:
                 batch_stats['encode_success'] += 1
