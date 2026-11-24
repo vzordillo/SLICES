@@ -1,254 +1,286 @@
 # Simplified Line-Input Crystal-Encoding System (SLICES)
 
-The **Simplified Line-Input Crystal-Encoding System (SLICES)** is the first invertible and invariant crystal representation tool. This software supports encoding and decoding crystal structures, reconstructing them, and generating new materials with desired properties using generative deep learning.
+**SLICES** (v4.0.2) is an invertible, translation-, rotation-, and permutation-invariant text representation for three-dimensional periodic crystal structures. It encodes crystals into token sequences via labeled quotient graphs and reconstructs 3D atomic structures through topology-only GFN-FF geometry targets, ZL\* lattice optimization, and NequIP-OAM force-field relaxation.
 
-**Related Publications and Resources:**
-- **Nature Communications**: [Paper](https://www.nature.com/articles/s41467-023-42870-7)
-- **MatterGPT 图形界面介绍**: [Bilibili](https://www.bilibili.com/video/BV15XrmYMEYU/)
-- **SLICES 晶体语言介绍**: [Bilibili](https://www.bilibili.com/video/BV17H4y1W7aZ/)
-- **SLICES 101**: [Bilibili](https://www.bilibili.com/video/BV1Yr42147dM/)
-- **MatterGPT Paper**: [arXiv](https://arxiv.org/abs/2408.07608)
-- **MatterGPT Demo**: [Huggingface](https://huggingface.co/spaces/xiaohang07/MatterGPT_CPU)
-- **SLICES-PLUS Paper**: [arXiv](https://arxiv.org/abs/2410.22828)
-- **Data and Results**: [Figshare](https://doi.org/10.6084/m9.figshare.22707472)
-- **完整的Materials Project新颖性检查库和EAH计算竞争相库**: [Figshare](https://doi.org/10.6084/m9.figshare.28645331) 
-方便大家在整个MP数据库中进行新颖性检查和计算EAH！
----
+![SLICES Architecture Overview](./docs/figure_intro.png)
 
-## Main Functionalities
+## Publications and External Resources
 
-1. **Encode crystal structures into SLICES strings**
-2. **Reconstruct original crystal structures (Text2Crystal)**
-3. **Inverse design of solid-state materials with desired properties using MatterGPT**
-4. **Inverse design of solid-state materials with desired properties and crystal systems using MatterGPT ([SLICES-PLUS](https://arxiv.org/abs/2410.22828))**
+- **SLICES Paper (*Nature Communications*, 2023):** [doi:10.1038/s41467-023-42870-7](https://www.nature.com/articles/s41467-023-42870-7)
+- **SLICES-PLUS Paper (Space-Group Encoding, 2024):** [arXiv:2410.22828](https://arxiv.org/abs/2410.22828)
+- **Online SLICES / CIF Converter:** [Hugging Face Space](https://huggingface.co/spaces/xiaohang07/SLICES)
+- **Published Datasets and Benchmark Results:** [Figshare (22707472)](https://doi.org/10.6084/m9.figshare.22707472)
+- **Materials Project Novelty & Competing-Phase Library:** [Figshare (28645331)](https://doi.org/10.6084/m9.figshare.28645331)
+
+[![Online SLICES/CIF Converter](./docs/SLICES_demo.png)](https://huggingface.co/spaces/xiaohang07/SLICES "Online SLICES/CIF Converter")
 
 ---
-We provide a huggingface space to allow one-click conversion of CIF to SLICES and SLICES to CIF online. 
-### [[Online SLICES/CIF Convertor]](https://huggingface.co/spaces/xiaohang07/SLICES)
-[![IMAGE ALT TEXT](./docs/SLICES_demo.png)](https://huggingface.co/spaces/xiaohang07/SLICES "Online SLICES/CIF Convertor - Click to Try!")
-### [[MatterGPT Online Demo]](https://huggingface.co/spaces/xiaohang07/MatterGPT_CPU)
-[![IMAGE ALT TEXT](./docs/huggingface_space.png)](https://huggingface.co/spaces/xiaohang07/MatterGPT_CPU "MatterGPT Online Demo - Click to Try!")
-### MatterGPT 图形界面 
-![IMAGE ALT TEXT](./docs/gui_snapshot.png)
----
 
-## Table of Contents
+## Key Capabilities
 
-1. [Installation](#installation)
-   - [Local Installation](#local-installation)
-   - [Docker Installation](#docker-installation)
-2. [Examples](#examples)
-   - [Crystal to SLICES and SLICES to Crystal](#crystal-to-slices-and-slices-to-crystal)
-   - [Augment SLICES and Canonicalize SLICES](#augment-slices-and-canonicalize-slices)
-3. [Tutorials](#tutorials)
-    - **MatterGPT图形界面**: [Bilibili](https://www.bilibili.com/video/BV15XrmYMEYU/)
-    - [MatterGPT脚本教程](./MatterGPT/tutorials_CN.sh)
-
-    - **SLICES Video Tutorials**: [Bilibili](https://space.bilibili.com/398676911/channel/seriesdetail?sid=4012344)(#tutorials-for-docker-installation)
-4. [Documentation](#documentation)
-5. [Reproducing Benchmarks](#reproducing-benchmarks)
-6. [Citation](#citation)
-7. [Acknowledgements](#acknowledgement)
-8. [Contact and Support](#contact-and-support)
+1. **Crystal Encoding & Augmentation:** Convert `pymatgen` `Structure` objects (CIF, POSCAR, JSON) into SLICES strings across Strategies 1–4 (default Strategy 4 with tokenized 230 space-group prefixes), automatic primitive-cell pre-reduction, random permutation augmentation (`structure2randomSLICES`, `structure2SLICESAug_atom_order`), and canonical reduction (`get_canonical_SLICES`).
+2. **Invertible Structure Reconstruction:** Decode SLICES strings back to 3D crystal structures using the bundled open-source GFN-FF topology engine (`slices._vendor.gfnff`, LGPL-3.0 on Linux x86\_64; external `xtb` fallback on non-Linux hosts), Eon's barycentric net embedding, ZL\* L-BFGS-B optimization, and NequIP-OAM relaxation (`relax_model="auto"` -> `nequip-s+l` on CPU).
+3. **Optional Multi-MLIP Support:** Built-in NequIP plans (`auto`, `nequip-s+l`, `nequip-m+l`, `nequip-l`, `none`) plus opt-in adapters in `slices.mlip_relaxer` for `chgnet`, `mattersim`, `orbv3`, `mace`, and legacy `m3gnet` when their respective packages are installed.
+4. **Opt-In Robust Recovery Decoding:** Standalone multi-stage fallback pipeline (`SLICES.robust_SLICES2structure` / `slices decode --robust`) combining seeded multi-start ZL\* optimization, cycle-basis and covalent-radius fallbacks, and progressive relaxation without altering default v4.0.2 decoding determinism.
+5. **Command-Line Interface & Safe Batch Utilities:** Unified `slices` CLI (`encode`, `decode`, `validate`, `canonicalize`) and scoped local/SLURM batch execution utilities (`slices.utils`).
 
 ---
 
 ## Installation
-可以选择 1.本地安装 **或者** 2.docker安装。只在自己的代码里用 SLICES 库（编码/解码晶体）的话，直接从 PyPI 安装即可：
 
-### 只安装 SLICES 库（pip / uv 一键安装）
+### Requirements
+
+- **Python:** `>= 3.10` (locked environment targets Python `3.10` via `.python-version` and `uv.lock`).
+- **Primary Platform:** Linux x86\_64 (including Windows 11 WSL2 Ubuntu), where the bundled `libgfnff.so` shared library runs in memory with zero external binaries.
+- **Non-Linux Platforms (macOS / Windows native):** Encoding, validation, canonicalization, and optional MLIP adapters work natively. Decoding requires building the modified `xtb` binary (`xtb_noring_nooutput_nostdout_noCN`) and setting `SLICES_XTB_PATH` (see [Cross-Platform Notes](#cross-platform-notes)).
+
+### Local Installation with `uv` (Recommended)
+
+Environment management uses [uv](https://docs.astral.sh/uv/) with exact versions pinned in `uv.lock`.
+
+1. Install `uv` if not already available:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. Clone the repository and sync dependencies for your hardware (`--extra cpu`, `--extra cu126` for NVIDIA GPUs through RTX 40 series, or `--extra cu128` for CUDA 12.8 / RTX 50 series):
+   ```bash
+   git clone https://github.com/xiaohang007/SLICES.git
+   cd SLICES
+
+   # Select one PyTorch build extra: cpu, cu126, or cu128
+   uv sync --extra cpu
+   source .venv/bin/activate
+   ```
+   - Optional developer tools (`pytest`, `pytest-cov`, `ruff`): add `--group dev` (included by default in `uv sync` unless `--no-dev` is passed).
+   - Optional faster CUDA NequIP kernels on NVIDIA GPUs: add `--extra oeq` alongside `--extra cu126` or `--extra cu128`.
+   - `pyproject.toml` configures the Tsinghua PyPI mirror (`tuna`) as default so `uv.lock` resolves identically across machines (`uv sync --locked`). Outside China, `UV_DEFAULT_INDEX=https://pypi.org/simple` may be used when re-resolving.
+
+3. Pre-compile and cache the default NequIP force-field models before launching parallel decoding jobs:
+   ```bash
+   python -m slices.relax_backends --prepare
+   ```
+   Compiled artifacts are stored in `~/.cache/slices/nequip` (configurable via `SLICES_MODEL_CACHE`). Weights are downloaded from `nequip.net` (Zenodo) with automatic timeout retries; for offline setups, download the `.nequip.zip` archive manually and set `SLICES_NEQUIP_MODEL_S` / `SLICES_NEQUIP_MODEL_M` / `SLICES_NEQUIP_MODEL_L`.
+
+4. Verify the installation:
+   ```bash
+   python tools/validate_installation.py --quick
+   ```
+
+### Library-Only Installation (`uv pip` / `pip`)
+
+If you only need the `slices` library for crystal encoding and decoding in an existing Python 3.10+ Linux x86\_64 environment:
+
 ```bash
 uv venv && source .venv/bin/activate
-uv pip install slices --torch-backend=auto   # 自动选择 CPU 或与显卡驱动匹配的 CUDA 版 PyTorch
-# 或者：pip install slices                    # Linux 上默认安装 CUDA 版 PyTorch（没有显卡也能运行，只是下载更大）
-```
-- 仅支持 Linux x86_64（包括 Win11 的 WSL2），Python ≥ 3.10。
-- 第一次解码时会自动下载 NequIP 力场权重并在本机编译（约 1–2 分钟），之后直接使用缓存。
-- 权重从 nequip.net（文件在 Zenodo）下载，网络不稳定时会自动重试；仍然失败时，报错里会给出下载地址，可以用浏览器下载后设置 `SLICES_NEQUIP_MODEL_S` / `SLICES_NEQUIP_MODEL_L` 指向下载的文件。
-- MatterGPT 的训练、生成和教程脚本不在 PyPI 包里，需要按下面的方式下载仓库并安装环境。
-
-## Local Installation
-本地安装指南（Ubuntu 或者 Win11 的 WSL2 Ubuntu 子系统）。环境由 [uv](https://docs.astral.sh/uv/) 管理：Python 3.10 由 uv 自动下载，不需要 conda；所有依赖的确切版本锁定在 `uv.lock` 中，每台机器装出来的环境完全一致。PyPI 默认使用清华镜像（在 `pyproject.toml` 中配置），PyTorch 从官方源下载。
-
-### 1.1 安装 uv
-**如果已经装好 uv，可以跳过这一步。**
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-# 如果上面的命令下载慢，也可以用已有的 pip 从清华镜像安装：
-# pip install uv -i https://pypi.tuna.tsinghua.edu.cn/simple
-```
-安装后重新打开终端，运行 `uv --version` 确认安装成功。
-
-### 1.2 下载 SLICES 仓库并安装环境
-根据你的硬件选择一个 PyTorch 版本（三选一）：
-- `--extra cu128`：NVIDIA 显卡，**50 系显卡必须用这个**；
-- `--extra cu126`：NVIDIA 显卡，驱动较老、不支持 CUDA 12.8 时使用；
-- `--extra cpu`：没有 NVIDIA 显卡。
-
-```bash
-wget https://github.com/xiaohang007/SLICES/archive/refs/heads/main.zip -O slices_repo.zip
-unzip slices_repo.zip
-cd SLICES-main
-uv sync --extra cu128              # 按上面的说明换成 cu126 或 cpu
-source .venv/bin/activate          # 激活环境；之后的命令都在这个环境里运行
-python -m slices.relax_backends --prepare   # 首次使用：下载并在本机编译 NequIP 力场模型
-```
-安装完成！
-
-- 环境装在仓库目录下的 `.venv` 中。每次打开新终端后，进入仓库目录运行 `source .venv/bin/activate`；也可以不激活，在命令前加 `uv run`，例如 `uv run python app.py`。
-- 可以同时加多个可选组件，例如 `uv sync --extra cu128 --extra gui`（图形界面，见 1.4）。
-- `uv sync` 会让环境与 `uv.lock` 完全一致，手动用 `uv pip install` 装的额外包会被移除；如需保留，用 `uv sync --inexact`。
-- flash-attn 不再随环境安装（目前没有适配 torch 2.9 的预编译包）。MatterGPT 检测不到 flash-attn 时会改用 PyTorch 自带的 `scaled_dot_product_attention`，结果相同。
-- 只有 CPU 时训练 MatterGPT 很耗内存：教程中 `batch_size=36` 约需 13 GB，16 GB 内存的电脑（包括 WSL）建议把 `BATCH_SIZE` 改为 8（约 5.5 GB），否则可能把系统内存耗尽。
-
-### 1.3 NequIP 力场（解码最后一步的结构弛豫）
-`SLICES(relax_model="auto")`（默认）在所有机器上都一样：在 CPU 上用 NequIP-OAM-S 弛豫，再用 NequIP-OAM-L 算一次能量（`nequip-s+l`）。所有机器默认结果一致，解码不占用 GPU，GPU 可以留给 MatterGPT 训练和生成。
-
-在 MP-20 全部 2383 个结构上（CPU）：
-
-| 方案 | 结构复现率（StructureMatcher） | 相对耗时 |
-|---|---|---|
-| 旧版（xtb + M3GNet） | 88.7% | — |
-| `nequip-s+l`（默认） | 93.8% | 1× |
-| `nequip-m+l` | 94.8% | 约 2× |
-
-- 编译好的模型缓存在 `~/.cache/slices/nequip`（CPU 上约 1 分钟），换机器需要重新运行 `--prepare`。在开多个并行解码进程之前先运行一次，避免第一次运行时等待编译。
-- 追求精度可以用 `relax_model="nequip-m+l"`，或设置环境变量 `SLICES_RELAX_MODEL=nequip-m+l`。
-- 弛豫前会自动处理原子重叠的初始结构（约 2% 的结构），并防止晶胞塌缩导致的卡死。
-- M3GNet 已移除，不再安装 TensorFlow。
-
-<details>
-<summary>高级：在 GPU 上解码</summary>
-
-解码约 90% 的时间花在 CPU 步骤上，GPU 只能快约 12%，因此默认不用。如需使用：设置 `SLICES_DEVICE=cuda`，可配合 `relax_model="nequip-l"`。GPU 上需要安装 CUDA toolkit（设置 `CUDA_HOME`）才能用 AOTInductor 编译模型，否则会退回到 TorchScript，比 CPU 还慢；`uv sync --extra oeq` 可再加 OpenEquivariance 加速。完整说明见 `src/slices/relax_backends.py`。
-</details>
-
-### 1.4 访问图形界面
-```bash
-uv sync --extra cu128 --extra gui   # 安装图形界面所需的 gradio（cu128 换成你在 1.2 中的选择）
-cd MatterGPT
-python app.py
-```
-按住 `CTRL` (或 Mac 上的 `Command`)，然后点击terminal中的 `http://localhost:7860`链接来打开MatterGPT的图形界面。
-
-
-如果想用Docker来跑SLICES的环境，可以选择下面的安装方法：
-### Docker Installation
-
-> 注意：Docker 镜像 v12 仍是旧环境（包含 M3GNet 的旧版 SLICES），还没有更新到上面的 uv 环境。
-
-请按照以下步骤使用 Docker 安装 SLICES:
-
-**Windows系统下的准备工作**：
-如果是win11的系统，需要先安装WSL2的ubuntu系统，然后安装Docker Desktop,并且在选项里面开启WSL2 ubuntu访问本机的docker，然后按照下图按住shift右键点击圆圈处，然后选择在此处打开linux shell
-
-![IMAGE ALT TEXT](./docs/win11_wsl2.png)
-
-**Linux系统下的准备工作**：安装docker就可以了。
-
----
-
-1. **下载仓库**，并解压文件。
-```bash
-wget https://github.com/xiaohang007/SLICES/archive/refs/heads/main.zip -O slices_repo.zip
-unzip slices_repo.zip
-cd SLICES-main
+uv pip install slices --torch-backend=auto
+# Or from a local checkout:
+uv pip install -e .
 ```
 
-2. **在 `slurm.conf`中配置 CPU 线程数量。例如下面是设置为16**
+### Legacy Docker / SLURM Environment
+
+Legacy container files are retained at [Dockerfile/Dockerfile](Dockerfile/Dockerfile), [Dockerfile/docker-compose.yml](Dockerfile/docker-compose.yml), and [rundocker.sh](rundocker.sh) for reproducing older SLURM/PBS workflows. Note that the prebuilt Docker image `xiaohang07/slices:v12` ships an older pre-v4 environment rather than the current `uv` + NequIP + GFN-FF stack.
+
 ```bash
+# Adjust CPU core count in slurm.conf before starting the container
 sed -i 's/CPUs=8/CPUs=16/' slurm.conf
-```
-3. **执行 Docker 集成命令：**
-```bash
-# 从 Docker Hub 下载已经构建的 SLICES Docker 镜像
-docker pull xiaohang07/slices:v12
+chmod +x entrypoint_set_cpus.sh rundocker.sh
 
-# 如果 docker pull 不管用，您可以在 https://figshare.com/s/260701a1accd0192de20 下载压缩的 docker 镜像 v12。
-
-# 然后，使用以下命令4线程并行解压缩以及加载此 docker 镜像：
-xz -T4 -dc dockerv12.tar.xz | docker load
-
-# 您也可以使用此仓库中的 Dockerfile 构建自己的 docker 镜像。感谢 Haidi Wang 教授 (https://haidi-ustc.github.io/about/) 提供的 Dockerfile。
-
-# 使脚本具有执行权限
-sudo chmod +x entrypoint_set_cpus_gradio.sh entrypoint_set_cpus.sh
-
-# 运行 Docker
-docker run -it -p 7860:7860 -h workq --shm-size=0.5gb --gpus all -v ./:/crystal xiaohang07/slices:v12 /crystal/entrypoint_set_cpus_gradio.sh
+# Launch with the current directory mounted at /crystal (override via SLICES_DATA_DIR / SLICES_IMAGE)
+./rundocker.sh
 ```
 
-5. **访问图形界面**:
+On Windows 11, enable WSL2 Ubuntu integration in Docker Desktop and run the commands from a WSL2 shell:
 
-   - 按住 `CTRL` (或 Mac 上的 `Command`)，然后点击terminal中的 `http://localhost:7860`链接来打开MatterGPT的图形界面。
+![Windows 11 WSL2 Shell Setup](./docs/win11_wsl2.png)
 
 ---
 
-### 注意
-- **Windows 11**：使用完全支持 GPU 的 Docker 环境。
+## Quickstart
 
-- **Ubuntu**：使用本地安装更好，因为 nvidia-docker 比较难安装。
+### Python API
 
-
----
-
-## Examples
-
-### Crystal to SLICES and SLICES to Crystal
-Convert a crystal structure to its SLICES string and reconstruct it.
+#### 1. Encode and Decode a Crystal Structure
 
 ```python
-from slices.core import SLICES
 from pymatgen.core.structure import Structure
+from slices import SLICES, check_SLICES
 
-# Load crystal structure from file
-original_structure = Structure.from_file(filename='NdSiRu.cif')
+# Load a crystal structure (CIF, POSCAR, or JSON)
+original = Structure.from_file("examples/NdSiRu.cif")
+
+# Default relax_model="auto" resolves to CPU nequip-s+l
 backend = SLICES()
 
-# Convert to SLICES string
-slices_NdSiRu = backend.structure2SLICES(original_structure)
+# Encode to Strategy-4 SLICES (reduces to primitive cell if smaller)
+slices_str = backend.structure2SLICES(original)
+assert check_SLICES(slices_str, strategy=4)
 
-# Reconstruct crystal and get predicted energy
-reconstructed_structure, final_energy_per_atom = backend.SLICES2structure(slices_NdSiRu)
-
-print('SLICES string of NdSiRu is:', slices_NdSiRu)
-print('Reconstructed structure:', reconstructed_structure)
-print('Final energy per atom:', final_energy_per_atom, 'eV/atom')
+# Decode back to a 3D crystal structure and predicted energy (eV/atom)
+reconstructed, energy_per_atom = backend.SLICES2structure(slices_str)
+print("SLICES:", slices_str)
+print("Formula:", reconstructed.composition.reduced_formula)
+print(f"Predicted energy: {energy_per_atom:.6f} eV/atom")
 ```
 
-### Augment SLICES and Canonicalize SLICES
-Generate augmented SLICES strings and reduce them to a canonical form.
+For encoding, validation, or canonicalization without loading force-field models, pass `relax_model=None`:
 
 ```python
-from slices.core import SLICES
-from pymatgen.core.structure import Structure
-
-# Load crystal structure
-original_structure = Structure.from_file(filename='Sr3Ru2O7.cif')
-backend = SLICES(graph_method='econnn')
-
-# Generate augmented SLICES
-slices_list = backend.structure2randomSLICES(structure=original_structure, num=50, shuffle_bond_order=False, flip_bonds=False)
-canonical_slices = list(set(backend.get_canonical_SLICES(s) for s in slices_list))
-
-print('Unique Canonical SLICES:', len(canonical_slices))
+encoder = SLICES(relax_model=None, graph_method="econnn")
+slices_str = encoder.structure2SLICES(original, strategy=4)
+canonical = encoder.get_canonical_SLICES(slices_str, strategy=4)
 ```
+
+#### 2. Data Augmentation and Canonicalization
+
+```python
+from pymatgen.core.structure import Structure
+from slices import SLICES
+
+structure = Structure.from_file("examples/Sr3Ru2O7.cif")
+backend = SLICES(relax_model=None, graph_method="econnn")
+
+# Permute atom ordering only (or use structure2randomSLICES for bond shuffling/flipping)
+augmented = backend.structure2SLICESAug_atom_order(structure, strategy=4, num=50)
+canonical_set = {backend.get_canonical_SLICES(s, strategy=4) for s in augmented}
+print(f"Generated {len(augmented)} variants -> {len(canonical_set)} unique canonical form")
+```
+
+#### 3. Opt-In Robust Decoding and Optional MLIP Backends
+
+```python
+from slices import SLICES
+
+# Multi-stage recovery decoding (standard v4.0.2 fast path + seeded multi-start fallback)
+backend = SLICES(relax_model="auto")
+structure, energy = backend.robust_SLICES2structure(slices_str, n_starts=3, seed=0)
+
+# Higher-accuracy built-in NequIP plan (NequIP-OAM-M relaxation + NequIP-OAM-L energy)
+backend_m = SLICES(relax_model="nequip-m+l")
+
+# Optional external MLIP adapters (require separate installation, e.g. `pip install chgnet`)
+# Supported names: "chgnet", "mattersim", "orbv3" ("orb-v3"), "mace" ("mace-mp"), "m3gnet"
+# backend_opt = SLICES(relax_model="chgnet")
+```
+
+### Command-Line Interface (`slices`)
+
+The package installs the `slices` entry point (also runnable as `python -m slices.cli`). Non-relaxing commands (`encode`, `validate`, `canonicalize`) run with `relax_model=None` and do not load force fields.
+
+```bash
+slices --version
+
+# Encode CIF/POSCAR/JSON (or '-' for CIF on stdin)
+slices encode examples/NdSiRu.cif -o NdSiRu.slices --strategy 4 --graph-method econnn
+
+# Validate syntax and quotient-graph topology (exit 0 if VALID, 1 if INVALID)
+slices validate NdSiRu.slices
+slices validate NdSiRu.slices --check-duplicates
+
+# Convert to canonical SLICES form
+slices canonicalize NdSiRu.slices -o NdSiRu.canon.slices
+
+# Decode to CIF / POSCAR / JSON (default: --relax-model auto -> nequip-s+l on CPU)
+slices decode NdSiRu.slices -o reconstructed.cif --relax-model auto
+slices decode NdSiRu.slices -o reconstructed_zl.cif --relax-model none
+slices decode NdSiRu.slices -o reconstructed_robust.cif --robust --seed 0
+
+# Pipeline via stdin/stdout
+slices encode examples/NdSiRu.cif | slices validate -
+```
+
+---
+
+## Default Relaxation Backend and MP-20 Benchmark Summary
+
+`SLICES(relax_model="auto")` resolves to **`nequip-s+l` on CPU** on every machine (relaxation with `NequIP-OAM-S`, final energy with `NequIP-OAM-L`). Because CPU-side GFN-FF topology generation (~0.43 s) and ZL\* lattice optimization (~0.45 s) dominate single-structure decode time, GPU relaxation yields at most ~12% wall-clock speedup and is opt-in via `SLICES_DEVICE=cuda` (optionally paired with `relax_model="nequip-l"`).
+
+Full benchmark on all **2,383** MP-20 non-metal structures ([data/mp20_nonmetal/mp20_v4_benchmark_2383.csv](data/mp20_nonmetal/mp20_v4_benchmark_2383.csv), CPU, identical `StructureMatcher` tolerances and formation-energy reference):
+
+| Pipeline / Model | Succeeded | Standard Match | Loose Match | Median \|E\_form - DFT\| (eV/atom) | Relative CPU Time |
+|---|---:|---:|---:|---:|---:|
+| Legacy `xtb` + M3GNet | 2,291 / 2,383 | 88.67% | 91.23% | 0.048 | — |
+| **`nequip-s+l` (`auto` default)** | **2,374 / 2,383** | **93.79%** | **95.97%** | **0.025** | **1.0x** |
+| `nequip-m+l` | 2,374 / 2,383 | 94.80% | 96.18% | 0.021 | ~2.0x |
+| MatterSim-1M (same ZL\* starts) | 2,374 / 2,383 | 94.67% | 96.01% | 0.050 | — |
+
+Run local relaxation benchmarks directly with:
+
+```bash
+python examples/3.benchmark_relax_models.py --n 32 --models auto nequip-m+l
+python tools/benchmarks/run_comparison_test.py --n 16 --models auto chgnet mace
+```
+
+---
+
+## Cross-Platform Notes
+
+- **Non-Linux GFN-FF Fallback (`SLICES_XTB_PATH`):** When the bundled Linux x86\_64 `libgfnff.so` shared library cannot be loaded (`ImportError` / `OSError`), `slices.gfnff_helper.run_gfnff_helper` searches `SLICES_XTB_PATH`, `XTB_MOD_PATH`, and `PATH` for `xtb_noring_nooutput_nostdout_noCN`, executing it in an isolated temporary directory without `shell=True`.
+- **Forcing Local Batch Execution (`SLICES_FORCE_LOCAL`):** Set `SLICES_FORCE_LOCAL=1` to bypass SLURM detection in `slices.utils.is_slurm_available()`. Local worker tracking is strictly scoped to processes launched by the current session.
+- **POSIX Signal Timeouts:** `function_timeout` uses `signal.SIGALRM` only on POSIX main threads; worker threads and Windows execute the wrapped call directly without raising signal errors.
+- **Optional PyTorch MLIP Device Selection:** `SLICES_DEVICE` accepts `cpu` or `cuda` for built-in NequIP models, and additionally accepts `mps` (Apple Silicon) for optional PyTorch MLIP adapters in `slices.mlip_relaxer`.
+
+---
+
+## Repository Layout
+
+| Path | Description |
+|---|---|
+| `src/slices/` | Core library: `core.py`, `tobascco_net.py`, `gfnff_helper.py`, `relax_backends.py`, `mlip_relaxer.py`, `decoding_strategies.py`, `cli.py`, `exceptions.py`, `utils.py`, `utils_wyckoff.py`, `config.py`, and vendored `_vendor/gfnff/` |
+| `examples/` | Runnable scripts (`2.1structure2SLICES_SLICES2structure.py`, `2.2data_augmentation_get_canonical_slices.py`, `3.benchmark_relax_models.py`, `test.py`) and sample CIFs (`NdSiRu.cif`, `Sr3Ru2O7.cif`) |
+| `tools/` | Installation validation (`validate_installation.py`), unified test/lint runner (`run_tests.py`), workstation script (`workstation_check.sh`), and MLIP comparison benchmark (`benchmarks/run_comparison_test.py`) |
+| `tests/` | Unified test suite: `baseline/` (89 frozen v4.0.2 golden equivalence tests at `atol=1e-12`), `unit/`, `integration/`, and `regression/` |
+| `HTS/` | High-throughput inverse-design workflow scripts and archived datasets |
+| `benchmark/` | Reproducibility benchmarks for MP-20, MP-21-40, QMOF-21-40, and RNN validity/success studies ([benchmark/benchmarks.md](benchmark/benchmarks.md)) |
+| `data/` | Benchmark datasets, including `data/mp20_nonmetal/mp20_v4_benchmark_2383.csv` and `chemPotMP.json` |
+| `Dockerfile/` | Legacy Docker image and compose definitions (`Dockerfile`, `docker-compose.yml`, SLURM entrypoints) |
+| `docs/` | Documentation index, API reference (`docs/api/`), and migration audit records (`docs/migration/`) |
+
+---
+
+## Testing, Linting, and Validation
+
+The repository enforces Google Python style via `ruff` and maintains a unified `pytest` suite (`250 passed, 5 skipped, 0 failed`, where the 5 skips correspond to uninstalled optional MLIP packages):
+
+```bash
+# Validate environment, GFN-FF helper, NequIP config, CLI, and quick round-trip
+python tools/validate_installation.py --quick
+
+# Run ruff static checks only
+python tools/run_tests.py --lint-only
+
+# Run fast unit tests with reproducible PYTHONHASHSEED=0 and OMP_NUM_THREADS=1
+python tools/run_tests.py --unit
+
+# Run frozen v4.0.2 golden baseline equivalence tests (89 tests, atol=1e-12)
+python tools/run_tests.py --baseline
+
+# Run full lint + pytest suite
+python tools/run_tests.py --lint --verbose
+```
+
 ---
 
 ## Documentation
-The official documentation is available at [Read the Docs](https://xiaohang007.github.io/SLICES/).
 
----
-
-## Reproducing Benchmarks
-Refer to the [Benchmarks Guide](benchmark/benchmarks.md) for detailed instructions.
+- [Documentation Index](docs/README.md)
+- [Technical Architecture Guide](TECHNICAL.md) — encoding strategies, net embedding, GFN-FF, ZL\* optimization, NequIP relaxer benchmarks, optional MLIPs, and baseline freeze invariant
+- [Changelog](CHANGELOG.md) — upstream v1.0–v4.0.2 history and `slices-4-personal` migration releases
+- **API Reference:**
+  - [Core Encoder/Decoder & Exceptions](docs/api/API_CORE.md)
+  - [Relaxation Backends & Optional MLIPs](docs/api/API_MLIP.md)
+  - [Opt-In Robust Decoding Strategies](docs/api/API_DECODING_STRATEGIES.md)
+  - [Periodic Net Topology, GFN-FF & Wyckoff Utilities](docs/api/API_GRAPH.md)
+  - [Batch Job Utilities & CLI](docs/api/API_UTILITIES.md)
+  - [Configuration, Constants & Environment Variables](docs/api/API_CONFIG.md)
+- [Deferred Core / Algorithm Register](docs/migration/DEFERRED_CORE_REGISTER.md) — formal log of frozen v4.0.2 math/algorithm behaviors preserved for baseline equivalence
 
 ---
 
 ## Citation
 
-If you use SLICES, MatterGPT or SLICES-PLUS, please cite the following works:
+If you use SLICES or SLICES-PLUS in academic work, please cite:
 
 ```bibtex
 @article{xiao2023invertible,
@@ -262,41 +294,26 @@ If you use SLICES, MatterGPT or SLICES-PLUS, please cite the following works:
   publisher={Nature Publishing Group UK London}
 }
 
-@misc{chen2024mattergptgenerativetransformermultiproperty,
-  title={MatterGPT: A Generative Transformer for Multi-Property Inverse Design of Solid-State Materials},
-  author={Yan Chen and Xueru Wang and Xiaobin Deng and Yilun Liu and Xi Chen and Yunwei Zhang and Lei Wang and Hang Xiao},
-  year={2024},
-  eprint={2408.07608},
-  archivePrefix={arXiv},
-  primaryClass={cond-mat.mtrl-sci},
-  url={https://arxiv.org/abs/2408.07608}
-}
-
 @misc{wang2024slicespluscrystalrepresentationleveraging,
-      title={SLICES-PLUS: A Crystal Representation Leveraging Spatial Symmetry}, 
-      author={Baoning Wang and Zhiyuan Xu and Zhiyu Han and Qiwen Nie and Hang Xiao and Gang Yan},
-      year={2024},
-      eprint={2410.22828},
-      archivePrefix={arXiv},
-      primaryClass={physics.comp-ph},
-      url={https://arxiv.org/abs/2410.22828}, 
+  title={SLICES-PLUS: A Crystal Representation Leveraging Spatial Symmetry},
+  author={Baoning Wang and Zhiyuan Xu and Zhiyu Han and Qiwen Nie and Hang Xiao and Gang Yan},
+  year={2024},
+  eprint={2410.22828},
+  archivePrefix={arXiv},
+  primaryClass={physics.comp-ph},
+  url={https://arxiv.org/abs/2410.22828}
 }
 ```
 
 ---
 
-## Acknowledgement
-Special thanks to the open-source projects and developers that inspired this work:
-- [tobascco](https://github.com/peteboyd/tobascco)
-- [xtb](https://github.com/grimme-lab/xtb)
-- [gfnff](https://github.com/pprcht/gfnff) (bundled GFN-FF library used for SLICES decoding, LGPL-3.0)
-- [m3gnet](https://github.com/materialsvirtuallab/m3gnet)
-- [chgnet](https://github.com/CederGroupHub/chgnet)
-- [molgpt](https://github.com/devalab/molgpt)
+## License and Acknowledgements
 
----
+SLICES is licensed under the **GNU Lesser General Public License v2.1** ([LICENSE](LICENSE)). The bundled open-source GFN-FF library (`src/slices/_vendor/gfnff`) is licensed under the **GNU Lesser General Public License v3.0** ([src/slices/_vendor/gfnff_extra/LICENSE](src/slices/_vendor/gfnff_extra/LICENSE)).
 
-## Contact and Support
-- **Email**: [hangxiao@ln.edu.hk](mailto:hangxiao@ln.edu.hk)
-- **ResearchGate**: [Hang Xiao](https://www.researchgate.net/profile/Hang-Xiao-8)
-- **Start a Discussion**: [GitHub Discussions](https://github.com/xiaohang007/SLICES/discussions/categories/general)
+SLICES builds upon open-source scientific libraries including [pymatgen](https://github.com/materialsproject/pymatgen), [ASE](https://gitlab.com/ase/ase), [NequIP](https://github.com/mir-group/nequip), [gfnff](https://github.com/pprcht/gfnff), [tobascco](https://github.com/peteboyd/tobascco), [xtb](https://github.com/grimme-lab/xtb), [CHGNet](https://github.com/CederGroupHub/chgnet), and [M3GNet](https://github.com/materialsvirtuallab/m3gnet).
+
+## Contact
+
+- **Upstream Author:** Hang Xiao ([hangxiao@ln.edu.hk](mailto:hangxiao@ln.edu.hk))
+- **Discussions & Issues:** [GitHub Discussions](https://github.com/xiaohang007/SLICES/discussions/categories/general)
