@@ -44,6 +44,7 @@ Primary-source planning, audits, review rulings, execution logs, and frozen-beha
 | [REVIEW_SIGNOFF.md](migration/REVIEW_SIGNOFF.md) | Stage 3 independent architectural review, cross-audit resolutions (`CA-01`–`CA-09`), and binding rulings (`RUL-01`–`RUL-08`) |
 | [DEFERRED_CORE_REGISTER.md](migration/DEFERRED_CORE_REGISTER.md) | Formal 27-entry register (`DEF-001`–`DEF-027`) tracking resolved non-math fixes, frozen deferred math behaviors, and blocked regressions |
 | [LAB_LOG.md](migration/LAB_LOG.md) | Chronological scientific lab log of all stages, verification metrics, and local commits |
+| [FINAL_REPORT.md](migration/FINAL_REPORT.md) | Executive summary of the 7-stage v4.0.2 migration, commit ledger, verification scorecard, and maintenance guide |
 
 ---
 
