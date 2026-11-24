@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "slices"
 version = "4.0.2"
-description = "Invertible crystal representation (SLICES) and the MatterGPT generative model for inverse materials design"
+description = "Invertible crystal representation (SLICES) for inverse materials design"
 authors = [{name = "Hang Xiao", email = "xiaohang07@live.cn"}]
 requires-python = ">=3.10"
 license-files = ["LICENSE", "src/slices/_vendor/gfnff_extra/LICENSE"]
@@ -24,7 +24,6 @@ dependencies = [
     "pymatgen",
     "scikit-learn",
     "tqdm",
-    "einops",             # MatterGPT model
     "ase",
     # PyTorch + NequIP force fields for relax_model="auto". Pick the torch build with one of
     # the extras below: uv sync --extra cpu | cu126 | cu128
@@ -33,6 +32,9 @@ dependencies = [
     "matscipy>=1.0.0",
 ]
 
+[project.scripts]
+slices = "slices.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/xiaohang007/SLICES"
 
@@ -40,8 +42,14 @@ Homepage = "https://github.com/xiaohang007/SLICES"
 cpu = ["torch>=2.6,<2.10"]
 cu126 = ["torch>=2.6,<2.10"]   # NVIDIA GPUs up to the RTX 40 series
 cu128 = ["torch>=2.6,<2.10"]   # also needed for RTX 50 series
-gui = ["gradio"]               # MatterGPT/app.py
 oeq = ["openequivariance"]     # optional faster NequIP kernels on NVIDIA GPUs
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.9",
+]
 
 [tool.uv]
 conflicts = [[{ extra = "cpu" }, { extra = "cu126" }, { extra = "cu128" }]]
@@ -82,4 +90,45 @@ slices = [
     "_vendor/gfnff/libgfnff.so*",
     "_vendor/gfnff.libs/*",
     "_vendor/gfnff_extra/*",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = [
+    "src/slices/_vendor",
+    "HTS",
+    "benchmark",
+    "data",
+    "docs",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/slices/core.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+norecursedirs = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    "src/slices/_vendor",
+    "HTS",
+    "benchmark",
+    "data",
+    "docs",
+]
+markers = [
+    "baseline: Golden baseline equivalence tests against upstream SLICES v4.0.2",
+    "unit: Fast unit tests for individual modules and functions",
+    "integration: End-to-end integration workflow tests",
+    "regression: Regression tests for API compatibility and known structures",
+    "slow: Slow-running tests",
+    "mlip: Optional external MLIP backend tests (chgnet, mattersim, orbv3, mace, m3gnet)",
+    "gfnff: GFN-FF topology and cross-platform helper tests",
+    "network: Tests requiring external network access",
 ]
