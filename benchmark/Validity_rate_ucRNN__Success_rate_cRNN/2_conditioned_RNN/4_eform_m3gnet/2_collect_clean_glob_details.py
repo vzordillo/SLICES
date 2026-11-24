@@ -26,7 +26,7 @@ with open("results_"+pwd.split("/")[-1]+".csv",'a') as result:
 
 import pandas as pd
 
-# 读取CSV文件
+# Read CSV file
 input_file = "results_"+pwd.split("/")[-1]+".csv"
 
 

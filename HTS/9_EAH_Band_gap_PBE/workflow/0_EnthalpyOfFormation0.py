@@ -3,7 +3,7 @@
 # xiaohang07@live.cn
 """
 Created on Wed Dec 19 18:47:34 2018
-读取构型文件，自动计算生成焓
+Read structure files and automatically calculate formation enthalpy.
 @author: xiaoh
 """
 import re
@@ -17,9 +17,9 @@ from pymatgen.apps.borg.queen import BorgQueen
 from pymatgen.analysis.phase_diagram import PhaseDiagram, PDPlotter
 from pymatgen.entries.compatibility import MaterialsProjectCompatibility
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-#读取化学势数据库
+# Load chemical potential database
 
-#准备能量计算文件夹
+# Prepare energy calculation directory
 s = Structure.from_file("temp.cif")
 finder = SpacegroupAnalyzer(s)
 try:

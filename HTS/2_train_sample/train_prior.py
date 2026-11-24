@@ -72,7 +72,7 @@ def pretrain(restore_from=None,batch_size=128,epochs=10):
                 #torch.cuda.empty_cache()
                 tqdm.write("\n{:>4.1f}% valid SLICES".format(100 * valid / len(seqs)))
                 del seqs, likelihood, _
-                tqdm.write('*'*50 + '\n')      #这句的问题
+                tqdm.write('*'*50 + '\n')      # progress output newline
                 torch.save(Prior.rnn.state_dict(), 'Prior_local.ckpt')
         # Save the prior
         torch.save(Prior.rnn.state_dict(), 'Prior_local.ckpt')

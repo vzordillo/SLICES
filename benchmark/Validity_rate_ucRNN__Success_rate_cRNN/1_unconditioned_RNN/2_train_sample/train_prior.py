@@ -60,7 +60,7 @@ def pretrain(restore_from=None):
                 decrease_learning_rate(optimizer, decrease_by=0.03)
                 tqdm.write('*'*50)
                 tqdm.write("Epoch {:3d}   step {:3d}    loss: {:5.2f}\n".format(epoch, step, loss.data))
-                #seqs, likelihood, _ = Prior.sample(batch_size_now)        #这句的问题
+                #seqs, likelihood, _ = Prior.sample(batch_size_now)        # commented out due to sampling issue
                 torch.save(Prior.rnn.state_dict(), 'Prior_local.ckpt')
         # Save the prior
         torch.save(Prior.rnn.state_dict(), 'Prior_local_'+str(epoch)+'.ckpt')

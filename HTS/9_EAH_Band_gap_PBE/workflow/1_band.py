@@ -3,7 +3,7 @@
 # xiaohang07@live.cn
 """
 Created on Wed Dec 19 18:47:34 2018
-读取构型文件，自动计算生成焓
+Read structure files and automatically calculate formation enthalpy.
 @author: xiaoh
 """
 import os

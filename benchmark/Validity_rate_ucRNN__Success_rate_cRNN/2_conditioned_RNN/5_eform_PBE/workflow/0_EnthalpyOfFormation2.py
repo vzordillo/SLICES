@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Dec 19 18:47:34 2018
-读取构型文件，自动计算生成焓
+Read structure files and automatically calculate formation enthalpy.
 @author: xiaoh
 """
 import json
@@ -14,17 +14,17 @@ from pymatgen.entries.compatibility import MaterialsProjectCompatibility
 from pymatgen.core.composition import Composition
 from pymatgen.core.periodic_table import Element
 #from pymatgen.ext.matproj import MPRester
-#读取化学势数据库
+# Load chemical potential database
 #a = MPRester("PWvnIjizov7K5a3nLw6y")
 
 
 with open('./chemPotMP.json') as handle:
     chemPot = json.loads(handle.read())
-#读取计算结果
+# Load calculation results
 drone = VaspToComputedEntryDrone()
 queen = BorgQueen(drone, "EFormation", 1)
 entries = queen.get_data()
-#修正计算结果并计算生成焓
+# Apply compatibility corrections and calculate formation enthalpy
 compat = MaterialsProjectCompatibility()
 compat.process_entries(entries)
 entry = entries[0]

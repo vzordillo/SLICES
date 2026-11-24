@@ -1,14 +1,14 @@
-# 基于 nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu20.04 镜像
+# Based on the nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu20.04 image
 FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu20.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai
 
-# 更换为清华大学的镜像源
+# Switch apt repositories to the Tsinghua University mirror
 RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list
 
-# 更新包列表并安装必要的软件包
+# Update package index and install required system packages
 RUN apt-get update && apt-get install -y \
     wget \
     libstdc++-9-dev \
@@ -21,15 +21,15 @@ RUN apt-get update && apt-get install -y \
     slurm-wlm-doc \
     slurm-wlm-torque 
 
-# 下载并安装 Miniconda
+# Download and install Miniconda
 RUN wget -P /tmp https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py39_4.10.3-Linux-x86_64.sh && \
     bash /tmp/Miniconda3-py39_4.10.3-Linux-x86_64.sh -b -p /opt/miniconda && \
     rm /tmp/Miniconda3-py39_4.10.3-Linux-x86_64.sh
 
-# 设置环境变量
+# Configure environment variables
 ENV PATH=/opt/miniconda/bin:$PATH
 
-# 创建新的 conda 环境并安装包
+# Create the conda environment and install packages
 RUN conda create -n umat python=3.10 -y
 
 RUN /bin/bash -c "source activate umat && \
@@ -46,7 +46,7 @@ RUN /bin/bash -c "source activate umat && \
     pip install --no-cache setuptools==59.5.0 && \
     pip install --no-cache alignn "
 
-# 安装 jarvis_leaderboard 并重新安装 dgl
+# Install jarvis_leaderboard, reinstall dgl, and install SLICES dependencies
 RUN /bin/bash -c "source activate umat  && \
     pip install --no-cache jarvis_leaderboard -i https://pypi.tuna.tsinghua.edu.cn/simple && \
     pip uninstall dgl -y && \
@@ -59,7 +59,7 @@ RUN /bin/bash -c "source activate umat  && \
 RUN /bin/bash -c "source activate umat  &&  \
     pip install jupyter -i https://pypi.tuna.tsinghua.edu.cn/simple"
 
-# 配置 .bashrc 以自动激活环境
+# Configure .bashrc to activate the conda environment automatically
 RUN echo "source /opt/miniconda/bin/activate && conda activate umat" >> /root/.bashrc
 
 # Set environment variables
@@ -70,7 +70,7 @@ ENV PATH=/opt/miniconda/bin:$PATH \
 
 #COPY slurm.conf /etc/slurm/
 
-# 配置Slurm目录
+# Configure SLURM spool and runtime directories
 RUN rm -rf /var/spool/slurm-llnl && \
     mkdir /var/spool/slurm-llnl && \
     chown -R slurm:slurm /var/spool/slurm-llnl && \
@@ -78,9 +78,9 @@ RUN rm -rf /var/spool/slurm-llnl && \
     mkdir /var/run/slurm-llnl/ && \
     chown -R slurm:slurm /var/run/slurm-llnl/
 
-# 设置工作目录
+# Set working directory
 WORKDIR /crystal
 
-# 启动容器时进入 bash
+# Launch bash when starting the container
 CMD ["bash"]
 

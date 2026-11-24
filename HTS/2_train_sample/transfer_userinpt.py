@@ -85,7 +85,7 @@ def train_model(voc_dir, smi_dir, prior_dir, tf_dir,tf_process_dir,freeze=False,
                 #torch.cuda.empty_cache()
                 tqdm.write("\n{:>4.1f}% valid SLICES".format(100 * valid / len(seqs)))
                 del seqs, likelihood, _
-                tqdm.write('*'*50 + '\n')      #这句的问题
+                tqdm.write('*'*50 + '\n')      # progress output newline
                 torch.save(transfer_model.rnn.state_dict(), tf_dir)
         torch.save(transfer_model.rnn.state_dict(), tf_dir)
 

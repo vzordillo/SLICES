@@ -3,11 +3,11 @@ import os
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-# 设置全局样式
+# Configure global plot style
 plt.rcParams.update({'font.size': 15}) 
 
 os.system("rm formation_energy.txt normalized_distribution.txt plot.png ")
-# 读取数据
+# Load data
 with open("results_4_eform_m3gnet.csv") as f:
     data = [float(line.strip().split(',')[-1]) for line in f if line.strip().split(',')[-1]!="eform" ]
 #print(data)
@@ -19,7 +19,7 @@ with open("results_4_eform_m3gnet.csv") as f:
 #plt.bar(bins_3d[:-1],percent_y,width=intvl)
 
     
-# 生成直方图    
+# Generate histogram
 props, bins, patches = plt.hist(data, bins=50, density=True, 
                                  edgecolor='black', facecolor='pink',linewidth=0.2, alpha=0.5)
 
@@ -33,14 +33,14 @@ with open('formation_energy.txt','w') as f:
         f.write('\n')
     
 
-# 生成渐变颜色并填充  
+# Generate gradient colors and fill
 #cmap = LinearSegmentedColormap.from_list('pink', ['red', 'green', 'blue'], 128)
 #for rect in plt.gca().patches:
 #    rect.set_color('pink')
 
 
 #########################
-# 绘制正态分布曲线
+# Plot normal distribution curve
 
 mean = np.mean(data)
 std = np.std(data)
@@ -56,12 +56,12 @@ with open('normalized_distribution.txt','w') as f:
         f.write('\n')
     
 
-# 设置坐标轴范围及记号  
+# Set axis limits and tick counts
 plt.xlim(-5,0)
 plt.locator_params(axis='x', nbins=5) 
 plt.locator_params(axis='y', nbins=5)
 
-# 添加标签          
+# Add axis labels
 plt.xlabel('Formation energy per atom (eV)')
 plt.ylabel('%Materials')  
 #plt.title('Formation energy distribution')
