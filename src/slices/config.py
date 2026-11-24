@@ -1,13 +1,22 @@
-# -*- coding: UTF-8 -*-
-# Hang Xiao 2023.07
-# xiaohang07@live.cn
-import numpy as np
+"""Frozen empirical tables and periodic lattice constants for SLICES.
+
+Defines the 27-cell ``3x3x3`` supercell translation offsets (``OFFSET``),
+Lennard-Jones repulsive potential parameters for atomic numbers ``Z = 1..118``
+(``LJ_PARAMS_LIST``), and reference periodic-table metadata (``PERIODIC_DATA``).
+"""
+
+from __future__ import annotations
+
 from io import StringIO
+
+import numpy as np
 import pandas as pd
+
+__all__ = ["LJ_PARAMS_LIST", "OFFSET", "PERIODIC_DATA"]
 
 
 # 3*3*3 supercell: 27 cells in -1, 0, 1 offsets in the x, y, z dimensions
-OFFSET = np.array([
+OFFSET: np.ndarray = np.array([
     [-1, -1, -1],
     [-1, -1, 0],
     [-1, -1, 1],
@@ -37,7 +46,7 @@ OFFSET = np.array([
     [1, 1, 1],
 ])
 # lj_params of the repulsive potentials for uncovered pairs
-LJ_PARAMS_LIST = [
+LJ_PARAMS_LIST: list[list[float | int]] = [
 [1, 2.20943,0.552357],
 [2, 1.99561, 0.498903],
 [3, 9.1228, 2.2807],
@@ -159,7 +168,7 @@ LJ_PARAMS_LIST = [
 ]
 
 # periodic table data
-PERIODIC_DATA = pd.read_csv(
+PERIODIC_DATA: pd.DataFrame = pd.read_csv(
     StringIO(
         r'''
 atomic_number,symbol,name,atomic_mass,electron_configuration,phase,category,period,group,mass_number,radioactive,valence_electrons

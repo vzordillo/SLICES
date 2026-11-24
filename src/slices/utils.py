@@ -1,795 +1,895 @@
-# -*- coding: UTF-8 -*-
-# Hang Xiao 2024.03
-# xiaohang07@live.cn
-import os,sys,glob,json,io
-import re,time
-import numpy as np
-import math,json
-import tempfile
-from tqdm import tqdm
-from pymatgen.core.structure import Structure
-import warnings
-warnings.filterwarnings("ignore")
-import contextlib
-from itertools import zip_longest
-import configparser
-from contextlib import redirect_stdout
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-import math
-import shutil  # 用于检测 SLURM 命令是否存在
-import logging
-import subprocess
-import getpass
-from multiprocessing import Pool, cpu_count
-from functools import partial
-@contextlib.contextmanager
-#temporarily change to a different working directory
-def temporaryWorkingDirectory(path):
-    _oldCWD = os.getcwd()
-    os.chdir(os.path.abspath(path))
+"""Batch job execution, result collection, dataset binning, and multiprocessing helpers.
 
+Provides local and SLURM batch-splitting utilities (``splitRun``, ``splitRun_csv``,
+``splitRun_sample``, ``show_progress``, ``cancel_all_jobs``), output collectors
+(``collect_json``, ``collect_csv``, ``collect_csv_filter``), composition filtering
+(``exclude_elements_json``), stratified regression binning (``determine_bin_count``,
+``adaptive_dynamic_binning``), and single-thread-per-worker ``multiprocessing.Pool``
+helpers (``parallel_process_json``, ``parallel_process_csv``).
+
+Process tracking is strictly scoped to SLURM job IDs (``_SUBMITTED_SLURM_JOBS``) and
+local ``subprocess.Popen`` handles (``_SUBMITTED_LOCAL_PROCS``) spawned by the current
+Python session, never terminating unrelated user processes on the host.
+"""
+
+from __future__ import annotations
+
+import configparser
+import contextlib
+import getpass
+import glob
+import json
+import logging
+import math
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from collections.abc import Callable, Collection, Iterator, Sequence
+from functools import partial
+from multiprocessing import Pool, cpu_count
+from pathlib import Path
+from typing import Any, TypeVar
+
+import numpy as np
+import pandas as pd
+from pymatgen.core.structure import Structure
+from sklearn.model_selection import train_test_split
+from tqdm import tqdm
+
+_logger = logging.getLogger(__name__)
+
+__all__ = [
+    "adaptive_dynamic_binning",
+    "cancel_all_jobs",
+    "collect_csv",
+    "collect_csv_filter",
+    "collect_json",
+    "determine_bin_count",
+    "exclude_elements_json",
+    "is_slurm_available",
+    "parallel_process_csv",
+    "parallel_process_json",
+    "show_progress",
+    "splitRun",
+    "splitRun_csv",
+    "splitRun_sample",
+    "split_list",
+    "temporaryWorkingDirectory",
+]
+
+_T = TypeVar("_T")
+
+# SLURM job IDs and local Popen handles submitted by the most recent splitRun* call.
+# show_progress and cancel_all_jobs act exclusively on these tracked jobs/processes.
+_SUBMITTED_SLURM_JOBS: list[str] = []
+_SUBMITTED_LOCAL_PROCS: dict[str, subprocess.Popen[bytes]] = {}
+
+
+@contextlib.contextmanager
+def temporaryWorkingDirectory(path: str | os.PathLike[str]) -> Iterator[None]:
+    """Temporarily change the current working directory to ``path`` and restore on exit.
+
+    Args:
+        path: Target directory path.
+
+    Yields:
+        ``None`` with the process working directory set to ``os.path.abspath(path)``.
+    """
+    old_cwd = os.getcwd()
+    os.chdir(os.path.abspath(path))
     try:
         yield
     finally:
-        os.chdir(_oldCWD)
+        os.chdir(old_cwd)
 
-def split_list(a, n):
+
+def split_list(a: Sequence[_T], n: int) -> Iterator[Sequence[_T]]:
+    """Partition sequence ``a`` into ``n`` contiguous chunks of nearly equal size.
+
+    Args:
+        a: Input sequence to partition.
+        n: Number of partitions (must be ``>= 1``).
+
+    Yields:
+        Contiguous slices of ``a``.
+    """
     k, m = divmod(len(a), n)
-    return (a[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n))
+    return (a[i * k + min(i, m) : (i + 1) * k + min(i + 1, m)] for i in range(n))
 
-def is_slurm_available():
+
+def is_slurm_available() -> bool:
+    """Check whether SLURM job submission commands are available and enabled.
+
+    Setting ``SLICES_FORCE_LOCAL=1`` (or ``true`` / ``yes``) forces local process
+    execution even when SLURM binaries exist on ``PATH``.
+
+    Returns:
+        ``True`` if SLURM should be used, ``False`` otherwise.
     """
-    检测系统是否安装了 SLURM 作业管理系统。
-    返回: True 如果存在 SLURM, 否则 False
-    """
-    return shutil.which('sinfo') is not None or shutil.which('squeue') is not None
+    if os.environ.get("SLICES_FORCE_LOCAL", "").strip().lower() in ("1", "true", "yes"):
+        return False
+    return shutil.which("sinfo") is not None or shutil.which("squeue") is not None
 
 
-# SLURM job IDs submitted by the last splitRun/splitRun_csv call; show_progress waits for
-# (and Ctrl+C cancels) only these, so other jobs of the same user are left alone.
-_SUBMITTED_SLURM_JOBS = []
-
-
-def _submit_slurm_job(script='0_run.sh'):
-    """sbatch ``script`` in the current directory and remember its job ID."""
-    # the job script runs "${SLICES_PYTHON:-python}", so jobs use this interpreter's environment
+def _submit_slurm_job(script: str = "0_run.sh") -> None:
+    """Submit ``script`` via ``sbatch`` in the current directory and record its job ID."""
     env = dict(os.environ, SLICES_PYTHON=sys.executable)
-    result = subprocess.run(['sbatch', '--parsable', script], stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, text=True, env=env)
-    job_id = result.stdout.strip().split(';')[0]
+    result = subprocess.run(
+        ["sbatch", "--parsable", script],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    job_id = result.stdout.strip().split(";")[0]
     if result.returncode == 0 and job_id:
         _SUBMITTED_SLURM_JOBS.append(job_id)
     else:
         print(f"sbatch failed in {os.getcwd()}: {result.stderr.strip()}")
 
 
-def _run_local_job(script='0_run.py'):
-    """Start ``script`` in the background in the current directory (no SLURM), with this interpreter."""
+def _run_local_job(
+    script: str = "0_run.py",
+    job_name: str | None = None,
+) -> subprocess.Popen[bytes]:
+    """Start ``script`` in the background in the current directory and track its ``Popen``."""
     env = dict(os.environ, SLICES_PYTHON=sys.executable)
-    with open('log.txt', 'w') as out, open('error.txt', 'w') as err:
-        subprocess.Popen([sys.executable, script], stdout=out, stderr=err, env=env)
+    key = job_name or os.path.basename(os.getcwd())
+    with open("log.txt", "wb") as out, open("error.txt", "wb") as err:
+        proc = subprocess.Popen(
+            [sys.executable, script],
+            stdout=out,
+            stderr=err,
+            env=env,
+            start_new_session=(os.name != "nt"),
+        )
+    _SUBMITTED_LOCAL_PROCS[key] = proc
+    return proc
 
 
-def splitRun(filename,threads,skip_header=False):
-    """
-    分割并在本地运行任务，自动调整线程数以避免空任务分配。
+def _cleanup_previous_run() -> None:
+    """Remove stale ``job_*`` directories, ``structures_ori_opt``, and ``./result.csv``."""
+    for job_path in glob.glob("job_*"):
+        if os.path.isdir(job_path):
+            shutil.rmtree(job_path, ignore_errors=True)
+        elif os.path.isfile(job_path):
+            Path(job_path).unlink(missing_ok=True)
+    if os.path.isdir("structures_ori_opt"):
+        shutil.rmtree("structures_ori_opt", ignore_errors=True)
+    Path("result.csv").unlink(missing_ok=True)
+
+
+def _cleanup_job_dirs(verbose: bool = False) -> None:
+    """Remove all ``job_*`` subdirectories in the current working directory."""
+    for job_dir in sorted(glob.glob("job_*")):
+        try:
+            if os.path.isdir(job_dir):
+                shutil.rmtree(job_dir)
+                if verbose:
+                    msg = f"Removed job directory: {job_dir}"
+                    print(msg)
+                    _logger.info(msg)
+        except FileNotFoundError:
+            if verbose:
+                msg = f"Job directory already absent: {job_dir}"
+                print(msg)
+                _logger.warning(msg)
+        except OSError as exc:
+            msg = f"Failed to remove job directory {job_dir}: {exc}"
+            print(msg)
+            _logger.error(msg)
+
+
+def _signal_proc(proc: subprocess.Popen[bytes], sig: int) -> None:
+    """Send signal ``sig`` to ``proc`` (and its process group on POSIX when session leader)."""
+    if os.name != "nt":
+        try:
+            os.killpg(proc.pid, sig)
+            return
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+    with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+        if sig == getattr(signal, "SIGKILL", signal.SIGTERM):
+            proc.kill()
+        else:
+            proc.terminate()
+
+
+def _terminate_tracked_local_procs(grace_seconds: float = 5.0) -> None:
+    """Terminate only local background processes tracked in ``_SUBMITTED_LOCAL_PROCS``."""
+    active = {name: proc for name, proc in _SUBMITTED_LOCAL_PROCS.items() if proc.poll() is None}
+    if not active:
+        msg = "No active tracked local SLICES worker processes found."
+        print(msg)
+        _logger.info(msg)
+        _SUBMITTED_LOCAL_PROCS.clear()
+        return
+
+    pids_str = ", ".join(str(proc.pid) for proc in active.values())
+    msg = f"Terminating tracked local worker PIDs: {pids_str}"
+    print(msg)
+    _logger.info(msg)
+
+    for proc in active.values():
+        _signal_proc(proc, signal.SIGTERM)
+
+    deadline = time.monotonic() + grace_seconds
+    while time.monotonic() < deadline:
+        if all(proc.poll() is not None for proc in active.values()):
+            break
+        time.sleep(0.1)
+
+    remaining = [proc for proc in active.values() if proc.poll() is None]
+    if remaining:
+        rem_pids = ", ".join(str(proc.pid) for proc in remaining)
+        kill_msg = f"Force-killing unresponsive tracked worker PIDs: {rem_pids}"
+        print(kill_msg)
+        _logger.info(kill_msg)
+        sigkill = getattr(signal, "SIGKILL", signal.SIGTERM)
+        for proc in remaining:
+            _signal_proc(proc, sigkill)
+        for proc in remaining:
+            with contextlib.suppress(subprocess.TimeoutExpired, OSError):
+                proc.wait(timeout=1.0)
+        done_msg = "All tracked worker processes were force-terminated."
+    else:
+        done_msg = "All tracked worker processes terminated cleanly."
+    print(done_msg)
+    _logger.info(done_msg)
+    _SUBMITTED_LOCAL_PROCS.clear()
+
+
+def _detect_external_running_jobs() -> set[str]:
+    """Fallback ``ps``/``pwdx`` probe when monitoring jobs not launched in this session."""
+    running_jobs: set[str] = set()
+    try:
+        result = subprocess.run(
+            ["ps", "aux"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        for line in result.stdout.splitlines():
+            if "python" in line and "0_run.py" in line:
+                parts = line.split()
+                if len(parts) > 1:
+                    pid = parts[1]
+                    pwd_result = subprocess.run(
+                        ["pwdx", pid],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if pwd_result.returncode == 0 and ":" in pwd_result.stdout:
+                        job_path = pwd_result.stdout.strip().split(":", 1)[1].strip()
+                        job_dir_name = os.path.basename(job_path)
+                        if job_dir_name.startswith("job_"):
+                            running_jobs.add(job_dir_name)
+    except (OSError, subprocess.SubprocessError) as exc:
+        _logger.debug("External process check skipped: %s", exc)
+    return running_jobs
+
+
+def splitRun(filename: str, threads: int, skip_header: bool = False) -> None:
+    """Split a JSON task list across ``job_*`` directories and submit to SLURM or locally.
+
+    Automatically caps worker count to avoid empty shards when ``threads`` exceeds
+    the number of tasks.
 
     Args:
-        filename (str): 包含任务列表的JSON文件路径。
-        threads (int): 期望的线程数。
-        skip_header (bool, optional): 是否跳过任务列表的头部。默认值为False。
+        filename: Path to the JSON file containing the list of task items.
+        threads: Desired number of parallel job shards.
+        skip_header: Whether to skip the first element of the loaded JSON list.
     """
-    # 清理之前的任务目录和结果
-    os.system('rm -rf job_* structures_ori_opt ./result.csv')
-    
-    # 读取任务列表
-    with open(filename, 'r') as f:
+    _cleanup_previous_run()
+
+    with open(filename, encoding="utf-8") as handle:
         try:
-            cifs = json.load(f)
-        except json.JSONDecodeError as e:
-            print(f"JSON解析错误: {e}")
+            cifs = json.load(handle)
+        except json.JSONDecodeError as exc:
+            print(f"JSON decode error in {filename}: {exc}")
             return
-    
-    # 根据是否跳过头部调整任务列表
-    if skip_header:
-        tasks = cifs[1:]
-    else:
-        tasks = cifs
-    
-    # 过滤掉任何空的任务条目（例如，None 或 空字典）
+
+    tasks = cifs[1:] if skip_header else cifs
     tasks = [task for task in tasks if task]
-    
     total_tasks = len(tasks)
-    
-    # 如果任务数量小于线程数，调整线程数
+
     actual_threads = min(threads, total_tasks) if total_tasks > 0 else 1
     if actual_threads < threads:
-        print(f"任务数量 ({total_tasks}) 小于线程数 ({threads})，将使用 {actual_threads} 个线程。")
-    
-    # 分割任务列表
+        print(
+            f"Task count ({total_tasks}) is smaller than requested threads ({threads}); "
+            f"using {actual_threads} worker(s)."
+        )
+
     cifs_split = list(split_list(tasks, actual_threads))
     use_slurm = is_slurm_available()
     _SUBMITTED_SLURM_JOBS.clear()
-    # 创建并提交每个子任务
-    for i in range(len(cifs_split)):
-        job_dir = f'job_{i}'
-        os.mkdir(job_dir)
-        os.system('cp -r ./workflow/. ' + job_dir)
-        temp_json_path = os.path.join(job_dir, 'temp.json')
-        with open(temp_json_path, 'w') as f:
-            json.dump(cifs_split[i], f)
-        
-        # 提交任务
-        os.chdir(job_dir)
-        if use_slurm:
-            _submit_slurm_job()
-        else:
-            _run_local_job()
-        os.chdir('..')
-    
-    print("计算任务已提交。")
+    _SUBMITTED_LOCAL_PROCS.clear()
 
-def splitRun_csv(filename,threads,skip_header=False):
-    # 清理之前的任务目录和结果
-    os.system('rm -rf job_* structures_ori_opt ./result.csv')
-    
-    # 读取任务列表，并排除空行
-    with open(filename, 'r') as f:
-        lines = f.readlines()
-    
+    for i, shard in enumerate(cifs_split):
+        job_dir = f"job_{i}"
+        os.mkdir(job_dir)
+        if os.path.isdir("./workflow"):
+            shutil.copytree("./workflow", job_dir, dirs_exist_ok=True)
+        temp_json_path = os.path.join(job_dir, "temp.json")
+        with open(temp_json_path, "w", encoding="utf-8") as handle:
+            json.dump(shard, handle)
+
+        with temporaryWorkingDirectory(job_dir):
+            if use_slurm:
+                _submit_slurm_job()
+            else:
+                _run_local_job(job_name=job_dir)
+
+    print("Computation tasks have been submitted.")
+
+
+def splitRun_csv(filename: str, threads: int, skip_header: bool = False) -> None:
+    """Split a CSV/line-based task file across ``job_*`` directories and submit jobs.
+
+    Args:
+        filename: Path to the input CSV file.
+        threads: Desired number of parallel job shards.
+        skip_header: Whether to skip the header line of ``filename``.
+    """
+    _cleanup_previous_run()
+
+    with open(filename, encoding="utf-8") as handle:
+        lines = handle.readlines()
+
     if skip_header:
         lines = lines[1:]
-    
-    # 过滤掉任何空行或仅包含空白字符的行
+
     cifs = [line for line in lines if line.strip()]
-    
     total_tasks = len(cifs)
-    
-    # 如果任务数量小于线程数，调整线程数
+
     actual_threads = min(threads, total_tasks) if total_tasks > 0 else 1
     if actual_threads < threads:
-        print(f"任务数量 ({total_tasks}) 小于线程数 ({threads})，将使用 {actual_threads} 个线程。")
-    
-    # 分割任务列表
+        print(
+            f"Task count ({total_tasks}) is smaller than requested threads ({threads}); "
+            f"using {actual_threads} worker(s)."
+        )
+
     cifs_split = list(split_list(cifs, actual_threads))
     use_slurm = is_slurm_available()
     _SUBMITTED_SLURM_JOBS.clear()
-    # 创建并提交每个子任务
-    for i in range(len(cifs_split)):
-        job_dir = f'job_{i}'
-        os.mkdir(job_dir)
-        os.system('cp -r ./workflow/. ' + job_dir)
-        temp_csv_path = os.path.join(job_dir, 'temp.csv')
-        with open(temp_csv_path, 'w') as f:
-            f.writelines(cifs_split[i])
-        
-        # 提交任务
-        os.chdir(job_dir)
-        if use_slurm:
-            _submit_slurm_job()
-        else:
-            _run_local_job()
-        os.chdir('..')
-    
-    print("计算任务已提交。")
+    _SUBMITTED_LOCAL_PROCS.clear()
 
-def splitRun_sample(threads=8,sample_size=8000):
+    for i, shard in enumerate(cifs_split):
+        job_dir = f"job_{i}"
+        os.mkdir(job_dir)
+        if os.path.isdir("./workflow"):
+            shutil.copytree("./workflow", job_dir, dirs_exist_ok=True)
+        temp_csv_path = os.path.join(job_dir, "temp.csv")
+        with open(temp_csv_path, "w", encoding="utf-8") as handle:
+            handle.writelines(shard)
+
+        with temporaryWorkingDirectory(job_dir):
+            if use_slurm:
+                _submit_slurm_job()
+            else:
+                _run_local_job(job_name=job_dir)
+
+    print("Computation tasks have been submitted.")
+
+
+def splitRun_sample(threads: int = 8, sample_size: int = 8000) -> None:
+    """Configure per-shard ``sample_size`` in ``settings.ini`` and submit PBS sampling jobs.
+
+    Args:
+        threads: Number of parallel ``job_*`` directories to create.
+        sample_size: Total number of samples across all shards.
+    """
     config = configparser.ConfigParser()
-    os.system('rm -rf job_* structures_ori_opt ./result.csv')
-    config["Settings"] = {'sample_size':int(sample_size/threads) }
-    with open('./workflow/settings.ini', 'w') as configfile:
+    _cleanup_previous_run()
+    config["Settings"] = {"sample_size": str(int(sample_size / threads))}
+    with open("./workflow/settings.ini", "w", encoding="utf-8") as configfile:
         config.write(configfile)
     for i in range(threads):
-        os.mkdir('job_'+str(i))
-        os.system('cp -r ./workflow/. job_'+str(i))
-        os.chdir('job_'+str(i))
-        if len(sys.argv)==2:
-            if sys.argv[1]=="test":
-                os.system('qsub 0_test.pbs')
-        else:
-            os.system('qsub 0_run.pbs > /dev/null 2>&1')
-        os.chdir('..')
+        job_dir = f"job_{i}"
+        os.mkdir(job_dir)
+        if os.path.isdir("./workflow"):
+            shutil.copytree("./workflow", job_dir, dirs_exist_ok=True)
+        with temporaryWorkingDirectory(job_dir):
+            if len(sys.argv) == 2 and sys.argv[1] == "test":
+                subprocess.run(["qsub", "0_test.pbs"], check=False)
+            else:
+                subprocess.run(
+                    ["qsub", "0_run.pbs"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                )
     print("Sampling tasks have been submitted.")
 
-def show_progress(total_jobs=None, check_interval=5):
+
+def show_progress(total_jobs: int | None = None, check_interval: float = 5) -> None:
+    """Monitor submitted SLURM or local ``job_*`` shards with a progress bar until completion.
+
+    On ``KeyboardInterrupt``, cancels only the SLURM jobs or local ``Popen`` processes
+    submitted by this session rather than unrelated user processes.
+
+    Args:
+        total_jobs: Expected number of local ``job_*`` directories (auto-detected if ``None``).
+        check_interval: Polling interval in seconds.
+    """
     use_slurm = is_slurm_available()
     if use_slurm:
         print("SLURM system detected. Using SLURM-based processing.")
+        current_user = getpass.getuser()
         try:
-            countTask = 0
-            totalTask = 0  # 初始化总任务数
-            current_user = getpass.getuser()  # 使用 getpass 获取当前用户名
-            with tqdm(total=100, position=0, leave=True,
-                      bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}') as pbar:
+            count_task = 0
+            total_task = 0
+            with tqdm(
+                total=100,
+                position=0,
+                leave=True,
+                bar_format="{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}",
+            ) as pbar:
                 pbar.set_description("Progress")
                 while True:
-                    countTask0 = countTask
-                    # 使用squeue命令获取作业状态：只看本次提交的作业（没有记录时退回到当前用户的全部作业）
+                    count_task_prev = count_task
                     try:
                         result = subprocess.run(
-                            ['squeue', '-u', current_user, '-h', '-o', '%i %T'],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
+                            ["squeue", "-u", current_user, "-h", "-o", "%i %T"],
+                            capture_output=True,
                             text=True,
-                            check=True
+                            check=True,
                         )
                         tracked = set(_SUBMITTED_SLURM_JOBS)
-                        log = [state for job_id, _, state in (line.partition(' ') for line in result.stdout.splitlines())
-                               if not tracked or job_id.split('_')[0] in tracked]
-                    except subprocess.CalledProcessError as e:
-                        print(f"Error executing squeue: {e.stderr}")
+                        states = [
+                            state
+                            for job_id, _, state in (
+                                line.partition(" ") for line in result.stdout.splitlines()
+                            )
+                            if not tracked or job_id.split("_")[0] in tracked
+                        ]
+                    except subprocess.CalledProcessError as exc:
+                        print(f"Error executing squeue: {exc.stderr}")
                         break
 
-                    countTask = sum(1 for state in log if state in ['RUNNING', 'PENDING', 'CONFIGURING', 'SUSPENDED'])
-
-                    # 如果检测到新的任务数增加，重置进度条
-                    if countTask0 < countTask:
-                        totalTask = countTask
+                    count_task = sum(
+                        1
+                        for state in states
+                        if state in ("RUNNING", "PENDING", "CONFIGURING", "SUSPENDED")
+                    )
+                    if count_task_prev < count_task:
+                        total_task = count_task
                         pbar.reset(total=100)
                         pbar.set_description("Progress")
-
-                    # 如果任务数减少，更新进度条
-                    if countTask0 > countTask and totalTask > 0:
-                        completed = (totalTask - countTask) / totalTask * 100
-                        pbar.update(completed - pbar.n)  # 更新到新的完成百分比
-
-                    # 如果所有任务完成，更新进度条到100%并退出
-                    if countTask == 0 and totalTask > 0:
+                    if count_task_prev > count_task and total_task > 0:
+                        completed_pct = (total_task - count_task) / total_task * 100
+                        pbar.update(completed_pct - pbar.n)
+                    if count_task == 0 and total_task > 0:
                         pbar.n = pbar.total
                         pbar.refresh()
                         break
-
                     time.sleep(check_interval)
         except KeyboardInterrupt:
-            # 用户中断时取消本次提交的作业（没有记录时取消当前用户的全部作业）
             try:
                 if _SUBMITTED_SLURM_JOBS:
-                    subprocess.run(['scancel', *_SUBMITTED_SLURM_JOBS], check=True)
+                    subprocess.run(["scancel", *_SUBMITTED_SLURM_JOBS], check=True)
                     print(f"\n{len(_SUBMITTED_SLURM_JOBS)} submitted jobs have been canceled")
                 else:
-                    subprocess.run(['scancel', '-u', current_user], check=True)
+                    subprocess.run(["scancel", "-u", current_user], check=True)
                     print("\nAll jobs have been canceled")
-            except subprocess.CalledProcessError as e:
-                print(f"\nError cancelling jobs: {e.stderr}")
-        except EnvironmentError as env_err:
+            except subprocess.CalledProcessError as exc:
+                print(f"\nError canceling jobs: {exc.stderr}")
+        except OSError as env_err:
             print(env_err)
-    else:
-        print("No SLURM system detected. Falling back to local processing.")
-        try:
-            # 如果未提供总任务数，自动检测 job_* 目录
-            if total_jobs is None:
-                job_dirs = glob.glob("job_*")
-                total_jobs = len(job_dirs)
+        return
 
-            if total_jobs == 0:
-                print("未检测到任何任务需要监控。")
-                logging.info("未检测到任何任务需要监控。")
-                return
+    print("No SLURM system detected. Falling back to local processing.")
+    try:
+        if total_jobs is None:
+            total_jobs = len(glob.glob("job_*"))
 
-            # 获取当前工作目录的绝对路径，用于匹配进程
-            current_dir = os.path.abspath(os.getcwd())
+        if total_jobs == 0:
+            msg = "No job directories detected to monitor."
+            print(msg)
+            _logger.info(msg)
+            return
 
-            with tqdm(total=total_jobs, position=0, leave=True,
-                    bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}') as pbar:
+        with tqdm(
+            total=total_jobs,
+            position=0,
+            leave=True,
+            bar_format="{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}",
+        ) as pbar:
+            completed = 0
+            while completed < total_jobs:
                 completed = 0
+                if _SUBMITTED_LOCAL_PROCS:
+                    running_jobs = {
+                        name
+                        for name, proc in _SUBMITTED_LOCAL_PROCS.items()
+                        if proc.poll() is None
+                    }
+                else:
+                    running_jobs = _detect_external_running_jobs()
 
-                while completed < total_jobs:
-                    completed = 0
+                for i in range(total_jobs):
+                    job_dir = f"job_{i}"
+                    is_completed = False
+                    if job_dir not in running_jobs:
+                        output_json = os.path.join(job_dir, "output.json")
+                        output_csv = os.path.join(job_dir, "result.csv")
+                        if os.path.exists(output_json):
+                            with contextlib.suppress(OSError):
+                                if os.path.getsize(output_json) > 10:
+                                    is_completed = True
+                        if not is_completed and os.path.exists(output_csv):
+                            with contextlib.suppress(OSError):
+                                if os.path.getsize(output_csv) > 20:
+                                    is_completed = True
+                    if is_completed:
+                        completed += 1
 
-                    # 获取所有正在运行的 python 进程及其工作目录
-                    running_jobs = set()
-                    try:
-                        # 使用 ps 命令获取所有 python 进程的 PID 和工作目录
-                        result = subprocess.run(
-                            ['ps', 'aux'],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                            text=True
-                        )
-
-                        for line in result.stdout.splitlines():
-                            # 查找包含 0_run.py 的 python 进程
-                            if 'python' in line and '0_run.py' in line:
-                                parts = line.split()
-                                if len(parts) > 1:
-                                    pid = parts[1]
-                                    try:
-                                        # 使用 pwdx 获取进程的工作目录
-                                        pwd_result = subprocess.run(
-                                            ['pwdx', pid],
-                                            stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE,
-                                            text=True
-                                        )
-                                        if pwd_result.returncode == 0:
-                                            # pwdx 输出格式: "PID: /path/to/dir"
-                                            pwd_output = pwd_result.stdout.strip()
-                                            if ':' in pwd_output:
-                                                job_path = pwd_output.split(':', 1)[1].strip()
-                                                # 提取 job_X 目录名
-                                                if 'job_' in job_path:
-                                                    job_dir_name = os.path.basename(job_path)
-                                                    if job_dir_name.startswith('job_'):
-                                                        running_jobs.add(job_dir_name)
-                                    except:
-                                        pass
-                    except:
-                        pass
-
-                    # 检查每个任务的状态
-                    for i in range(total_jobs):
-                        job_dir = f'job_{i}'
-                        is_completed = False
-
-                        # 如果进程不在运行列表中，检查输出文件
-                        if job_dir not in running_jobs:
-                            # 检查输出文件是否存在且有内容
-                            output_file1 = os.path.join(job_dir, 'output.json')
-                            output_file2 = os.path.join(job_dir, 'result.csv')
-
-                            # 检查 output.json
-                            if os.path.exists(output_file1):
-                                try:
-                                    file_size = os.path.getsize(output_file1)
-                                    if file_size > 10:
-                                        is_completed = True
-                                except (OSError, IOError):
-                                    pass
-
-                            # 检查 result.csv
-                            if not is_completed and os.path.exists(output_file2):
-                                try:
-                                    file_size = os.path.getsize(output_file2)
-                                    if file_size > 20:
-                                        is_completed = True
-                                except (OSError, IOError):
-                                    pass
-
-                        if is_completed:
-                            completed += 1
-
-                    pbar.n = completed
-                    pbar.refresh()
-                    time.sleep(check_interval)
-
-                pbar.n = pbar.total
+                pbar.n = completed
                 pbar.refresh()
-        except KeyboardInterrupt:
-            print("\n检测到取消操作。正在终止所有 'pt_main_thread' 和 'python' 进程...")
-            logging.info("检测到取消操作。尝试终止所有 'pt_main_thread' 和 'python' 进程。")
-            try:
-                # 定义要查找的进程名称列表
-                process_names = ["pt_main_thread", "python"]
-                all_pids = []
-                for proc_name in process_names:
-                    try:
-                        # 使用 pgrep 查找精确匹配的进程名
-                        pgrep_output = subprocess.check_output(["pgrep", "-f", proc_name], stderr=subprocess.DEVNULL).decode().strip()
-                        pids = pgrep_output.split('\n') if pgrep_output else []
-                        pids = [pid for pid in pids if pid.isdigit()]
-                        all_pids.extend(pids)
-                    except subprocess.CalledProcessError:
-                        # 如果没有找到对应的进程，继续
-                        continue
-                
-                if not all_pids:
-                    print("未找到任何名为 'pt_main_thread' 或 'python' 的进程。")
-                    logging.info("未找到任何名为 'pt_main_thread' 或 'python' 的进程。")
-                else:
-                    unique_pids = list(set(all_pids))  # 移除重复的 PID
-                    print(f"找到以下 PID: {', '.join(unique_pids)}")
-                    logging.info(f"找到以下 PID: {', '.join(unique_pids)}")
-                    
-                    # 发送 SIGTERM 信号以温和终止进程
-                    print("正在发送 SIGTERM 信号...")
-                    logging.info("发送 SIGTERM 信号给进程。")
-                    try:
-                        subprocess.run(["kill"] + unique_pids, check=True)
-                    except subprocess.CalledProcessError as e:
-                        print(f"发送 SIGTERM 信号失败: {e}")
-                        logging.error(f"发送 SIGTERM 信号失败: {e}")
-                    
-                    # 等待 5 秒以允许进程优雅终止
-                    time.sleep(5)
-                    
-                    # 检查哪些进程仍在运行
-                    remaining_pids = []
-                    for proc_name in process_names:
-                        try:
-                            remaining_pgrep = subprocess.check_output(["pgrep", "-f", proc_name], stderr=subprocess.DEVNULL).decode().strip()
-                            rem_pids = remaining_pgrep.split('\n') if remaining_pgrep else []
-                            rem_pids = [pid for pid in rem_pids if pid.isdigit()]
-                            remaining_pids.extend(rem_pids)
-                        except subprocess.CalledProcessError:
-                            continue
-                    
-                    remaining_pids = list(set(remaining_pids))  # 移除重复的 PID
-                    
-                    if remaining_pids:
-                        print(f"以下进程未终止，正在发送 SIGKILL 信号: {', '.join(remaining_pids)}")
-                        logging.info(f"以下进程未终止，发送 SIGKILL 信号: {', '.join(remaining_pids)}")
-                        try:
-                            subprocess.run(["kill", "-9"] + remaining_pids, check=True)
-                            print("所有相关进程已被强制终止。")
-                            logging.info("所有相关进程已被强制终止。")
-                        except subprocess.CalledProcessError as e:
-                            print(f"发送 SIGKILL 信号失败: {e}")
-                            logging.error(f"发送 SIGKILL 信号失败: {e}")
-                    else:
-                        print("所有相关进程已成功终止。")
-                        logging.info("所有相关进程已成功终止。")
-            except subprocess.CalledProcessError:
-                print("未找到任何名为 'pt_main_thread' 或 'python' 的进程。")
-                logging.info("未找到任何名为 'pt_main_thread' 或 'python' 的进程。")
-            except Exception as e:
-                print(f"终止进程时发生错误: {e}")
-                logging.error(f"终止进程时发生错误: {e}")
-            
-            print("开始清理任务目录...")
-            logging.info("开始清理任务目录。")
-            # 清理 job_* 目录
-            job_dirs = glob.glob("job_*")
-            for job_dir in job_dirs:
-                try:
-                    if os.path.isdir(job_dir):
-                        shutil.rmtree(job_dir)
-                        print(f"已删除目录: {job_dir}")
-                        logging.info(f"已删除目录: {job_dir}")
-                except FileNotFoundError:
-                    print(f"目录不存在: {job_dir}")
-                    logging.warning(f"目录不存在: {job_dir}")
-                except Exception as e:
-                    print(f"无法删除目录 {job_dir}: {e}")
-                    logging.error(f"无法删除目录 {job_dir}: {e}")
-            
-            print("任务监控已结束。")
-            logging.info("任务监控已结束。")
-        finally:
-            print("任务监控已结束。")
-            logging.info("任务监控已结束。")      
+                if completed >= total_jobs:
+                    break
+                time.sleep(check_interval)
 
-def cancel_all_jobs():
-    use_slurm = is_slurm_available()
-    if use_slurm:
-        current_user = getpass.getuser()  # 使用 getpass 获取当前用户名
-        subprocess.run(['scancel', '-u', current_user], check=True)
-        print("All jobs have been canceled")
-    else:
-        try:
-            # 定义要查找的进程名称列表
-            process_names = ["pt_main_thread", "python"]
-            all_pids = []
-            for proc_name in process_names:
-                try:
-                    # 使用 pgrep 查找精确匹配的进程名
-                    pgrep_output = subprocess.check_output(["pgrep", "-f", proc_name], stderr=subprocess.DEVNULL).decode().strip()
-                    pids = pgrep_output.split('\n') if pgrep_output else []
-                    pids = [pid for pid in pids if pid.isdigit()]
-                    all_pids.extend(pids)
-                except subprocess.CalledProcessError:
-                    # 如果没有找到对应的进程，继续
-                    continue
-            
-            if not all_pids:
-                print("未找到任何名为 'pt_main_thread' 或 'python' 的进程。")
-                logging.info("未找到任何名为 'pt_main_thread' 或 'python' 的进程。")
-            else:
-                unique_pids = list(set(all_pids))  # 移除重复的 PID
-                print(f"找到以下 PID: {', '.join(unique_pids)}")
-                logging.info(f"找到以下 PID: {', '.join(unique_pids)}")
-                
-                # 发送 SIGTERM 信号以温和终止进程
-                print("正在发送 SIGTERM 信号...")
-                logging.info("发送 SIGTERM 信号给进程。")
-                try:
-                    subprocess.run(["kill"] + unique_pids, check=True)
-                except subprocess.CalledProcessError as e:
-                    print(f"发送 SIGTERM 信号失败: {e}")
-                    logging.error(f"发送 SIGTERM 信号失败: {e}")
-                
-                # 等待 5 秒以允许进程优雅终止
-                time.sleep(5)
-                
-                # 检查哪些进程仍在运行
-                remaining_pids = []
-                for proc_name in process_names:
-                    try:
-                        remaining_pgrep = subprocess.check_output(["pgrep", "-f", proc_name], stderr=subprocess.DEVNULL).decode().strip()
-                        rem_pids = remaining_pgrep.split('\n') if remaining_pgrep else []
-                        rem_pids = [pid for pid in rem_pids if pid.isdigit()]
-                        remaining_pids.extend(rem_pids)
-                    except subprocess.CalledProcessError:
-                        continue
-                
-                remaining_pids = list(set(remaining_pids))  # 移除重复的 PID
-                
-                if remaining_pids:
-                    print(f"以下进程未终止，正在发送 SIGKILL 信号: {', '.join(remaining_pids)}")
-                    logging.info(f"以下进程未终止，发送 SIGKILL 信号: {', '.join(remaining_pids)}")
-                    try:
-                        subprocess.run(["kill", "-9"] + remaining_pids, check=True)
-                        print("所有相关进程已被强制终止。")
-                        logging.info("所有相关进程已被强制终止。")
-                    except subprocess.CalledProcessError as e:
-                        print(f"发送 SIGKILL 信号失败: {e}")
-                        logging.error(f"发送 SIGKILL 信号失败: {e}")
-                else:
-                    print("所有相关进程已成功终止。")
-                    logging.info("所有相关进程已成功终止。")
-        except subprocess.CalledProcessError:
-            print("未找到任何名为 'pt_main_thread' 或 'python' 的进程。")
-            logging.info("未找到任何名为 'pt_main_thread' 或 'python' 的进程。")
-        except Exception as e:
-            print(f"终止进程时发生错误: {e}")
-            logging.error(f"终止进程时发生错误: {e}")
-
-        print("开始清理任务目录...")
-        logging.info("开始清理任务目录。")
-        # 清理 job_* 目录
-        job_dirs = glob.glob("job_*")
-        for job_dir in job_dirs:
-            try:
-                if os.path.isdir(job_dir):
-                    shutil.rmtree(job_dir)
-                    print(f"已删除目录: {job_dir}")
-                    logging.info(f"已删除目录: {job_dir}")
-            except FileNotFoundError:
-                print(f"目录不存在: {job_dir}")
-                logging.warning(f"目录不存在: {job_dir}")
-            except Exception as e:
-                print(f"无法删除目录 {job_dir}: {e}")
-                logging.error(f"无法删除目录 {job_dir}: {e}")
-
-def collect_json(output,glob_target,cleanup=True):
-    data=[]               
-    for f in glob.glob(glob_target, recursive=True):
-        with open(f,"r") as infile:
-            temp=json.load(infile)  # put each cifs into the final list
-            for i in temp:
-                data.append(i)
-    with open(output,'w') as outfile:
-        json.dump(data, outfile)     
-    if cleanup:
-        for i in glob.glob("job_*"):
-            os.system("rm -r "+i)
-    print("Results have been collected into: "+output)
-
-def collect_csv(output,glob_target,header="",index=False,cleanup=True):
-    result_sli=""
-    if index:
-        index=0
-        for i in glob.glob(glob_target):
-            with open(i,'r') as result:
-                lines=result.readlines()
-                for j in range(len(lines)):
-                    result_sli+=str(index)+','+lines[j]
-                    index+=1
-    else:
-        for f in glob.glob(glob_target, recursive=True):
-            with open(f,"r") as infile:
-                result_sli += infile.read()
-    with open(output,'w') as result:
-        if header!="":
-            result.write(header)
-        result.write(result_sli)  
-    if cleanup:
-        for i in glob.glob("job_*"):
-            os.system("rm -r "+i)
-    print("Results have been collected into: "+output)
-
-def collect_csv_filter(output,glob_target,header,condition,cleanup=True):
-    result_csv=''
-    result_filtered_csv=''
-    for i in glob.glob(glob_target):
-        with open(i,'r') as result:
-            for j in result.readlines():
-                result_csv+=j
-                if condition(j):
-                    result_filtered_csv+=j
-    with open(output,'w') as result:
-        if header!="":
-            result.write(header)
-        result.write(result_csv) 
-    with open(output.split('.')[0]+"_filtered."+output.split('.')[1],'w') as result:
-        if header!="":
-            result.write(header)
-        result.write(result_filtered_csv) 
-    if cleanup:
-        for i in glob.glob("job_*"):
-            os.system("rm -r "+i)
-    print("Results have been collected into: "+output)
-
-def exclude_elements_json(input_json,exclude_elements):
-    print("excluding materials containing elements not supported")
-    flitered_json = []
-    for i in tqdm(input_json,position=0, leave=True,bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}'):
-        ori = Structure.from_str(i['cif'],fmt="cif")
-        species=[str(j) for j in ori.species]
-        flag=0
-        for j in species:
-            if j in exclude_elements:
-                flag+=1
-                break
-        if not flag and i["material_id"] != None:
-            flitered_json.append(i)
-    print(str(round((len(input_json)-len(flitered_json))/len(input_json)*100,1))+"% materials excluded")
-    return flitered_json
+            pbar.n = pbar.total
+            pbar.refresh()
+    except KeyboardInterrupt:
+        print("\nCancellation requested. Terminating tracked local worker processes...")
+        _logger.info("Cancellation requested. Terminating tracked local worker processes.")
+        _terminate_tracked_local_procs()
+        print("Cleaning up job directories...")
+        _logger.info("Cleaning up job directories.")
+        _cleanup_job_dirs(verbose=True)
+    print("Task monitoring finished.")
+    _logger.info("Task monitoring finished.")
 
 
-def determine_bin_count(data_size, target_values):
-    # 使用Sturges规则作为起点
-    sturges_bins = math.ceil(math.log2(data_size)) + 1
-    
-    # 使用Freedman-Diaconis规则
-    q75, q25 = np.percentile(target_values, [75, 25])
-    iqr = q75 - q25
-    bin_width = 2 * iqr * (len(target_values) ** (-1/3))
-    fd_bins = math.ceil((max(target_values) - min(target_values)) / bin_width)
-    
-    # 使用Scott规则
-    scott_bins = math.ceil((max(target_values) - min(target_values)) / (3.5 * np.std(target_values) * (len(target_values) ** (-1/3))))
-    
-    # 取这些方法的平均值，并确保bin数量在合理范围内
-    avg_bins = int(np.mean([sturges_bins, fd_bins, scott_bins]))
-    return max(min(avg_bins, data_size // 20), 5)  # 至少5个bin，最多数据点数的1/20
-
-def adaptive_dynamic_binning(data, target_column, test_size=0.2, random_state=42):
-    # 将目标列转换为数值型，设置errors='coerce'将非数值转换为NaN
-    data[target_column] = pd.to_numeric(data[target_column], errors='coerce')
-    
-    # 删除目标列中的NaN值
-    data_cleaned = data.dropna(subset=[target_column])
-    
-    print(f"\n原始数据行数: {len(data)}")
-    print(f"清理后数据行数: {len(data_cleaned)}")
-    
-    # 自动确定bin数量
-    target_values = data_cleaned[target_column].values
-    n_bins = determine_bin_count(len(data_cleaned), target_values)
-    print(f"自动确定的bin数量: {n_bins}")
-    
-    # 使用分位数法创建bins
-    percentiles = [i * 100 / n_bins for i in range(n_bins + 1)]
-    bins = list(data_cleaned[target_column].quantile([p/100 for p in percentiles]))
-    
-    # 确保bin边界是唯一的
-    bins = sorted(set(bins))
-    
-    # 为bins添加标签
-    labels = [f'Bin{i+1}' for i in range(len(bins) - 1)]
-    
-    # 将目标值分成区间
-    data_cleaned['bin'] = pd.cut(data_cleaned[target_column], bins=bins, labels=labels, include_lowest=True)
-    
-    train_data = pd.DataFrame(columns=data_cleaned.columns)
-    test_data = pd.DataFrame(columns=data_cleaned.columns)
-    
-    # 对每个区间进行分层抽样
-    for bin_label in data_cleaned['bin'].unique():
-        bin_data = data_cleaned[data_cleaned['bin'] == bin_label]
-        if len(bin_data) > 1:
-            bin_train, bin_test = train_test_split(bin_data, test_size=test_size, random_state=random_state)
+def cancel_all_jobs() -> None:
+    """Cancel tracked SLURM jobs or tracked local ``job_*`` worker processes and clean up."""
+    if is_slurm_available():
+        current_user = getpass.getuser()
+        if _SUBMITTED_SLURM_JOBS:
+            subprocess.run(["scancel", *_SUBMITTED_SLURM_JOBS], check=True)
+            print(f"{len(_SUBMITTED_SLURM_JOBS)} submitted jobs have been canceled")
+            _SUBMITTED_SLURM_JOBS.clear()
         else:
-            bin_train, bin_test = bin_data, pd.DataFrame()
-        
-        train_data = pd.concat([train_data, bin_train])
-        test_data = pd.concat([test_data, bin_test])
-    
-    # 删除临时的'bin'列
-    train_data = train_data.drop('bin', axis=1)
-    test_data = test_data.drop('bin', axis=1)
-    
-    # 打乱数据
-    train_data = train_data.sample(frac=1, random_state=random_state).reset_index(drop=True)
-    test_data = test_data.sample(frac=1, random_state=random_state).reset_index(drop=True)
-    
-    return train_data, test_data, bins
+            subprocess.run(["scancel", "-u", current_user], check=True)
+            print("All jobs have been canceled")
+        return
 
-def parallel_process_json(process_func, data, n_processes=16, output_file='result.csv', **kwargs):
-    """
-    使用multiprocessing Pool进行并行处理，每个进程使用单个CPU
+    _terminate_tracked_local_procs()
+    print("Cleaning up job directories...")
+    _logger.info("Cleaning up job directories.")
+    _cleanup_job_dirs(verbose=True)
+
+
+def collect_json(output: str, glob_target: str, cleanup: bool = True) -> None:
+    """Concatenate JSON list files matching ``glob_target`` into ``output``.
 
     Args:
-        process_func: 处理函数，接收单个数据项和kwargs作为参数
-        data (list): 要处理的数据列表（通常是从JSON文件加载的）
-        n_processes (int): 并行进程数，默认16
-        output_file (str): 输出文件名，默认'result.csv'
-        **kwargs: 传递给process_func的额外参数
+        output: Destination JSON file path.
+        glob_target: Glob pattern for per-shard JSON files.
+        cleanup: Whether to remove ``job_*`` directories after collection.
+    """
+    data: list[Any] = []
+    for path in glob.glob(glob_target, recursive=True):
+        with open(path, encoding="utf-8") as infile:
+            temp = json.load(infile)
+            data.extend(temp)
+    with open(output, "w", encoding="utf-8") as outfile:
+        json.dump(data, outfile)
+    if cleanup:
+        _cleanup_job_dirs(verbose=False)
+    print(f"Results have been collected into: {output}")
+
+
+def collect_csv(
+    output: str,
+    glob_target: str,
+    header: str = "",
+    index: bool = False,
+    cleanup: bool = True,
+) -> None:
+    """Concatenate CSV shard files matching ``glob_target`` into ``output``.
+
+    Args:
+        output: Destination CSV file path.
+        glob_target: Glob pattern for per-shard CSV files.
+        header: Optional CSV header string (including trailing newline if needed).
+        index: Whether to prepend a sequential 0-based row index column.
+        cleanup: Whether to remove ``job_*`` directories after collection.
+    """
+    result_sli = ""
+    if index:
+        row_idx = 0
+        for path in glob.glob(glob_target):
+            with open(path, encoding="utf-8") as infile:
+                for line in infile:
+                    result_sli += f"{row_idx},{line}"
+                    row_idx += 1
+    else:
+        for path in glob.glob(glob_target, recursive=True):
+            with open(path, encoding="utf-8") as infile:
+                result_sli += infile.read()
+    with open(output, "w", encoding="utf-8") as outfile:
+        if header != "":
+            outfile.write(header)
+        outfile.write(result_sli)
+    if cleanup:
+        _cleanup_job_dirs(verbose=False)
+    print(f"Results have been collected into: {output}")
+
+
+def collect_csv_filter(
+    output: str,
+    glob_target: str,
+    header: str,
+    condition: Callable[[str], bool],
+    cleanup: bool = True,
+) -> None:
+    """Collect all CSV rows into ``output`` and filtered rows into ``<stem>_filtered.<ext>``.
+
+    Args:
+        output: Destination CSV file path for unfiltered rows.
+        glob_target: Glob pattern for per-shard CSV files.
+        header: Optional CSV header string.
+        condition: Predicate receiving each raw CSV line and returning ``True`` to retain.
+        cleanup: Whether to remove ``job_*`` directories after collection.
+    """
+    result_csv = ""
+    result_filtered_csv = ""
+    for path in glob.glob(glob_target):
+        with open(path, encoding="utf-8") as infile:
+            for line in infile:
+                result_csv += line
+                if condition(line):
+                    result_filtered_csv += line
+    with open(output, "w", encoding="utf-8") as outfile:
+        if header != "":
+            outfile.write(header)
+        outfile.write(result_csv)
+    stem, ext = output.split(".", 1)
+    filtered_output = f"{stem}_filtered.{ext}"
+    with open(filtered_output, "w", encoding="utf-8") as outfile:
+        if header != "":
+            outfile.write(header)
+        outfile.write(result_filtered_csv)
+    if cleanup:
+        _cleanup_job_dirs(verbose=False)
+    print(f"Results have been collected into: {output}")
+
+
+def exclude_elements_json(
+    input_json: Sequence[dict[str, Any]],
+    exclude_elements: Collection[str],
+) -> list[dict[str, Any]]:
+    """Filter out CIF entries containing excluded elements or missing ``material_id``.
+
+    Args:
+        input_json: Sequence of dictionaries with ``"cif"`` and ``"material_id"`` keys.
+        exclude_elements: Element symbols to exclude.
 
     Returns:
-        list: 处理结果列表
+        Filtered list of material dictionaries.
     """
-    # 设置每个进程只使用1个CPU
+    print("excluding materials containing elements not supported")
+    filtered_json: list[dict[str, Any]] = []
+    for item in tqdm(
+        input_json,
+        position=0,
+        leave=True,
+        bar_format="{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}",
+    ):
+        ori = Structure.from_str(item["cif"], fmt="cif")
+        species = [str(sp) for sp in ori.species]
+        has_excluded = any(sp in exclude_elements for sp in species)
+        if not has_excluded and item["material_id"] is not None:
+            filtered_json.append(item)
+    excluded_pct = round((len(input_json) - len(filtered_json)) / len(input_json) * 100, 1)
+    print(f"{excluded_pct}% materials excluded")
+    return filtered_json
+
+
+def determine_bin_count(data_size: int, target_values: np.ndarray | Sequence[float]) -> int:
+    """Compute an adaptive histogram bin count averaging Sturges, Freedman-Diaconis, and Scott.
+
+    Args:
+        data_size: Number of non-null samples.
+        target_values: Numeric array of target property values.
+
+    Returns:
+        Integer bin count clamped to ``[5, max(5, data_size // 20)]``.
+    """
+    sturges_bins = math.ceil(math.log2(data_size)) + 1
+
+    q75, q25 = np.percentile(target_values, [75, 25])
+    iqr = q75 - q25
+    bin_width = 2 * iqr * (len(target_values) ** (-1 / 3))
+    fd_bins = math.ceil((max(target_values) - min(target_values)) / bin_width)
+
+    scott_denom = 3.5 * float(np.std(target_values)) * (len(target_values) ** (-1 / 3))
+    scott_bins = math.ceil((max(target_values) - min(target_values)) / scott_denom)
+
+    avg_bins = int(np.mean([sturges_bins, fd_bins, scott_bins]))
+    return max(min(avg_bins, data_size // 20), 5)
+
+
+def adaptive_dynamic_binning(
+    data: pd.DataFrame,
+    target_column: str,
+    test_size: float = 0.2,
+    random_state: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame, list[float]]:
+    """Perform quantile-binned stratified train/test splitting on a continuous target column.
+
+    Args:
+        data: Input DataFrame containing ``target_column``.
+        target_column: Name of the numeric regression column to stratify on.
+        test_size: Fraction of each bin assigned to the test split.
+        random_state: Random seed for reproducible per-bin splits and shuffles.
+
+    Returns:
+        Tuple ``(train_data, test_data, bin_edges)``.
+    """
+    working = data.copy()
+    working[target_column] = pd.to_numeric(working[target_column], errors="coerce")
+    data_cleaned = working.dropna(subset=[target_column]).copy()
+
+    print(f"\nOriginal row count: {len(data)}")
+    print(f"Cleaned row count: {len(data_cleaned)}")
+
+    target_values = data_cleaned[target_column].to_numpy()
+    n_bins = determine_bin_count(len(data_cleaned), target_values)
+    print(f"Automatically selected bin count: {n_bins}")
+
+    percentiles = [i * 100 / n_bins for i in range(n_bins + 1)]
+    bins = sorted(set(data_cleaned[target_column].quantile([p / 100 for p in percentiles])))
+    labels = [f"Bin{i + 1}" for i in range(len(bins) - 1)]
+
+    data_cleaned["bin"] = pd.cut(
+        data_cleaned[target_column], bins=bins, labels=labels, include_lowest=True
+    )
+
+    train_parts: list[pd.DataFrame] = []
+    test_parts: list[pd.DataFrame] = []
+    for bin_label in data_cleaned["bin"].unique():
+        bin_data = data_cleaned[data_cleaned["bin"] == bin_label]
+        if len(bin_data) > 1:
+            bin_train, bin_test = train_test_split(
+                bin_data, test_size=test_size, random_state=random_state
+            )
+            train_parts.append(bin_train)
+            test_parts.append(bin_test)
+        else:
+            train_parts.append(bin_data)
+
+    empty = pd.DataFrame(columns=data_cleaned.columns)
+    train_data = pd.concat(train_parts, ignore_index=False) if train_parts else empty.copy()
+    test_data = pd.concat(test_parts, ignore_index=False) if test_parts else empty.copy()
+
+    train_data = train_data.drop("bin", axis=1)
+    test_data = test_data.drop("bin", axis=1)
+
+    train_data = train_data.sample(frac=1, random_state=random_state).reset_index(drop=True)
+    test_data = test_data.sample(frac=1, random_state=random_state).reset_index(drop=True)
+    return train_data, test_data, [float(b) for b in bins]
+
+
+def _init_single_thread_worker() -> None:
+    """Configure single-threaded BLAS/OpenMP execution inside ``Pool`` workers."""
     os.environ["OMP_NUM_THREADS"] = "1"
     os.environ["MKL_NUM_THREADS"] = "1"
     os.environ["OPENBLAS_NUM_THREADS"] = "1"
     os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
-    # 确保进程数不超过数据量和CPU核心数
+
+def parallel_process_json(
+    process_func: Callable[..., Any],
+    data: Sequence[Any],
+    n_processes: int = 16,
+    output_file: str = "result.csv",
+    **kwargs: Any,
+) -> list[Any]:
+    """Process a sequence of items in parallel with ``multiprocessing.Pool`` (1 CPU/worker).
+
+    Args:
+        process_func: Worker callable accepting a single item from ``data`` and ``**kwargs``.
+        data: Sequence of items (typically loaded from JSON) to process.
+        n_processes: Maximum number of worker processes (capped to ``len(data)`` and CPUs).
+        output_file: Output file path for non-``None`` line results (empty string disables).
+        **kwargs: Additional keyword arguments bound via ``functools.partial``.
+
+    Returns:
+        List of non-``None`` results returned by ``process_func``.
+    """
+    _init_single_thread_worker()
+    if not data:
+        return []
     n_processes = min(n_processes, len(data), cpu_count())
+    print(f"Processing in parallel with {n_processes} worker process(es)...")
 
-    print(f"使用 {n_processes} 个进程进行并行处理...")
-
-    # 创建部分函数，预先填充kwargs
     func_with_kwargs = partial(process_func, **kwargs)
+    results: list[Any] = []
+    with (
+        Pool(processes=n_processes, initializer=_init_single_thread_worker) as pool,
+        tqdm(
+            total=len(data),
+            position=0,
+            leave=True,
+            bar_format="{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}",
+        ) as pbar,
+    ):
+        for result in pool.imap_unordered(func_with_kwargs, data, chunksize=1):
+            if result is not None:
+                results.append(result)
+            pbar.update(1)
 
-    # 使用Pool进行并行处理
-    results = []
-    with Pool(processes=n_processes) as pool:
-        # 使用imap_unordered来获得更好的性能，并添加进度条
-        with tqdm(total=len(data), position=0, leave=True,
-                  bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}') as pbar:
-            for result in pool.imap_unordered(func_with_kwargs, data, chunksize=1):
-                if result is not None:
-                    results.append(result)
-                pbar.update(1)
-
-    # 保存结果
     if results and output_file:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w", encoding="utf-8") as handle:
             for result in results:
-                f.write(str(result) + '\n')
-        print(f"结果已保存到: {output_file}")
+                handle.write(f"{result}\n")
+        print(f"Results saved to: {output_file}")
 
     return results
 
-def parallel_process_csv(process_func, filename, n_processes=16, output_file='result.csv', skip_header=False, **kwargs):
-    """
-    使用multiprocessing Pool进行并行处理CSV文件，每个进程使用单个CPU
+
+def parallel_process_csv(
+    process_func: Callable[..., Any],
+    filename: str,
+    n_processes: int = 16,
+    output_file: str = "result.csv",
+    skip_header: bool = False,
+    **kwargs: Any,
+) -> list[Any]:
+    """Process lines of a CSV file in parallel with ``multiprocessing.Pool`` (1 CPU/worker).
 
     Args:
-        process_func: 处理函数，接收单行文本和kwargs作为参数
-        filename (str): CSV文件路径
-        n_processes (int): 并行进程数，默认16
-        output_file (str): 输出文件名，默认'result.csv'
-        skip_header (bool): 是否跳过第一行，默认False
-        **kwargs: 传递给process_func的额外参数
+        process_func: Worker callable accepting a single text line and ``**kwargs``.
+        filename: Input CSV file path.
+        n_processes: Maximum number of worker processes (capped to line count and CPUs).
+        output_file: Output file path for non-``None`` line results (empty string disables).
+        skip_header: Whether to skip the first line of ``filename``.
+        **kwargs: Additional keyword arguments bound via ``functools.partial``.
 
     Returns:
-        list: 处理结果列表
+        List of non-``None`` results returned by ``process_func``.
     """
-    # 设置每个进程只使用1个CPU
-    os.environ["OMP_NUM_THREADS"] = "1"
-    os.environ["MKL_NUM_THREADS"] = "1"
-    os.environ["OPENBLAS_NUM_THREADS"] = "1"
-    os.environ["NUMEXPR_NUM_THREADS"] = "1"
-
-    # 读取CSV文件
-    with open(filename, 'r') as f:
-        lines = f.readlines()
+    _init_single_thread_worker()
+    with open(filename, encoding="utf-8") as handle:
+        lines = handle.readlines()
 
     if skip_header:
         lines = lines[1:]
-
-    # 过滤空行
     lines = [line for line in lines if line.strip()]
+    if not lines:
+        return []
 
-    # 确保进程数不超过数据量和CPU核心数
     n_processes = min(n_processes, len(lines), cpu_count())
+    print(f"Processing in parallel with {n_processes} worker process(es)...")
 
-    print(f"使用 {n_processes} 个进程进行并行处理...")
-
-    # 创建部分函数，预先填充kwargs
     func_with_kwargs = partial(process_func, **kwargs)
+    results: list[Any] = []
+    with (
+        Pool(processes=n_processes, initializer=_init_single_thread_worker) as pool,
+        tqdm(
+            total=len(lines),
+            position=0,
+            leave=True,
+            bar_format="{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}",
+        ) as pbar,
+    ):
+        for result in pool.imap_unordered(func_with_kwargs, lines, chunksize=1):
+            if result is not None:
+                results.append(result)
+            pbar.update(1)
 
-    # 使用Pool进行并行处理
-    results = []
-    with Pool(processes=n_processes) as pool:
-        # 使用imap_unordered来获得更好的性能，并添加进度条
-        with tqdm(total=len(lines), position=0, leave=True,
-                  bar_format='{desc:<5.5}{percentage:3.0f}%|{bar:15}{r_bar}') as pbar:
-            for result in pool.imap_unordered(func_with_kwargs, lines, chunksize=1):
-                if result is not None:
-                    results.append(result)
-                pbar.update(1)
-
-    # 保存结果
     if results and output_file:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w", encoding="utf-8") as handle:
             for result in results:
-                f.write(str(result) + '\n')
-        print(f"结果已保存到: {output_file}")
+                handle.write(f"{result}\n")
+        print(f"Results saved to: {output_file}")
 
     return results
