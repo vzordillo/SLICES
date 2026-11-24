@@ -522,7 +522,7 @@ def get_calculator(size: str, device: str) -> tuple[Any, str]:
         try:
             calc = _load_calculator(path, device)
             _self_test(calc)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             errors.append(f"{os.path.basename(path)}: {type(exc).__name__}: {exc}")
             _log(
                 f"could not use {os.path.basename(path)} "

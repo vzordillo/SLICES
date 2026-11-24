@@ -63,7 +63,7 @@ def _check_module(module_name: str, label: str, *, required: bool = True) -> tup
         if found:
             return True, f"[OK]   {label}: installed"
         return False, f"[INFO] {label}: not installed (optional)"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         tag = "[FAIL]" if required else "[WARN]"
         return False, f"{tag} {label}: {type(exc).__name__}: {exc}"
 
@@ -98,7 +98,7 @@ def _check_gfnff() -> tuple[bool, str]:
             f"({n_bonds} bonds, {n_angles} angles)"
         )
         return False, msg
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return False, f"[FAIL] slices.gfnff_helper: {type(exc).__name__}: {exc}"
 
 
@@ -119,7 +119,7 @@ def _check_relax_backends() -> tuple[bool, str]:
             True,
             f"[OK]   slices.relax_backends: auto -> {resolved_name} on {device} ({cache_note})",
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return False, f"[FAIL] slices.relax_backends: {type(exc).__name__}: {exc}"
 
 
@@ -133,7 +133,7 @@ def _check_cli() -> tuple[bool, str]:
             if callable(getattr(cli_mod, "main", None)):
                 bin_note = f"console script `{cli_bin}`" if cli_bin else "`python -m slices.cli`"
                 return True, f"[OK]   slices.cli: entry point ready ({bin_note})"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return False, f"[FAIL] slices.cli: import failed ({type(exc).__name__}: {exc})"
     if cli_bin:
         return True, f"[OK]   slices CLI binary found at {cli_bin}"
@@ -179,7 +179,7 @@ def _run_quick_roundtrip(use_relax: bool = False) -> tuple[bool, str]:
             f"{len(reconstructed)} sites reconstructed (E={energy:.1f})"
         )
         return True, msg
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return False, f"[FAIL] quick round-trip: {type(exc).__name__}: {exc}"
 
 

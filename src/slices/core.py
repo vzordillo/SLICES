@@ -352,7 +352,7 @@ class SLICES:
                 edge_indices[i, 0] = int(edge[0])
                 edge_indices[i, 1] = int(edge[1])
                 if edge_indices[i, 0] > num_atoms - 1 or edge_indices[i, 1] > num_atoms - 1:
-                    raise Exception("Error: wrong edge indices")  # noqa: TRY002
+                    raise Exception("Error: wrong edge indices")
                 for j in range(3):
                     if edge[j + 2] == "-":
                         to_jimages[i, j] = -1
@@ -361,7 +361,7 @@ class SLICES:
                     elif edge[j + 2] == "+":
                         to_jimages[i, j] = 1
                     else:
-                        raise Exception("Error: wrong edge label")  # noqa: TRY002
+                        raise Exception("Error: wrong edge label")
 
         if strategy == 1:
             temp_list = []
@@ -380,7 +380,7 @@ class SLICES:
                 self.atom_symbols[edge_indices[i, 0]] = edge[0]
                 self.atom_symbols[edge_indices[i, 1]] = edge[1]
                 if edge_indices[i, 0] > num_atoms - 1 or edge_indices[i, 1] > num_atoms - 1:
-                    raise Exception("Error: wrong edge indices")  # noqa: TRY002
+                    raise Exception("Error: wrong edge indices")
                 for j in range(3):
                     if edge[j + 4] == "-":
                         to_jimages[i, j] = -1
@@ -389,14 +389,14 @@ class SLICES:
                     elif edge[j + 4] == "+":
                         to_jimages[i, j] = 1
                     else:
-                        raise Exception("Error: wrong edge label")  # noqa: TRY002
+                        raise Exception("Error: wrong edge label")
             if "NaN" in self.atom_symbols:
-                raise Exception("Error: wrong atom symbols")  # noqa: TRY002
+                raise Exception("Error: wrong atom symbols")
 
         if strategy == 4:
             first_elem_idx = self._first_element_index(tokens)
             if first_elem_idx is None:
-                raise Exception("Error: no valid element symbols found")  # noqa: TRY002
+                raise Exception("Error: no valid element symbols found")
 
             if first_elem_idx > 0:
                 letter_enc = "".join(tokens[:first_elem_idx])
@@ -404,7 +404,7 @@ class SLICES:
                     space_group_num = get_space_group_num_from_letter_enc(letter_enc)
                 except Exception as err:
                     space_group_num = None
-                    raise Exception("Error: space_group_num = None") from err  # noqa: TRY002
+                    raise Exception("Error: space_group_num = None") from err
             else:
                 space_group_num = None
             for i in range(first_elem_idx, len(tokens)):
@@ -423,7 +423,7 @@ class SLICES:
                 edge_indices[i, 0] = int(edge[0])
                 edge_indices[i, 1] = int(edge[1])
                 if edge_indices[i, 0] > num_atoms - 1 or edge_indices[i, 1] > num_atoms - 1:
-                    raise Exception("Error: wrong edge indices")  # noqa: TRY002
+                    raise Exception("Error: wrong edge indices")
                 for j in range(3):
                     if edge[2][j] == "-":
                         to_jimages[i, j] = -1
@@ -432,7 +432,7 @@ class SLICES:
                     elif edge[2][j] == "+":
                         to_jimages[i, j] = 1
                     else:
-                        raise Exception("Error: wrong edge label")  # noqa: TRY002
+                        raise Exception("Error: wrong edge label")
 
         if fix_duplicate_edge:
             edge_data_ascending = []
@@ -569,7 +569,7 @@ class SLICES:
         to_jimages: np.ndarray,
         space_group_num: int | None,
     ) -> str:
-        """Serialize graph components using Strategy 4 (optional space-group token + compact labels).
+        """Serialize graph components via Strategy 4 (optional space-group token + compact labels).
 
         Args:
             atom_symbols: List of chemical element symbols in the unit cell.
@@ -662,7 +662,7 @@ class SLICES:
                 self.from_SLICES(SLICES, strategy, fix_duplicate_edge=False)
             else:
                 self.from_SLICES(SLICES, strategy, fix_duplicate_edge=True)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
         # Ensure rank of first homology group >= 3 for 3D embedding: rank H1(X,Z) = |E| - |E1|
         G = nx.MultiGraph()
@@ -731,7 +731,7 @@ class SLICES:
             net.simple_cycle_basis()
             net.get_lattice_basis()
             net.get_cocycle_basis()
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
         return True
 
@@ -748,7 +748,7 @@ class SLICES:
         """
         try:
             self.from_SLICES(SLICES, strategy)
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
         nodes_covered = []
         for i in self.edge_indices:
@@ -842,7 +842,7 @@ class SLICES:
             composition = Composition(extracted_string)
             formula = composition.formula.replace(" ", "")
             return formula
-        except Exception:  # noqa: BLE001
+        except Exception:
             print(SLICES, extracted_string)
             return None
 
@@ -868,7 +868,7 @@ class SLICES:
                 if primitive.composition.reduced_formula == structure.composition.reduced_formula:
                     return primitive
                 print("Warning: primitive cell changed the formula, using the input cell.")
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"Warning: primitive cell conversion failed, using the input cell: {e}")
         return structure
 
@@ -971,7 +971,7 @@ class SLICES:
                 space_group_num,
             )
             SLICES_set.add(original_SLICES)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"Error generating original SLICES: {e}")
 
         # Total candidate permutations to attempt
@@ -1024,7 +1024,7 @@ class SLICES:
                 try:
                     element = Element(symbol)
                     atom_types_aug.append(element.Z)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     invalid_symbols.append(symbol)
 
             if invalid_symbols:
@@ -1042,7 +1042,7 @@ class SLICES:
                     to_jimages_aug,
                     space_group_num,
                 )
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 print(f"Error generating SLICES: {e}")
                 continue
 
@@ -1129,7 +1129,7 @@ class SLICES:
         self.atom_types = np.array(structure.atomic_numbers)
         try:
             self.space_group_num = SpacegroupAnalyzer(structure).get_space_group_number()
-        except Exception:  # noqa: BLE001
+        except Exception:
             self.space_group_num = None
         edge_indices, to_jimages = [], []
         for i, j, to_jimage in structure_graph.graph.edges(data="to_jimage"):
@@ -1168,7 +1168,7 @@ class SLICES:
         try:
             analyzer = SpacegroupAnalyzer(structure)
             space_group_number = analyzer.get_space_group_number()
-        except Exception:  # noqa: BLE001
+        except Exception:
             space_group_number = None
 
         atom_types = np.array(structure.atomic_numbers)
@@ -1497,7 +1497,7 @@ class SLICES:
                 with open("inner_p_target.json", "w") as f:
                     json.dump(inner_p_target_dict, f)
             return inner_p_target, colattice_inds, colattice_weights
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(e)
             return None
 
@@ -1895,7 +1895,9 @@ class SLICES:
                 )
         # Repulsive Lennard-Jones term to prevent non-bonded atom collisions
         if repul:
-            coordinates_temp = self.get_coordinates(lattice_arcs, num_nodes, shortest_path, spanning)
+            coordinates_temp = self.get_coordinates(
+                lattice_arcs, num_nodes, shortest_path, spanning
+            )
             coordinates_temp_cart = np.dot(coordinates_temp, lattice_vectors_scaled)
             distance_matrix = self.all_distances(coordinates_temp_cart, coordinates_temp_cart)
             for i in range(len(uncovered_pair)):
@@ -1931,7 +1933,7 @@ class SLICES:
         lattice_type: int,
         metric_tensor_std: np.ndarray,
     ) -> float:
-        """Evaluate the ZL* objective function while printing per-bond/angle/repulsion diagnostics."""
+        """Evaluate the ZL* objective while printing per-bond/angle/repulsion diagnostics."""
         square_diff = 0.0
         metric_tensor, cocycle_rep = self.convert_params(
             x, ndim, int(order - 1), lattice_type, metric_tensor_std
@@ -2108,7 +2110,7 @@ class SLICES:
 
             sga = SpacegroupAnalyzer(structure_recreated_std)
             space_group_num = sga.get_space_group_number()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(f"Error in get_space_group_number: {e}")
             return None
         return space_group_num
@@ -2340,7 +2342,7 @@ class SLICES:
                 structure_recreated_opt,
                 structure_recreated_opt2,
             ], final_energy_per_atom
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(e)
             return [structure_recreated_std, structure_recreated_opt], 0
 
@@ -2451,7 +2453,7 @@ class SLICES:
         )
         if len(structures) == 3:
             return structures[-1], final_energy_per_atom
-        raise Exception("relax failed")  # noqa: TRY002
+        raise Exception("relax failed")
 
     def to_4structures(
         self,
@@ -2487,7 +2489,7 @@ class SLICES:
         try:
             std2, final_energy_per_atom = self.relax(structures[0])
             return [structures[0], std2, structures[1], structures[2]], final_energy_per_atom
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             print(e)
             return structures, final_energy_per_atom
 
@@ -2560,7 +2562,7 @@ class SLICES:
         stol: float = 0.3,
         angle_tol: float = 5,
     ) -> tuple[str, str, str, str]:
-        """Compare ``opt`` and ``std`` against ``ori`` via ``StructureMatcher`` and graph Jaccard."""
+        """Compare ``opt`` and ``std`` against ``ori`` via ``StructureMatcher`` and graph diff."""
         ori_checked = Structure.from_str(ori.to(fmt="poscar"), "poscar")
         opt_checked = Structure.from_str(opt.to(fmt="poscar"), "poscar")
         std_checked = Structure.from_str(std.to(fmt="poscar"), "poscar")
@@ -2593,7 +2595,7 @@ class SLICES:
         stol: float = 0.3,
         angle_tol: float = 5,
     ) -> tuple[str, str, str, str, str, str]:
-        """Compare ``opt2``, ``opt``, and ``std`` against ``ori`` via ``StructureMatcher`` and graph diff."""
+        """Compare ``opt2``, ``opt``, and ``std`` with ``ori`` via matcher and graph Jaccard."""
         ori_checked = Structure.from_str(ori.to(fmt="poscar"), "poscar")
         opt2_checked = Structure.from_str(opt2.to(fmt="poscar"), "poscar")
         opt_checked = Structure.from_str(opt.to(fmt="poscar"), "poscar")

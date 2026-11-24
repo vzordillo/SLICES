@@ -63,7 +63,7 @@ def formation_energy(
     """
     try:
         prim = SpacegroupAnalyzer(structure).get_primitive_standard_structure()
-    except Exception:  # noqa: BLE001
+    except Exception:
         prim = structure
     comp = prim.composition
     total = energy_per_atom * comp.num_atoms - sum(
@@ -118,7 +118,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for row in rows:
         try:
             probe.from_SLICES(row["SLICES"])
-        except Exception:  # noqa: BLE001, S112
+        except Exception:
             continue
         if len(probe.atom_types) <= args.max_atoms:
             picked.append(row)
@@ -133,7 +133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         t0 = time.time()
         try:
             cg = SLICES(relax_model=model)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"{model}: cannot be used here ({type(exc).__name__}: {exc})\n")
             continue
         setup = time.time() - t0
@@ -155,7 +155,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 err = ef - ref_ef
                 errors.append(abs(err))
                 details[model].append({"slices": row["SLICES"], "eform": ef, "ref": ref_ef})
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 failed += 1
                 details[model].append({"slices": row["SLICES"], "error": repr(exc)[:200]})
             times.append(time.time() - t1)

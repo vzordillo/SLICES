@@ -484,7 +484,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.verbose:
             traceback.print_exc()
         return 1
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"ERROR: Unexpected failure: {exc}", file=sys.stderr)
         if args.verbose:
             traceback.print_exc()

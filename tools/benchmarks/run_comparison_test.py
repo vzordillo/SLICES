@@ -56,7 +56,7 @@ def _formation_energy(
 
     try:
         prim = SpacegroupAnalyzer(structure).get_primitive_standard_structure()
-    except Exception:  # noqa: BLE001
+    except Exception:
         prim = structure
     comp = prim.composition
     total = energy_per_atom * comp.num_atoms - sum(
@@ -101,7 +101,7 @@ def _load_benchmark_samples(
             continue
         try:
             probe.from_SLICES(slices_str)
-        except Exception:  # noqa: BLE001, S112
+        except Exception:
             continue
         if len(probe.atom_types) <= max_atoms:
             ref_val = row.get("formation_energy_per_atom")
@@ -131,7 +131,7 @@ def _evaluate_model(
     t0 = time.perf_counter()
     try:
         backend = SLICES(relax_model=model_name)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {
             "model": model_name,
             "mode": mode_label,
@@ -176,7 +176,7 @@ def _evaluate_model(
                 rec["ref_eform"] = item["ref_eform"]
                 rec["abs_error"] = err
             records.append(rec)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             elapsed = time.perf_counter() - t_start
             times.append(elapsed)
             failed += 1
@@ -263,7 +263,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_atoms=args.max_atoms,
         use_examples=args.use_examples,
     )
-    print(f"Loaded {len(samples)} SLICES sample(s) (max_atoms={args.max_atoms}, seed={args.seed})\n")
+    print(
+        f"Loaded {len(samples)} SLICES sample(s) "
+        f"(max_atoms={args.max_atoms}, seed={args.seed})\n"
+    )
 
     all_runs: list[dict[str, Any]] = []
     modes = [False, True] if args.include_robust else [False]

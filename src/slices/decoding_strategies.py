@@ -63,7 +63,7 @@ _SUPPORTED_DECODE_STRATEGIES: tuple[int, ...] = (1, 3, 4)
 
 
 def is_approximately_integral(vect: np.ndarray, tolerance: float = 1e-6) -> bool:
-    """Return ``True`` if ``vect`` is non-zero and every entry is within ``tolerance`` of an integer.
+    """Return whether ``vect`` is non-zero and every entry is within ``tolerance`` of an integer.
 
     Uses elementwise comparison so vectors mixing slightly positive and slightly
     negative rounding residuals (e.g., ``[1.0 + 1e-8, 2.0 - 1e-8]``) are handled
@@ -369,7 +369,7 @@ class MultiStartOptimizer:
                     best_val = f_scalar
                     best_x = np.asarray(x_opt, dtype=float)
                     best_info = dict(info) if isinstance(info, dict) else {}
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 _logger.debug("Multi-start L-BFGS-B start %d failed: %s", start_idx, exc)
 
         if best_x is None:
@@ -488,7 +488,7 @@ class ProgressiveRelaxer:
                 if num_nodes <= 40:
                     return slices_inst.relax_large_cell1(structure)
                 return slices_inst.relax_large_cell2(structure)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 _logger.debug("Progressive relaxation tier %s failed: %s", tier["name"], exc)
             finally:
                 slices_inst.fmax = orig_fmax
@@ -754,7 +754,7 @@ def robust_decode(
             fallback_std, fallback_opt = structures[0], structures[1]
         elif len(structures) == 1:
             fallback_std = structures[0]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _logger.debug("Standard to_structures() failed, entering robust fallback: %s", exc)
 
     # Stage 2: Opt-in topology/bond-parameter fallback + seeded multi-start ZL*.

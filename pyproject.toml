@@ -103,8 +103,31 @@ extend-exclude = [
     "docs",
 ]
 
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "RUF",
+    "D",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.ruff.lint.per-file-ignores]
+# DEF-005 (RUL-03): Frozen top-of-file environment/warning setup before scientific imports.
 "src/slices/core.py" = ["E402"]
+# Frozen single-line 250-entry space-group Wyckoff encoding literal.
+"src/slices/utils_wyckoff.py" = ["E501"]
+# Standalone benchmark script sets OMP_NUM_THREADS=1 before importing NumPy/Pymatgen.
+"examples/3.benchmark_relax_models.py" = ["E402"]
+# Allow long SLICES/mock literals, concise test functions, raw Exception checks, and legacy noqa tags.
+"tests/**/*.py" = ["B017", "D100", "D101", "D102", "D103", "D104", "D107", "E501", "RUF100"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
