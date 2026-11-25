@@ -804,6 +804,27 @@ def _reconstruct_zl_multistart(
     return std_structure, opt_structure
 
 
+def _is_valid_relaxed_candidate(
+    struct: Structure | None,
+    energy: float,
+    slices_inst: SLICES | None = None,
+) -> bool:
+    """Return whether ``struct`` is non-None, finite-energy, and structurally valid."""
+    if struct is None:
+        return False
+    try:
+        energy_val = float(energy)
+    except (TypeError, ValueError):
+        return False
+    if not math.isfinite(energy_val):
+        return False
+    if slices_inst is not None:
+        return bool(slices_inst.check_structural_validity(struct))
+    from slices.core import SLICES as _SLICES
+
+    return bool(_SLICES.check_structural_validity(struct))
+
+
 def robust_decode(
     slices_inst: SLICES,
     slices_str: str,
@@ -820,8 +841,8 @@ def robust_decode(
     fails force-field relaxation, or leaves ``_last_gfnff_incomplete`` set due to
     dropped GFN-FF bonds, Stage 2/3 runs opt-in cycle-basis / covalent-radius
     fallbacks, Lorentz-Berthelot multi-start ZL* optimization, and progressive
-    relaxation tiers (falling back cleanly to Stage 1's structure if Stage 2/3
-    cannot improve upon a valid Stage 1 result).
+    relaxation tiers, then selects the lower-energy structurally valid candidate
+    between Stage 1 and Stage 2/3.
 
     Args:
         slices_inst: Active :class:`slices.core.SLICES` encoder/decoder instance.
@@ -893,13 +914,52 @@ def robust_decode(
                 f"All SLICES decoding strategies failed: {exc}"
             ) from exc
 
-    # Stage 3: Progressive force-field relaxation across candidates.
+    # Stage 3: Progressive force-field relaxation and candidate selection.
     if slices_inst.relaxer is not None:
+        valid_stage2: tuple[Structure, float] | None = None
+        stage2_fallback: tuple[Structure, float] | None = None
         for candidate in (opt_struct, std_struct):
             relaxed = ProgressiveRelaxer.relax_with_fallbacks(slices_inst, candidate)
-            if relaxed is not None:
-                return relaxed[0], float(relaxed[1])
-        if stage1_result is not None:
-            return stage1_result
+            if relaxed is None:
+                continue
+            cand_pair = (relaxed[0], float(relaxed[1]))
+            if stage2_fallback is None:
+                stage2_fallback = cand_pair
+            if _is_valid_relaxed_candidate(cand_pair[0], cand_pair[1], slices_inst):
+                valid_stage2 = cand_pair
+                break
+        stage2_result = valid_stage2 or stage2_fallback
 
+        if stage1_result is None and stage2_result is None:
+            return opt_struct, 0.0
+        if stage2_result is None:
+            assert stage1_result is not None
+            return stage1_result
+        if stage1_result is None:
+            return stage2_result
+
+        s1_valid = _is_valid_relaxed_candidate(stage1_result[0], stage1_result[1], slices_inst)
+        s2_valid = _is_valid_relaxed_candidate(stage2_result[0], stage2_result[1], slices_inst)
+        if s1_valid and not s2_valid:
+            return stage1_result
+        if s2_valid and not s1_valid:
+            return stage2_result
+        if s1_valid and s2_valid:
+            return (
+                stage1_result
+                if float(stage1_result[1]) <= float(stage2_result[1])
+                else stage2_result
+            )
+        s1_e = float(stage1_result[1])
+        s2_e = float(stage2_result[1])
+        if math.isfinite(s1_e) and math.isfinite(s2_e):
+            return stage1_result if s1_e <= s2_e else stage2_result
+        if math.isfinite(s1_e):
+            return stage1_result
+        return stage2_result
+
+    if slices_inst.check_structural_validity(opt_struct):
+        return opt_struct, 0.0
+    if stage1_result is not None and slices_inst.check_structural_validity(stage1_result[0]):
+        return stage1_result
     return opt_struct, 0.0

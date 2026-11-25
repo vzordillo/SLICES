@@ -21,10 +21,18 @@ from typing import Any
 
 import numpy as np
 import pytest
+from pymatgen.core.lattice import Lattice
+from pymatgen.core.structure import Structure
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 import slices.core as core_mod
 import slices.decoding_strategies as ds_mod
 from slices.core import SLICES, _classify_lattice_type
+from slices.decoding_strategies import (
+    ProgressiveRelaxer,
+    _is_valid_relaxed_candidate,
+    robust_decode,
+)
 from slices.exceptions import CocycleBasisError, LatticeBasisError
 from slices.tobascco_net import Net
 
@@ -267,3 +275,240 @@ def test_def031_controlled_skipped_bond_mock_alignment(
     assert ipt[1, 1] == 0.0
     assert ipt[0, 0] > 0.0 and ipt[2, 2] > 0.0 and ipt[3, 3] > 0.0
     np.testing.assert_array_equal(ipt, ipt_d)
+
+
+# === 4. robust_decode Stage 1 vs Stage 2 Energy & Structural-Validity Selection ===
+
+
+def _compute_mp_eform(
+    structure: Structure,
+    energy_per_atom: float,
+    chem_pot: dict[str, float],
+) -> float:
+    """Compute elemental-reference formation energy per atom matching benchmark scripts."""
+    try:
+        prim = SpacegroupAnalyzer(structure).get_primitive_standard_structure()
+    except Exception:
+        prim = structure
+    comp = prim.composition
+    total = energy_per_atom * comp.num_atoms - sum(
+        amt * chem_pot[el] for el, amt in comp.get_el_amt_dict().items()
+    )
+    return float(total / comp.num_atoms)
+
+
+def test_is_valid_relaxed_candidate_checks_none_finiteness_and_clashes(
+    slices_no_relax: SLICES,
+) -> None:
+    """Verify _is_valid_relaxed_candidate rejects None, NaN/Inf, and <0.5 A clashes."""
+    valid_na = Structure(Lattice.cubic(4.20), ["Na"], [[0.0, 0.0, 0.0]])
+    collapsed_self_image = Structure(Lattice.cubic(0.30), ["Na"], [[0.0, 0.0, 0.0]])
+    clashing_pair = Structure(
+        Lattice.cubic(5.00),
+        ["Na", "Cl"],
+        [[0.0, 0.0, 0.0], [0.04, 0.0, 0.0]],
+    )
+
+    assert _is_valid_relaxed_candidate(None, -3.5) is False
+    assert _is_valid_relaxed_candidate(valid_na, -3.5) is True
+    assert _is_valid_relaxed_candidate(valid_na, -3.5, slices_no_relax) is True
+    assert _is_valid_relaxed_candidate(valid_na, float("nan")) is False
+    assert _is_valid_relaxed_candidate(valid_na, float("inf")) is False
+    assert _is_valid_relaxed_candidate(valid_na, float("-inf")) is False
+    assert _is_valid_relaxed_candidate(collapsed_self_image, -8.0) is False
+    assert _is_valid_relaxed_candidate(clashing_pair, -8.0) is False
+
+
+def test_robust_decode_stage1_vs_stage2_selection_branches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify all Stage 1 vs Stage 2 energy, validity, finiteness, and no-relaxer branches."""
+    na_sli = "Na 0 0 +oo 0 0 o+o 0 0 oo+"
+    s1_valid = Structure(Lattice.cubic(4.10), ["Na"], [[0.0, 0.0, 0.0]])
+    s2_opt_valid = Structure(Lattice.cubic(4.25), ["Na"], [[0.0, 0.0, 0.0]])
+    s2_std_valid = Structure(Lattice.cubic(4.40), ["Na"], [[0.0, 0.0, 0.0]])
+    s1_invalid = Structure(Lattice.cubic(0.30), ["Na"], [[0.0, 0.0, 0.0]])
+    s2_invalid = Structure(Lattice.cubic(0.32), ["Na"], [[0.0, 0.0, 0.0]])
+
+    def run_mocked_case(
+        *,
+        with_relaxer: bool,
+        s1_out: tuple[Structure, float],
+        s2_reconstruct: tuple[Structure, Structure],
+        s2_relaxed_seq: list[tuple[Structure, float] | None],
+    ) -> tuple[Structure, float]:
+        inst = SLICES(relax_model=None)
+        if with_relaxer:
+            inst.relaxer = object()
+
+        def fake_to_structures() -> tuple[list[Structure], float]:
+            inst._last_gfnff_incomplete = True
+            s1_struct, s1_e = s1_out
+            if with_relaxer:
+                return [s1_struct, s1_struct, s1_struct], s1_e
+            return [s1_struct, s1_struct], 0.0
+
+        seq_iter = iter(s2_relaxed_seq)
+        monkeypatch.setattr(inst, "to_structures", fake_to_structures)
+        monkeypatch.setattr(
+            ds_mod,
+            "_reconstruct_zl_multistart",
+            lambda *_a, **_kw: s2_reconstruct,
+        )
+        monkeypatch.setattr(
+            ProgressiveRelaxer,
+            "relax_with_fallbacks",
+            lambda *_a, **_kw: next(seq_iter),
+        )
+        return robust_decode(inst, na_sli, strategy=4, n_starts=2, seed=0)
+
+    # 1. Stage 1 lower (or equal) energy wins when both candidates are structurally valid.
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_valid, -5.50),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[(s2_opt_valid, -5.10)],
+    )
+    assert out_struct is s1_valid and out_e == pytest.approx(-5.50)
+
+    tie_struct, tie_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_valid, -5.50),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[(s2_opt_valid, -5.50)],
+    )
+    assert tie_struct is s1_valid and tie_e == pytest.approx(-5.50)
+
+    # 2. Stage 2 lower energy wins when both candidates are structurally valid.
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_valid, -5.10),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[(s2_opt_valid, -5.50)],
+    )
+    assert out_struct is s2_opt_valid and out_e == pytest.approx(-5.50)
+
+    # 3. Stage 3 skips invalid relaxed opt_struct to find valid std_struct, which then wins.
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_valid, -5.10),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[(s2_invalid, -9.99), (s2_std_valid, -5.60)],
+    )
+    assert out_struct is s2_std_valid and out_e == pytest.approx(-5.60)
+
+    # 4. Structurally invalid lower-energy candidate loses to structurally valid candidate.
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_invalid, -9.99),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[(s2_opt_valid, -4.00)],
+    )
+    assert out_struct is s2_opt_valid and out_e == pytest.approx(-4.00)
+
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_valid, -4.00),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[(s2_invalid, -9.99), (s2_invalid, -9.50)],
+    )
+    assert out_struct is s1_valid and out_e == pytest.approx(-4.00)
+
+    # 5. Non-finite energy loses to finite structurally valid candidate.
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_valid, float("nan")),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[(s2_opt_valid, -4.00)],
+    )
+    assert out_struct is s2_opt_valid and out_e == pytest.approx(-4.00)
+
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_valid, -4.00),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[(s2_opt_valid, float("-inf")), None],
+    )
+    assert out_struct is s1_valid and out_e == pytest.approx(-4.00)
+
+    # 6. Neither candidate valid: lower finite energy fallback.
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=True,
+        s1_out=(s1_invalid, -6.20),
+        s2_reconstruct=(s2_invalid, s2_invalid),
+        s2_relaxed_seq=[(s2_invalid, -5.80), None],
+    )
+    assert out_struct is s1_invalid and out_e == pytest.approx(-6.20)
+
+    # 7. relaxer is None: prefers valid Stage 2 opt_struct, falls back to valid Stage 1 if invalid.
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=False,
+        s1_out=(s1_valid, 0.0),
+        s2_reconstruct=(s2_std_valid, s2_opt_valid),
+        s2_relaxed_seq=[],
+    )
+    assert out_struct is s2_opt_valid and out_e == 0.0
+
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=False,
+        s1_out=(s1_valid, 0.0),
+        s2_reconstruct=(s2_invalid, s2_invalid),
+        s2_relaxed_seq=[],
+    )
+    assert out_struct is s1_valid and out_e == 0.0
+
+    out_struct, out_e = run_mocked_case(
+        with_relaxer=False,
+        s1_out=(s1_invalid, 0.0),
+        s2_reconstruct=(s2_invalid, s2_invalid),
+        s2_relaxed_seq=[],
+    )
+    assert out_struct is s2_invalid and out_e == 0.0
+
+
+def test_nequip_robust_decode_oxyhydride_stage1_vs_stage2_selection(
+    repo_root: Path,
+    slices_nequip: SLICES,
+) -> None:
+    """Verify live NequIP robust_SLICES2structure picks lower-energy valid candidate on MP-20 oxyhydrides."""
+    slices_rows = _load_mp20_v4_slices(repo_root)
+    chem_pot = json.loads(
+        (repo_root / "data" / "mp20_nonmetal" / "chemPotMP.json").read_text(encoding="utf-8")
+    )
+
+    # mp-625477 (Eu2H6O6, row 994): Stage 1 (-1.6464 eV/atom) beats Stage 2 (-1.1823 eV/atom).
+    eu_sli = slices_rows[994]
+    assert slices_nequip.SLICES2formula(eu_sli) == "Eu2H6O6"
+    with contextlib.redirect_stdout(io.StringIO()):
+        eu_std_struct, eu_std_e = slices_nequip.SLICES2structure(eu_sli, strategy=4)
+        eu_rob_struct, eu_rob_e = slices_nequip.robust_SLICES2structure(
+            eu_sli,
+            strategy=4,
+            n_starts=3,
+            seed=0,
+        )
+    eu_std_eform = _compute_mp_eform(eu_std_struct, eu_std_e, chem_pot)
+    eu_rob_eform = _compute_mp_eform(eu_rob_struct, eu_rob_e, chem_pot)
+    assert slices_nequip.check_structural_validity(eu_rob_struct) is True
+    assert eu_rob_eform <= -1.64
+    assert eu_rob_eform == pytest.approx(eu_std_eform, abs=1e-9)
+    assert eu_rob_eform == pytest.approx(-1.646373, abs=1e-4)
+
+    # mp-1176505 (Lu4H4O8, row 563): Stage 2 (-2.7242 eV/atom, SG 14) beats Stage 1 (-2.7184 eV/atom).
+    lu_sli = slices_rows[563]
+    assert slices_nequip.SLICES2formula(lu_sli) == "Lu4H4O8"
+    with contextlib.redirect_stdout(io.StringIO()):
+        lu_std_struct, lu_std_e = slices_nequip.SLICES2structure(lu_sli, strategy=4)
+        lu_rob_struct, lu_rob_e = slices_nequip.robust_SLICES2structure(
+            lu_sli,
+            strategy=4,
+            n_starts=3,
+            seed=0,
+        )
+    lu_std_eform = _compute_mp_eform(lu_std_struct, lu_std_e, chem_pot)
+    lu_rob_eform = _compute_mp_eform(lu_rob_struct, lu_rob_e, chem_pot)
+    lu_rob_sg = int(SpacegroupAnalyzer(lu_rob_struct).get_space_group_number())
+    assert slices_nequip.check_structural_validity(lu_rob_struct) is True
+    assert lu_rob_eform < lu_std_eform
+    assert lu_rob_eform == pytest.approx(-2.724169, abs=1e-4)
+    assert lu_rob_sg == 14

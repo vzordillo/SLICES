@@ -1,6 +1,6 @@
 # API Reference: Opt-In Decoding Recovery Strategies (`slices.decoding_strategies`)
 
-**Package Version:** `4.0.2`  
+**Package Version:** `4.1.0`  
 **Primary Sources:** [`src/slices/decoding_strategies.py`](../../src/slices/decoding_strategies.py), [`src/slices/core.py`](../../src/slices/core.py) (`SLICES.robust_SLICES2structure`)
 
 ---
@@ -50,7 +50,10 @@ Decodes `slices_str` using a three-stage fallback cascade:
    - Evaluates uncovered and covered pair Lennard-Jones `[4*sigma, sigma]` parameters using **exact Lorentz-Berthelot arithmetic mixing** (`_evaluate_lorentz_lj_pairs` / `_compute_lorentz_pair_lj`, temporarily setting `slices_inst.lj_mixing = "lorentz"` inside a `try ... finally` block so the caller's original `lj_mixing` setting is always restored, even on exceptions; `DEF-001`).
    - Classifies `lattice_type` via `_classify_lattice_type(metric_tensor_std)` (`math.isclose(1e-9, 1e-12)` with transitive closure; `DEF-014`) and runs `AdaptiveConvergence` and seeded `MultiStartOptimizer` (`n_starts`, `seed`).
    - If Stage 2 raises an exception and `stage1_result` is available, cleanly returns `stage1_result` so Stage 2 never regresses a valid Stage 1 structure.
-3. **Stage 3 (Progressive Relaxation & Graceful Fallback):** When `slices_inst.relaxer is not None`, attempts `ProgressiveRelaxer.relax_with_fallbacks` across `(opt_struct, std_struct)`. If relaxation fails across all candidates, returns `stage1_result` when available, otherwise returns `(opt_struct, 0.0)` rather than crashing; raises `SLICESDecodingError` only if parsing or all reconstruction stages fail without any fallback structure.
+3. **Stage 3 (Progressive Relaxation & Lower-Energy Valid Candidate Selection):**
+   - **When `slices_inst.relaxer is not None`:** Evaluates `(opt_struct, std_struct)` sequentially through `ProgressiveRelaxer.relax_with_fallbacks(slices_inst, candidate)`, stopping at the first candidate passing `_is_valid_relaxed_candidate(struct, energy)` (`struct is not None`, `math.isfinite(float(energy))`, and `SLICES.check_structural_validity(struct)`) while retaining the first non-`None` relaxed candidate as `stage2_fallback` if neither passes validity (`stage2_result = valid_stage2 or stage2_fallback`). Compares `stage1_result` and `stage2_result`: returns whichever candidate is non-`None` when only one exists; returns the structurally valid candidate when only one passes `_is_valid_relaxed_candidate`; returns the **lower-energy candidate** (`stage1_result` if `float(stage1_result[1]) <= float(stage2_result[1])` else `stage2_result`) when both are structurally valid; and falls back to lower finite energy (or `stage2_result` / `(opt_struct, 0.0)`) if neither passes structural validity.
+   - **When `slices_inst.relaxer is None`:** Energies are unscored (`0.0`); returns `(opt_struct, 0.0)` when `slices_inst.check_structural_validity(opt_struct)` holds, falls back to `stage1_result` when `stage1_result` is available and structurally valid, and otherwise returns `(opt_struct, 0.0)`.
+   - Raises `SLICESDecodingError` only if parsing or all reconstruction stages fail without any fallback structure.
 
 ### `SLICES.robust_SLICES2structure`
 
@@ -131,10 +134,11 @@ def calculate_topology_timeout(num_atoms: int, num_bonds: int) -> int
 
 Computes an adaptive external topology-helper timeout in seconds (`min(120, ...)`). `calculate_xtb_timeout` is preserved as an alias.
 
-### Stage 2 Reconstruction, Symmetry Classification & Lorentz-Berthelot Internals
+### Stage 2 Reconstruction, Candidate Validation, Symmetry Classification & Lorentz-Berthelot Internals
 
-`_reconstruct_zl_multistart(slices_inst, n_starts=3, seed=0, ...)` orchestrates Stage 2 reconstruction and uses three internal helpers:
+`_reconstruct_zl_multistart(slices_inst, n_starts=3, seed=0, ...)` and `robust_decode` use four internal helpers:
 
+- `_is_valid_relaxed_candidate(struct: Structure | None, energy: float, slices_inst: SLICES | None = None) -> bool`: Returns `True` iff `struct is not None`, `math.isfinite(float(energy))`, and `SLICES.check_structural_validity(struct)` (delegating to `slices_inst.check_structural_validity` when provided, or lazily importing `SLICES` otherwise) so Stage 3 selects strictly finite-energy, clash-free candidates when available.
 - `_compute_lorentz_pair_lj(atom_types, pairs) -> list[list[float]]`: Computes exact arithmetic-mean `[(p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0]` on `LJ_PARAMS_LIST` `[4*sigma, sigma]` length columns in Angstrom (`DEF-001`).
 - `_evaluate_lorentz_lj_pairs(slices_inst, uncovered_pair) -> tuple[list[list[float]], list[list[float]]]`: When `hasattr(slices_inst, "lj_mixing")`, temporarily sets `slices_inst.lj_mixing = "lorentz"` inside a `try ... finally` block around `get_uncovered_pair_lj` / `get_covered_pair_lj` and unconditionally restores the original `slices_inst.lj_mixing`; otherwise falls back directly to `_compute_lorentz_pair_lj` (`DEF-001`).
 - `_classify_lattice_type(metric_tensor_std: np.ndarray, rel_tol: float = 1e-9, abs_tol: float = 1e-12) -> int`: Mirrors `slices.core._classify_lattice_type` verbatim using pairwise `math.isclose` with transitive closure (`1`, `23`, `22`, `21`, `3`), preserving crystallographic axial-length constraints on `metric_tensor_std` diagonals during Stage 2 multi-start ZL\* optimization (`DEF-014`).
