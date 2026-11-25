@@ -9,8 +9,9 @@ exact SLICES v4.0.2 baseline determinism.
 Key components:
 
 * :func:`robust_decode`: Multi-stage recovery pipeline (standard v4.0.2 fast
-  path -> optional cycle-basis / covalent-radii fallback + seeded multi-start
-  ZL* optimization -> progressive force-field relaxation).
+  path -> optional cycle-basis / incomplete-GFN-FF covalent-radii fallback +
+  Lorentz-Berthelot seeded multi-start ZL* optimization -> progressive
+  force-field relaxation).
 * :class:`MultiStartOptimizer`: Seeded multi-start L-BFGS-B wrapper using an
   isolated ``numpy.random.Generator`` (zero global RNG mutation).
 * :class:`AdaptiveConvergence`: Atom-count-scaled L-BFGS-B tolerances.
@@ -514,6 +515,73 @@ def calculate_topology_timeout(num_atoms: int, num_bonds: int) -> int:
 calculate_xtb_timeout = calculate_topology_timeout
 
 
+def _compute_lorentz_pair_lj(
+    atom_types: np.ndarray,
+    pairs: list[list[Any]] | np.ndarray,
+) -> list[list[float]]:
+    """Compute Lorentz-Berthelot arithmetic-mean ``[4*sigma, sigma]`` LJ parameters.
+
+    Both columns of ``LJ_PARAMS_LIST`` store length scales in Angstrom
+    (``[4*sigma, sigma]``), so exact Lorentz-Berthelot mixing is the arithmetic
+    mean across both columns.
+
+    Args:
+        atom_types: 1D array of site atomic numbers ``(N_atoms,)``.
+        pairs: Sequence of 0-based ``[i, j]`` atom-index pairs.
+
+    Returns:
+        List of ``[r_cut, sigma]`` parameter pairs in Angstrom.
+    """
+    from slices.config import LJ_PARAMS_LIST
+
+    lj_param: dict[int | float, list[float]] = {
+        row[0]: [float(row[1]), float(row[2])] for row in LJ_PARAMS_LIST
+    }
+    pair_lj: list[list[float]] = []
+    for pair in pairs:
+        i0, i1 = int(pair[0]), int(pair[1])
+        if i0 == i1:
+            pair_lj.append(lj_param[int(atom_types[i0])])
+        else:
+            p0 = lj_param[int(atom_types[i0])]
+            p1 = lj_param[int(atom_types[i1])]
+            pair_lj.append([(p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0])
+    return pair_lj
+
+
+def _evaluate_lorentz_lj_pairs(
+    slices_inst: SLICES,
+    uncovered_pair: list[list[Any]],
+) -> tuple[list[list[float]], list[list[float]]]:
+    """Evaluate uncovered and covered pair LJ parameters under Lorentz-Berthelot mixing.
+
+    Temporarily switches ``slices_inst.lj_mixing`` to ``"lorentz"`` inside a
+    ``try ... finally`` block when supported by ``slices_inst``, falling back to
+    :func:`_compute_lorentz_pair_lj` otherwise.
+
+    Args:
+        slices_inst: Active :class:`slices.core.SLICES` instance.
+        uncovered_pair: Non-bonded 0-based ``[i, j]`` atom-index pairs.
+
+    Returns:
+        Tuple ``(uncovered_pair_lj, covered_pair_lj)``.
+    """
+    if hasattr(slices_inst, "lj_mixing"):
+        orig_lj_mixing = slices_inst.lj_mixing
+        try:
+            slices_inst.lj_mixing = "lorentz"
+            return (
+                slices_inst.get_uncovered_pair_lj(uncovered_pair),
+                slices_inst.get_covered_pair_lj(),
+            )
+        finally:
+            slices_inst.lj_mixing = orig_lj_mixing
+    return (
+        _compute_lorentz_pair_lj(slices_inst.atom_types, uncovered_pair),
+        _compute_lorentz_pair_lj(slices_inst.atom_types, slices_inst.edge_indices),
+    )
+
+
 def _reconstruct_zl_multistart(
     slices_inst: SLICES,
     n_starts: int = 3,
@@ -541,8 +609,12 @@ def _reconstruct_zl_multistart(
         )
     net.get_cocycle_basis()
 
+    gfnff_incomplete_pre = bool(getattr(slices_inst, "_last_gfnff_incomplete", False))
     target_res = slices_inst.get_inner_p_target(bond_scaling)
-    if target_res is None or np.any(np.diag(target_res[0]) <= 0.0):
+    gfnff_incomplete = gfnff_incomplete_pre or bool(
+        getattr(slices_inst, "_last_gfnff_incomplete", False)
+    )
+    if target_res is None or gfnff_incomplete or np.any(np.diag(target_res[0]) <= 0.0):
         inner_p_target, colattice_inds, colattice_weights = (
             BondParameterFallback.build_inner_p_target(
                 slices_inst.atom_types,
@@ -554,8 +626,7 @@ def _reconstruct_zl_multistart(
         inner_p_target, colattice_inds, colattice_weights = target_res
 
     uncovered_pair = slices_inst.get_uncovered_pair(net.graph)
-    uncovered_pair_lj = slices_inst.get_uncovered_pair_lj(uncovered_pair)
-    covered_pair_lj = slices_inst.get_covered_pair_lj()
+    uncovered_pair_lj, covered_pair_lj = _evaluate_lorentz_lj_pairs(slices_inst, uncovered_pair)
 
     if net.cocycle is not None:
         net.periodic_rep = np.concatenate((net.cycle_rep, net.cocycle_rep), axis=0)
@@ -705,10 +776,13 @@ def robust_decode(
     """Decode ``slices_str`` using standard v4.0.2 decoding with multi-stage recovery fallbacks.
 
     Stage 1 executes the untouched ``SLICES.from_SLICES`` + ``SLICES.to_structures``
-    pipeline, returning immediately whenever standard decoding succeeds. Only if
-    standard reconstruction raises an error or fails force-field relaxation does
-    Stage 2/3 run opt-in cycle-basis / covalent-radius fallbacks, seeded
-    multi-start ZL* optimization, and progressive relaxation tiers.
+    pipeline, returning immediately whenever standard decoding succeeds with
+    complete GFN-FF bond targets. If standard reconstruction raises an error,
+    fails force-field relaxation, or leaves ``_last_gfnff_incomplete`` set due to
+    dropped GFN-FF bonds, Stage 2/3 runs opt-in cycle-basis / covalent-radius
+    fallbacks, Lorentz-Berthelot multi-start ZL* optimization, and progressive
+    relaxation tiers (falling back cleanly to Stage 1's structure if Stage 2/3
+    cannot improve upon a valid Stage 1 result).
 
     Args:
         slices_inst: Active :class:`slices.core.SLICES` encoder/decoder instance.
@@ -744,12 +818,16 @@ def robust_decode(
 
     fallback_std: Structure | None = None
     fallback_opt: Structure | None = None
+    stage1_result: tuple[Structure, float] | None = None
 
     # Stage 1: Standard untouched v4.0.2 path.
     try:
         structures, energy = slices_inst.to_structures()
+        gfnff_incomplete = bool(getattr(slices_inst, "_last_gfnff_incomplete", False))
         if slices_inst.relaxer is None or len(structures) == 3:
-            return structures[-1], float(energy)
+            if not gfnff_incomplete:
+                return structures[-1], float(energy)
+            stage1_result = (structures[-1], float(energy))
         if len(structures) >= 2:
             fallback_std, fallback_opt = structures[0], structures[1]
         elif len(structures) == 1:
@@ -765,6 +843,8 @@ def robust_decode(
             seed=seed,
         )
     except Exception as exc:
+        if stage1_result is not None:
+            return stage1_result
         if fallback_opt is not None:
             std_struct, opt_struct = fallback_std or fallback_opt, fallback_opt
         elif fallback_std is not None:
@@ -780,5 +860,7 @@ def robust_decode(
             relaxed = ProgressiveRelaxer.relax_with_fallbacks(slices_inst, candidate)
             if relaxed is not None:
                 return relaxed[0], float(relaxed[1])
+        if stage1_result is not None:
+            return stage1_result
 
     return opt_struct, 0.0

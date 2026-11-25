@@ -30,7 +30,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from functools import wraps
-from typing import Any
+from typing import Any, Literal
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -73,15 +73,19 @@ from slices.exceptions import (
     XTBExecutionError,
 )
 from slices.gfnff_helper import run_gfnff_helper, write_debug_files
-from slices.relax_backends import make_relaxer
+from slices.relax_backends import NEQUIP_OAM_ATOMIC_NUMBERS, make_relaxer
 from slices.tobascco_net import Net
 from slices.utils_wyckoff import get_space_group_num_from_letter_enc, get_tokenized_enc
 
+VALID_ELEMENT_MODES: tuple[str, ...] = ("legacy86", "nequip_oam", "gfnff103")
 VALID_GRAPH_METHODS: tuple[str, ...] = ("econnn", "crystalnn", "brunnernn", "mininn")
+VALID_LJ_MIXING_MODES: tuple[str, ...] = ("legacy", "lorentz")
 
 __all__ = [
     "SLICES",
+    "VALID_ELEMENT_MODES",
     "VALID_GRAPH_METHODS",
+    "VALID_LJ_MIXING_MODES",
     "CocycleBasisError",
     "GFNFFExecutionError",
     "GraphTopologyError",
@@ -165,6 +169,7 @@ class SLICES:
         fmax: float = 0.2,
         steps: int = 100,
         relax_model: str | None = "auto",
+        lj_mixing: Literal["legacy", "lorentz"] = "legacy",
     ) -> None:
         """Initialize a SLICES encoder/decoder instance.
 
@@ -195,23 +200,34 @@ class SLICES:
                 ``"m3gnet"``) are supported when their packages are installed.
                 After initialization, ``self.relax_model`` stores the resolved
                 canonical backend name.
+            lj_mixing: Combining rule for heteronuclear Lennard-Jones ``[4*sigma, sigma]``
+                steric parameters during ZL* optimization (``"legacy"`` preserves
+                v4.0.2 ``i[0]``-twice indexing; ``"lorentz"`` uses arithmetic
+                Lorentz-Berthelot mixing). Defaults to ``"legacy"``.
 
         Raises:
-            ValueError: If ``graph_method`` is not in ``VALID_GRAPH_METHODS``.
+            ValueError: If ``graph_method`` is not in ``VALID_GRAPH_METHODS`` or
+                ``lj_mixing`` is not in ``VALID_LJ_MIXING_MODES``.
         """
         gc.collect()
         if graph_method not in VALID_GRAPH_METHODS:
             raise ValueError(
                 f"Unsupported graph_method {graph_method!r}; choose from {VALID_GRAPH_METHODS}."
             )
+        if lj_mixing not in VALID_LJ_MIXING_MODES:
+            raise ValueError(
+                f"Unsupported lj_mixing {lj_mixing!r}; choose from {VALID_LJ_MIXING_MODES}."
+            )
         self.atom_types = atom_types
         self.edge_indices = edge_indices
         self.to_jimages = to_jimages
         self.graph_method = graph_method
         self.check_results = check_results
+        self.lj_mixing: Literal["legacy", "lorentz"] = lj_mixing
         self.atom_symbols: list[str] | None = None
         self.SLICES: str | None = None
         self.unstable_graph = False
+        self._last_gfnff_incomplete: bool = False
         self.fmax = fmax
         self.steps = steps
         self.space_group_num: int | None = None
@@ -251,26 +267,38 @@ class SLICES:
     # === Element, Dimensionality & Structure-Graph Construction ===
 
     @staticmethod
-    def check_element(structure: Structure) -> bool:
-        """Return whether every atom in ``structure`` has atomic number ``Z < 87``.
-
-        Enforces the ``Z <= 86`` element filter inherited from the legacy 86-element
-        GFN-FF parameter set (note: ``slices.gfnff_helper`` additionally supports
-        ``Z = 87..103`` via modern library fallback when invoked directly).
+    def check_element(
+        structure: Structure,
+        mode: Literal["legacy86", "nequip_oam", "gfnff103"] = "legacy86",
+    ) -> bool:
+        """Return whether every atom in ``structure`` belongs to the requested element set.
 
         Args:
             structure: Input pymatgen ``Structure``.
+            mode: Element-support tier to validate against (``"legacy86"`` for
+                ``Z <= 86``, ``"nequip_oam"`` for the 89-element NequIP-OAM set
+                ``{1..83, 89..94}``, or ``"gfnff103"`` for ``1 <= Z <= 103``).
+                Defaults to ``"legacy86"``.
 
         Returns:
-            ``True`` if all sites satisfy ``Z < 87``, else ``False``.
+            ``True`` if all sites satisfy the selected ``mode``, else ``False``.
 
         Raises:
+            ValueError: If ``mode`` is not in ``VALID_ELEMENT_MODES``.
             SLICESEncodingError: If ``structure`` contains zero sites.
         """
+        if mode not in VALID_ELEMENT_MODES:
+            raise ValueError(
+                f"Unsupported element check mode {mode!r}; choose from {VALID_ELEMENT_MODES}."
+            )
         if len(structure) == 0:
             raise SLICESEncodingError("Cannot check elements on an empty Structure with 0 sites.")
-        atom_types = np.array(structure.atomic_numbers)
-        return bool(atom_types.max() < 87)
+        if mode == "legacy86":
+            atom_types = np.array(structure.atomic_numbers)
+            return bool(int(atom_types.max()) < 87)
+        if mode == "nequip_oam":
+            return all(int(z) in NEQUIP_OAM_ATOMIC_NUMBERS for z in structure.atomic_numbers)
+        return all(1 <= int(z) <= 103 for z in structure.atomic_numbers)
 
     def check_2D(self, structure: Structure) -> bool:
         """Return whether all connected components of ``structure`` are 2-dimensional."""
@@ -345,6 +373,7 @@ class SLICES:
         SLICES: str,
         strategy: int = 4,
         fix_duplicate_edge: bool = True,
+        strict: bool = False,
     ) -> None:
         """Parse a SLICES string into ``atom_types``, ``edge_indices``, and ``to_jimages``.
 
@@ -353,10 +382,14 @@ class SLICES:
             strategy: Encoding strategy format (1, 3, or 4). Defaults to 4.
             fix_duplicate_edge: Whether to canonicalize edge orientation and
                 deduplicate identical edges. Defaults to ``True``.
+            strict: If ``True``, raise :class:`SLICESDecodingError` when trailing
+                partial edge tokens remain instead of silently truncating them.
+                Defaults to ``False``.
 
         Raises:
             SLICESDecodingError: If ``strategy`` is unsupported (including
-                encode-only ``strategy=2``) or no numeric edge tokens are present.
+                encode-only ``strategy=2``), no numeric/complete edge tokens are
+                present, or ``strict=True`` and trailing partial edge tokens exist.
             Exception: If element tokens, space-group prefix tokens, atom indices,
                 or periodic image labels are malformed.
         """
@@ -364,6 +397,7 @@ class SLICES:
         self.edge_indices = None
         self.to_jimages = None
         self.unstable_graph = False
+        self._last_gfnff_incomplete = False
         if strategy not in (1, 3, 4):
             if strategy == 2:
                 raise SLICESDecodingError(
@@ -384,7 +418,13 @@ class SLICES:
                     "Invalid Strategy 3 SLICES string: missing atom symbols or numeric edge tokens."
                 )
             self.atom_symbols = tokens[:num_atoms]
-            num_edges = int((len(tokens) - len(self.atom_symbols)) / 5)
+            edge_token_count = len(tokens) - len(self.atom_symbols)
+            if strict and edge_token_count % 5 != 0:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 3 SLICES string: trailing partial edge tokens "
+                    f"(expected multiple of 5 edge tokens, got {edge_token_count})."
+                )
+            num_edges = int(edge_token_count / 5)
             if num_edges == 0:
                 raise SLICESDecodingError(
                     "Invalid Strategy 3 SLICES string: no complete edges found."
@@ -420,6 +460,11 @@ class SLICES:
             if not temp_list:
                 raise SLICESDecodingError(
                     "Invalid Strategy 1 SLICES string: no numeric edge tokens found."
+                )
+            if strict and len(tokens) % 7 != 0:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 1 SLICES string: trailing partial edge tokens "
+                    f"(expected multiple of 7 tokens, got {len(tokens)})."
                 )
             if min(temp_list) < 0:
                 raise Exception("Error: wrong edge indices")
@@ -483,7 +528,13 @@ class SLICES:
             self.space_group_num = space_group_num
             self.atom_symbols = tokens[first_elem_idx : first_elem_idx + num_atoms]
             start_idx = first_elem_idx + len(self.atom_symbols)
-            num_edges = int((len(tokens) - start_idx) / 3)
+            edge_token_count = len(tokens) - start_idx
+            if strict and edge_token_count % 3 != 0:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 4 SLICES string: trailing partial edge tokens "
+                    f"(expected multiple of 3 edge tokens, got {edge_token_count})."
+                )
+            num_edges = int(edge_token_count / 3)
             if num_edges == 0:
                 raise SLICESDecodingError(
                     "Invalid Strategy 4 SLICES string: no complete edges found."
@@ -736,6 +787,7 @@ class SLICES:
         strategy: int = 4,
         dupli_check: bool = False,
         graph_rank_check: bool = True,
+        strict: bool = False,
     ) -> bool:
         """Validate whether a SLICES string satisfies syntax and 3D quotient-graph constraints.
 
@@ -748,15 +800,17 @@ class SLICES:
                 ``H1(X, Z) >= 3`` so Eon's method can construct a 3D embedding.
                 Set ``True`` for generative models and ``False`` when 3D
                 invertibility is not required. Defaults to ``True``.
+            strict: If ``True``, reject trailing partial edge tokens instead of
+                truncating them during parsing. Defaults to ``False``.
 
         Returns:
             ``True`` if ``SLICES`` passes validation, else ``False``.
         """
         try:
             if dupli_check:
-                self.from_SLICES(SLICES, strategy, fix_duplicate_edge=False)
+                self.from_SLICES(SLICES, strategy, fix_duplicate_edge=False, strict=strict)
             else:
-                self.from_SLICES(SLICES, strategy, fix_duplicate_edge=True)
+                self.from_SLICES(SLICES, strategy, fix_duplicate_edge=True, strict=strict)
         except Exception:
             return False
         # Ensure rank of first homology group >= 3 for 3D embedding: rank H1(X,Z) = |E| - |E1|
@@ -830,19 +884,26 @@ class SLICES:
             return False
         return True
 
-    def check_SLICES_basic(self, SLICES: str, strategy: int = 4) -> bool:
+    def check_SLICES_basic(
+        self,
+        SLICES: str,
+        strategy: int = 4,
+        strict: bool = False,
+    ) -> bool:
         """Perform lightweight syntax and node-coverage validation on a SLICES string.
 
         Args:
             SLICES: Input SLICES string.
             strategy: Encoding strategy number (1, 3, or 4). Defaults to 4.
+            strict: If ``True``, reject trailing partial edge tokens instead of
+                truncating them during parsing. Defaults to ``False``.
 
         Returns:
             ``True`` if ``SLICES`` parses cleanly and every atom participates in
             at least one edge, else ``False``.
         """
         try:
-            self.from_SLICES(SLICES, strategy)
+            self.from_SLICES(SLICES, strategy, strict=strict)
         except Exception:
             return False
         nodes_covered = []
@@ -1101,6 +1162,7 @@ class SLICES:
         shuffle_bond_order: bool = True,
         flip_bonds: bool = True,
         batch_multiplier: int = 10,
+        seed: int | None = None,
     ) -> list[str]:
         """Convert a ``Structure`` into deduplicated randomly augmented SLICES strings.
 
@@ -1121,11 +1183,15 @@ class SLICES:
                 image signs. Defaults to ``True``.
             batch_multiplier: Candidate-generation multiplier ``(num * batch_multiplier)``
                 used to sample unique permutations. Defaults to 10.
+            seed: Optional integer seed for isolated deterministic augmentation.
+                When ``None`` (default), preserves the legacy v4.0.2 global
+                ``random`` / ``set`` path. When an integer is supplied, uses an
+                isolated :class:`random.Random` instance and insertion-ordered
+                deduplication for 100% ``PYTHONHASHSEED``-invariant output
+                without mutating global RNG state.
 
         Returns:
-            List of up to ``num`` unique SLICES strings. Note that exact list
-            ordering across separate Python processes depends on ``PYTHONHASHSEED``
-            as well as ``random.seed``.
+            List of up to ``num`` unique SLICES strings.
         """
         # Extract crystal graph representation
         crystal_graph_rep = self.structure2crystal_graph_rep(structure)
@@ -1134,6 +1200,101 @@ class SLICES:
         edge_indices = crystal_graph_rep[1]
         to_jimages = crystal_graph_rep[2]
         space_group_num = crystal_graph_rep[3]
+
+        if seed is not None:
+            rng = random.Random(seed)
+            seen: dict[str, None] = {}
+            try:
+                original_SLICES = self.get_slices_by_strategy(
+                    strategy,
+                    atom_symbols,
+                    edge_indices,
+                    to_jimages,
+                    space_group_num,
+                )
+                seen[original_SLICES] = None
+            except Exception as e:
+                print(f"Error generating original SLICES: {e}")
+
+            total_permutations = num * batch_multiplier
+            orig_symbols = [str(Element.from_Z(i)) for i in atom_types]
+            for _ in range(total_permutations):
+                if len(seen) >= num:
+                    break
+                atom_symbols_aug = copy.deepcopy(atom_symbols)
+                edge_indices_aug = copy.deepcopy(edge_indices)
+                to_jimages_aug = copy.deepcopy(to_jimages)
+
+                if shuffle_atom_order:
+                    num_atoms = len(atom_symbols_aug)
+                    shuffled_indices = rng.sample(range(num_atoms), num_atoms)
+                    atom_symbols_aug = [atom_symbols_aug[i] for i in shuffled_indices]
+                    index_mapping = self.get_index_list_allow_duplicates(
+                        orig_symbols,
+                        atom_symbols_aug,
+                    )
+                    edge_indices_aug = np.array(
+                        [
+                            [index_mapping[edge[0]], index_mapping[edge[1]]]
+                            for edge in edge_indices_aug
+                        ]
+                    )
+
+                if shuffle_bond_order:
+                    bond_order = list(zip(edge_indices_aug, to_jimages_aug, strict=False))
+                    rng.shuffle(bond_order)
+                    if bond_order:
+                        edge_indices_tup, to_jimages_tup = zip(*bond_order, strict=False)
+                        edge_indices_aug = np.array(edge_indices_tup)
+                        to_jimages_aug = np.array(to_jimages_tup)
+                    else:
+                        edge_indices_aug, to_jimages_aug = ([], [])  # type: ignore[assignment]
+
+                if flip_bonds:
+                    for i in range(len(edge_indices_aug)):
+                        if rng.choice([True, False]):
+                            edge_indices_aug[i] = edge_indices_aug[i][::-1]
+                            to_jimages_aug[i] = -to_jimages_aug[i]
+
+                atom_types_aug = []
+                invalid_symbols = []
+                for symbol in atom_symbols_aug:
+                    try:
+                        element = Element(symbol)
+                        atom_types_aug.append(element.Z)
+                    except Exception:
+                        invalid_symbols.append(symbol)
+
+                if invalid_symbols:
+                    print(f"Warning: Could not find atomic numbers for symbols: {invalid_symbols}")
+                    continue
+
+                atom_types_aug = np.array(atom_types_aug)  # type: ignore[assignment]
+
+                try:
+                    SLICES_aug = self.get_slices_by_strategy(
+                        strategy,
+                        atom_symbols_aug,
+                        edge_indices_aug,
+                        to_jimages_aug,
+                        space_group_num,
+                    )
+                except Exception as e:
+                    print(f"Error generating SLICES: {e}")
+                    continue
+
+                seen[SLICES_aug] = None
+
+            if len(seen) < num:
+                print(
+                    f"Warning: Only generated {len(seen)} unique augmented SLICES strings "
+                    f"(target: {num}); insufficient unique permutations available."
+                )
+
+            slices_list = list(seen)
+            rng.shuffle(slices_list)
+            return slices_list[:num]
+
         # Track SLICES strings in a set to guarantee uniqueness
         SLICES_set = set()
 
@@ -1242,6 +1403,7 @@ class SLICES:
         structure: Structure,
         strategy: int = 4,
         num: int = 50,
+        seed: int | None = None,
     ) -> list[str]:
         """Generate augmented SLICES strings by randomly permuting atom order only.
 
@@ -1249,6 +1411,8 @@ class SLICES:
             structure: Input pymatgen ``Structure`` to encode and augment.
             strategy: Encoding strategy number (1, 2, 3, or 4). Defaults to 4.
             num: Target number of unique SLICES strings to generate. Defaults to 50.
+            seed: Optional integer seed forwarded to :meth:`structure2randomSLICES`.
+                Defaults to ``None``.
 
         Returns:
             List of up to ``num`` unique SLICES strings sharing identical bond
@@ -1261,6 +1425,7 @@ class SLICES:
             shuffle_atom_order=True,
             shuffle_bond_order=False,
             flip_bonds=False,
+            seed=seed,
         )
 
     def get_dim(self, structure: Structure) -> int:
@@ -1496,6 +1661,7 @@ class SLICES:
         Returns:
             Tuple ``(inner_p_target, colattice_inds, colattice_weights)``.
         """
+        self._last_gfnff_incomplete = False
         nbf, blist = self.get_nbf_blist()
         data = run_gfnff_helper(nbf)
         if self.check_results:
@@ -1514,6 +1680,7 @@ class SLICES:
                 index = temp2[0][0]
             else:
                 print("Cannot find bond!!!")
+                self._last_gfnff_incomplete = True
                 continue
             if np.isnan(data["vbond"][index][2]):
                 bond_weight.append(1)
@@ -1523,6 +1690,8 @@ class SLICES:
             inner_p_target[i, i] = round(
                 (data["vbond"][index][3] * 0.529177 * 1.05 * bond_scaling) ** 2, 5
             )
+        if np.any(np.diag(inner_p_target) <= 0):
+            self._last_gfnff_incomplete = True
         alist_original = np.array(data["alist"], dtype=int)
         colattice_inds: list[list[int]] = [[], []]
         colattice_weights: list[float] = []
@@ -1599,6 +1768,7 @@ class SLICES:
             Tuple ``(inner_p_target, colattice_inds, colattice_weights)``, or
             ``None`` if topology target generation raises an exception.
         """
+        self._last_gfnff_incomplete = False
         nbf, blist = self.get_nbf_blist()
         try:
             data = run_gfnff_helper(nbf)
@@ -1618,6 +1788,7 @@ class SLICES:
                     index = temp2[0][0]
                 else:
                     print("Cannot find bond!!!")
+                    self._last_gfnff_incomplete = True
                     continue
                 if np.isnan(data["vbond"][index][2]):
                     bond_weight.append(1)
@@ -1627,6 +1798,8 @@ class SLICES:
                 inner_p_target[i, i] = round(
                     (data["vbond"][index][3] * 0.529177 * 1.05 * bond_scaling) ** 2, 5
                 )
+            if np.any(np.diag(inner_p_target) <= 0):
+                self._last_gfnff_incomplete = True
             alist_original = np.array(data["alist"], dtype=int)
             colattice_inds: list[list[int]] = [[], []]
             colattice_weights: list[float] = []
@@ -1692,6 +1865,7 @@ class SLICES:
                     json.dump(inner_p_target_dict, f)
             return inner_p_target, colattice_inds, colattice_weights
         except Exception as e:
+            self._last_gfnff_incomplete = True
             print(e)
             return None
 
@@ -1748,7 +1922,14 @@ class SLICES:
 
         Returns:
             List of ``[r_cut, sigma]`` parameter pairs corresponding to ``uncovered_pair``.
+
+        Raises:
+            ValueError: If ``self.lj_mixing`` is not in ``VALID_LJ_MIXING_MODES``.
         """
+        if self.lj_mixing not in VALID_LJ_MIXING_MODES:
+            raise ValueError(
+                f"Unsupported lj_mixing {self.lj_mixing!r}; choose from {VALID_LJ_MIXING_MODES}."
+            )
         uncovered_pair_lj = []
         lj_param = {}
         for i in LJ_PARAMS_LIST:
@@ -1756,6 +1937,15 @@ class SLICES:
         for i in uncovered_pair:
             if i[0] == i[1]:
                 uncovered_pair_lj.append(lj_param[self.atom_types[i[0]]])
+            elif self.lj_mixing == "lorentz":
+                z0 = self.atom_types[i[0]]
+                z1 = self.atom_types[i[1]]
+                uncovered_pair_lj.append(
+                    [
+                        (lj_param[z0][0] + lj_param[z1][0]) / 2,
+                        (lj_param[z0][1] + lj_param[z1][1]) / 2,
+                    ]
+                )
             else:
                 uncovered_pair_lj.append(
                     [
@@ -1768,7 +1958,18 @@ class SLICES:
         return uncovered_pair_lj
 
     def get_covered_pair_lj(self) -> list[list[float]]:
-        """Return Lennard-Jones ``[cutoff, sigma]`` parameters for bonded atom pairs."""
+        """Return Lennard-Jones ``[cutoff, sigma]`` parameters for bonded atom pairs.
+
+        Returns:
+            List of ``[r_cut, sigma]`` parameter pairs corresponding to ``self.edge_indices``.
+
+        Raises:
+            ValueError: If ``self.lj_mixing`` is not in ``VALID_LJ_MIXING_MODES``.
+        """
+        if self.lj_mixing not in VALID_LJ_MIXING_MODES:
+            raise ValueError(
+                f"Unsupported lj_mixing {self.lj_mixing!r}; choose from {VALID_LJ_MIXING_MODES}."
+            )
         covered_pair_lj = []
         lj_param = {}
         for i in LJ_PARAMS_LIST:
@@ -1776,6 +1977,15 @@ class SLICES:
         for i in self.edge_indices:
             if i[0] == i[1]:
                 covered_pair_lj.append(lj_param[self.atom_types[i[0]]])
+            elif self.lj_mixing == "lorentz":
+                z0 = self.atom_types[i[0]]
+                z1 = self.atom_types[i[1]]
+                covered_pair_lj.append(
+                    [
+                        (lj_param[z0][0] + lj_param[z1][0]) / 2,
+                        (lj_param[z0][1] + lj_param[z1][1]) / 2,
+                    ]
+                )
             else:
                 covered_pair_lj.append(
                     [

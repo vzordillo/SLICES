@@ -50,6 +50,7 @@ from slices.exceptions import ModelDownloadError, RelaxBackendError
 
 if TYPE_CHECKING:
     import numpy as np
+    from ase import Atoms
     from pymatgen.core import Structure
 
 __all__ = [
@@ -58,6 +59,7 @@ __all__ = [
     "DOWNLOAD_TIMEOUT",
     "FIRE_PRESTEPS",
     "NEQUIP_MODEL_IDS",
+    "NEQUIP_OAM_ATOMIC_NUMBERS",
     "NEQUIP_PLANS",
     "OPTIMIZERS",
     "OVERLAP_TARGET",
@@ -82,6 +84,8 @@ NEQUIP_MODEL_IDS: dict[str, str] = {
     "M": "mir-group/NequIP-OAM-M:0.1",
     "L": "mir-group/NequIP-OAM-L:0.1",
 }
+# Exact 89-element OAM vocabulary {1..83, 89..94} (H-Bi and Ac-Pu; excludes Po-Ra and Am-Og).
+NEQUIP_OAM_ATOMIC_NUMBERS: frozenset[int] = frozenset(range(1, 84)) | frozenset(range(89, 95))
 # relax_model -> (model used for relaxation, model used for the final energy or None)
 NEQUIP_PLANS: dict[str, tuple[str, str | None]] = {
     "nequip-l": ("L", None),
@@ -570,6 +574,32 @@ def _optimize(target: Any, optimizer: str, fmax: float, steps: int) -> int:
     return int(used)
 
 
+def _validate_nequip_elements(atoms: Atoms) -> None:
+    """Validate that all atomic numbers in ``atoms`` belong to NequIP-OAM's 89-element set.
+
+    Args:
+        atoms: Input ASE ``Atoms`` structure prior to relaxation.
+
+    Raises:
+        RelaxBackendError: If ``atoms`` contains any element outside
+            ``NEQUIP_OAM_ATOMIC_NUMBERS`` (``{1..83, 89..94}``).
+    """
+    z_nums = atoms.get_atomic_numbers()
+    if all(int(z) in NEQUIP_OAM_ATOMIC_NUMBERS for z in z_nums):
+        return
+    unsupported: dict[int, str] = {}
+    for symbol, z_raw in zip(atoms.get_chemical_symbols(), z_nums, strict=False):
+        z = int(z_raw)
+        if z not in NEQUIP_OAM_ATOMIC_NUMBERS and z not in unsupported:
+            unsupported[z] = str(symbol)
+    formatted = ", ".join(f"{unsupported[z]} (Z={z})" for z in sorted(unsupported))
+    raise RelaxBackendError(
+        f"Unsupported element(s) for NequIP-OAM relaxation: {formatted}. "
+        "Supported 89-element NequIP-OAM atomic numbers are {1..83, 89..94} "
+        "(H-Bi and Ac-Pu; Po-Ra [84-88] and Am-Og [95-118] are not in the model vocabulary)."
+    )
+
+
 class NequIPRelaxer:
     """NequIP-OAM crystal relaxer matching the ``SLICES.relax`` dictionary interface.
 
@@ -613,7 +643,8 @@ class NequIPRelaxer:
     ) -> dict[str, Any]:
         """Relax ``structure`` with overlap pre-optimization and cell-collapse recovery.
 
-        Removes severe atomic overlaps prior to relaxation, guards against unphysical
+        Validates that all site elements belong to ``NEQUIP_OAM_ATOMIC_NUMBERS``,
+        removes severe atomic overlaps prior to relaxation, guards against unphysical
         cell collapse during optimization, and retries once with ``NequIP-OAM-S + FIRE``
         if a collapse is detected. Reports final energy using the plan's energy model.
 
@@ -626,11 +657,19 @@ class NequIPRelaxer:
         Returns:
             Dictionary containing ``final_structure``, ``trajectory`` (with ``energies``
             in total eV), ``steps``, ``preoptimized``, and ``retry``.
+
+        Raises:
+            RelaxBackendError: If ``structure`` contains elements outside
+                ``NEQUIP_OAM_ATOMIC_NUMBERS`` or if cell collapse persists.
         """
         from pymatgen.io.ase import AseAtomsAdaptor
 
-        structure, pre = preoptimize(structure)
         atoms = AseAtomsAdaptor.get_atoms(structure)
+        _validate_nequip_elements(atoms)
+        orig_structure = structure
+        structure, pre = preoptimize(structure)
+        if structure is not orig_structure:
+            atoms = AseAtomsAdaptor.get_atoms(structure)
         retry = 0
         try:
             with _collapse_guard(self.relax_calc, atoms):
