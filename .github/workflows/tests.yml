@@ -1,0 +1,104 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_nequip_suite:
+        description: "Also run full NequIP-OAM relaxation & golden equivalence suite"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_DEFAULT_INDEX: https://pypi.org/simple
+  PYTHONHASHSEED: "0"
+  OMP_NUM_THREADS: "1"
+  SLICES_TORCH_THREADS: "1"
+  SLICES_DEVICE: "cpu"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  lint-and-fast-tests:
+    name: Lint, Bytecode & Fast Offline Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.10 and CPU dependencies
+        run: |
+          uv sync --python 3.10 --extra cpu --group dev --default-index https://pypi.org/simple
+          git checkout -- uv.lock
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Lint with Ruff
+        run: ruff check src/ examples/ tools/ tests/
+
+      - name: Compile Python bytecode
+        run: python -m compileall -q -x 'error\.py' src/ examples/ tools/ tests/
+
+      - name: Validate core installation and bundled GFN-FF
+        run: python tools/validate_installation.py --quick
+
+      - name: Run offline unit and regression test suite
+        run: |
+          pytest -p no:cacheprovider \
+            tests/unit \
+            tests/regression \
+            -k "not (nequip or snf_unimodular_rescue or standard_decoding_never_invokes_robust_decode or live_ndsiru_parity or get_relaxer_delegates_none_and_auto or ndsiru_oxidation_state_element_comparator or single_atom_primitive_cell_cocycle_none_branch or public_api_defaults_m3gnet_guidance or gfnff_incomplete_flag_lifecycle)"
+
+  nequip-full-suite:
+    name: Full NequIP-OAM & Golden Suite (Manual)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_nequip_suite == true }}
+    needs: lint-and-fast-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Cache NequIP-OAM weights and compiled models
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nequip
+            ~/.cache/slices
+          key: slices-nequip-cpu-v4.1-${{ hashFiles('pyproject.toml') }}
+
+      - name: Install Python 3.10 and CPU dependencies
+        run: |
+          uv sync --python 3.10 --extra cpu --group dev --default-index https://pypi.org/simple
+          git checkout -- uv.lock
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare NequIP-OAM models
+        run: python -m slices.relax_backends --prepare
+
+      - name: Run full unified pytest suite
+        run: pytest -p no:cacheprovider tests/
