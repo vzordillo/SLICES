@@ -61,7 +61,7 @@ def test_rul07_lazy_import_leaves_omp_and_keras_env_untouched(repo_root: Path) -
         check=True,
     )
     result = json.loads(proc.stdout.strip())
-    assert result["version"] == "4.0.2"
+    assert result["version"] == "4.1.0"
     assert result["omp"] is None
     assert result["keras"] is None
     assert result["core_loaded"] is False

@@ -32,7 +32,7 @@ from slices.exceptions import (
 if TYPE_CHECKING:
     from slices.core import SLICES
 
-__version__ = "4.0.2"
+__version__ = "4.1.0"
 
 __all__ = [
     "SLICES",

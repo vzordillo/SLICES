@@ -4,9 +4,9 @@ All notable changes to SLICES are documented in this file. Commit hashes referen
 
 ---
 
-## [Unreleased — `exp/v4.1-algo-upgrades`] — 2026-11-25 (`d922032`..`36fa8e5`)
+## [4.1.0] — 2026-11-25
 
-Experimental algorithmic upgrade branch (`exp/v4.1-algo-upgrades`, branched from `9a51a73`) implementing four core mathematical and topological upgrades (`d922032`, `cd76ac5`, `36fa8e5`) verified against the locked `v4.0.2-baseline` (`f248b3c`) control group (`294 passed, 5 skipped, 0 failed` pytest + full `2,383`-crystal MP-20 & `39,244`-string `cRNN` paired A/B evaluation).
+Promoted `exp/v4.1-algo-upgrades` (`d922032`..`9df6d8a`, branched from `9a51a73`) onto `main` via linear fast-forward merge and bumped the package version to `4.1.0`, delivering four core mathematical and topological upgrades verified against the locked `v4.0.2-baseline` (`f248b3c`) control group (`294 passed, 5 skipped, 0 failed` pytest + full `2,383`-crystal MP-20 & `39,244`-string `cRNN` paired A/B evaluation).
 
 ### Changed & Fixed
 

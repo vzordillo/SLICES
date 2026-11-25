@@ -101,7 +101,7 @@ class TestPackageExportsAndLazyImports:
 
     def test_top_level_version_and_exception_reexports(self) -> None:
         """Verify slices.__version__ and all exception classes are exported at top level."""
-        assert slices.__version__ == "4.0.2"
+        assert slices.__version__ == "4.1.0"
         for symbol in exc_mod.__all__:
             assert symbol in slices.__all__
             assert getattr(slices, symbol) is getattr(exc_mod, symbol)
@@ -119,7 +119,7 @@ class TestPackageExportsAndLazyImports:
             "import os, sys\n"
             "import slices\n"
             "import slices.exceptions\n"
-            "assert slices.__version__ == '4.0.2'\n"
+            "assert slices.__version__ == '4.1.0'\n"
             "assert 'OMP_NUM_THREADS' not in os.environ\n"
             "assert 'TF_USE_LEGACY_KERAS' not in os.environ\n"
             "for heavy in ('torch', 'tensorflow', 'slices.core'):\n"
