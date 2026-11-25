@@ -7,7 +7,7 @@
 
 ## 1. Periodic Quotient Graphs (`slices.tobascco_net`)
 
-Adapted from Boyd & Woo's `tobascco` graph-theoretic net-embedding algorithms (Eon's barycentric placement and metric-tensor projection). Core topological basis selection (`DEF-003`) remains strictly frozen at upstream SLICES v4.0.2 (`0.0` ULP drift), while Wave 1 eliminated all `np.matrix` usage (`np.linalg.inv`, `DEF-011`), dead `np.random` mutations (`DEF-004`), mutable default arguments (`DEF-010`), and rectangular bounds overflows (`DEF-034`).
+Adapted from Boyd & Woo's `tobascco` graph-theoretic net-embedding algorithms (Eon's barycentric placement and metric-tensor projection). Primary SymPy single-nullspace-vector basis selection retains bit-identical outputs on already-passing nets (`0.0` ULP drift), while `Net.get_lattice_basis()` falls back strictly on pivot failure (`basis == -1`) to exact integer Smith Normal Form (`Net._get_lattice_basis_via_snf`, `DEF-003`). All `np.matrix` usage (`np.linalg.inv`, `DEF-011`), dead `np.random` mutations (`DEF-004`), mutable default arguments (`DEF-010`), and rectangular bounds overflows (`DEF-034`) have been eliminated; legacy non-SNF alterations (`is_integral`, `iter_cycles`, unconditional cycle reordering) remain frozen.
 
 ### Public Exports (`slices.tobascco_net.__all__`)
 
@@ -45,7 +45,8 @@ class Net:
 |---|---|---|
 | `simple_cycle_basis` | `(self) -> None` | Builds fundamental cycle basis (`self.cycle`) and cycle voltages (`self.cycle_rep`) from a minimum spanning tree without touching global `np.random` (`DEF-004`). |
 | `get_cycle_basis` | `(self) -> None` | Builds cycle basis of rank `E - V + 1` via `iter_cycles`. |
-| `get_lattice_basis` | `(self) -> int` | Uses SymPy rational nullspace arithmetic (with zero `np.random` state mutation; `DEF-004`) to find `ndim` integral cycle combinations spanning unit lattice translations. Returns `1` on success and `-1` on failure (`DEF-003`, `DEF-021`). |
+| `get_lattice_basis` | `(self) -> int` | Runs the primary SymPy rational single-nullspace-vector search first (zero `np.random` state mutation, `DEF-004`; bit-identical basis on passing nets), falling back strictly on pivot failure (`if not found_vector:`) to exact integer Smith Normal Form (`_get_lattice_basis_via_snf`). Returns `1` on success, or sets `self.lattice_basis = None` and returns `-1` on failure (`DEF-003`, `DEF-021`). |
+| `_get_lattice_basis_via_snf` | `(self) -> bool` | Internal exact integer Smith Normal Form fallback over `sympy.ZZ` (`DomainMatrix` + `smith_normal_decomp`). Factors `(m, d)` integer `self.cycle_rep` (`m >= d`) as `D = U * C * V`, verifies unimodularity (`|D[k, k]| == 1` for all `k in range(d)` and `|det(V)| == 1`), constructs left-inverse `W = V * S * U[:d, :]` satisfying `W * C == I_d` over `ZZ`, and sets `self.lattice_basis = (W @ cycle).astype(float)` (falling back to exact `DomainMatrix` multiplication when `max|W| > 10**12` or `max|cycle| > 10**6`). Returns `True` iff populated with a valid integral `(ndim, shape)` basis; `False` for rank-deficient or proper-sublattice nets (`DEF-003`). |
 | `get_cocycle_basis` | `(self) -> None` | Constructs oriented cutset basis (`self.cocycle`, `self.cocycle_rep`) of size `V - 1` (`None` when `V == 1`). |
 | `get_metric_tensor` | `(self) -> None` | Computes barycentric metric tensor `L @ eon_projection @ L.T`. |
 | `barycentric_embedding` | `(self) -> None` | Sets zero cocycle coordinates (`periodic_rep`) and computes standard metric tensor. |

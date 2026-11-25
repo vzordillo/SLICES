@@ -16,9 +16,9 @@ Central navigation hub for **SLICES v4.0.2** documentation, API references, benc
 
 ---
 
-## Quantitative Benchmarks (`v4.0.2-baseline`)
+## Quantitative Benchmarks (`v4.0.2-baseline` & `exp/v4.1-algo-upgrades`)
 
-Locked full-dataset MP-20 non-metal baseline (`2,383` structures, `nequip-s+l` CPU, paired `default` / `lorentz` / `robust` passes) archived on tag `v4.0.2-baseline` (`f248b3c`):
+Locked full-dataset MP-20 non-metal control baseline (`2,383` structures, `nequip-s+l` CPU, paired `default` / `lorentz` / `robust` passes) archived on tag `v4.0.2-baseline` (`f248b3c`):
 
 | Artifact | Scope |
 |---|---|
@@ -26,6 +26,16 @@ Locked full-dataset MP-20 non-metal baseline (`2,383` structures, `nequip-s+l` C
 | [summary.json](../benchmark/v4_0_2_baseline/summary.json) | Machine-readable aggregate metrics, crystal-system summaries, paired transition counts, and environment metadata |
 | [per_structure_metrics.csv](../benchmark/v4_0_2_baseline/per_structure_metrics.csv) | Wide-format control-group dataset (`2,383` rows × `53` columns) with lossless float64 formation energies and per-structure relaxation telemetry |
 | [run_mp20_baseline.py](../tools/benchmarks/run_mp20_baseline.py) | Reproducible multi-process benchmark runner (`24` spawned CPU workers, 1-to-1 MP-20 reference CIF join) |
+
+Paired A/B evaluation of experimental branch `exp/v4.1-algo-upgrades` (`DEF-003`, `DEF-014`, `DEF-021`, `DEF-031`) against locked `v4.0.2-baseline` across `2,383` MP-20 structures and `39,244` conditioned-RNN (`cRNN`) strings:
+
+| Artifact | Scope |
+|---|---|
+| [AB_COMPARISON_REPORT.md](../benchmark/v4_1_experimental/AB_COMPARISON_REPORT.md) | Head-to-head scientific A/B report: 5-comparison McNemar/Wilcoxon matrix, zero-regression audit, SNF rescue table, incomplete-GFN-FF oxyhydride diagnostics, crystal-system latency breakdown, `cRNN` validity scan, golden oracle deltas, and promotion recommendation |
+| [ab_vs_v4_0_2.json](../benchmark/v4_1_experimental/ab_vs_v4_0_2.json) | Machine-readable paired statistical comparison (McNemar & Wilcoxon p-values, crystal-system latencies, rescued/oxyhydride crystal records, and 5-corpus `cRNN` audit) |
+| [summary.json](../benchmark/v4_1_experimental/summary.json) | Candidate 3-pass aggregate metrics, crystal-system summaries, and environment metadata on `exp/v4.1-algo-upgrades` |
+| [per_structure_metrics.csv](../benchmark/v4_1_experimental/per_structure_metrics.csv) | Candidate wide-format dataset (`2,383` rows × `53` columns) aligned 1-to-1 with `v4.0.2-baseline` |
+| [compare_ab_baselines.py](../tools/benchmarks/compare_ab_baselines.py) | Paired statistical A/B comparison and `cRNN` validity-rate audit CLI |
 
 ---
 

@@ -7,7 +7,7 @@
 
 ## 1. Freeze Isolation Policy
 
-`slices.decoding_strategies` is **strictly opt-in**. Default `SLICES.to_structures()`, `SLICES.SLICES2structure()`, and `Net.get_lattice_basis()` remain frozen (`DEF-002`) and **never import or invoke** any function from this module. Wave 3 (`DEF-001`, `DEF-015`, `DEF-031`) upgraded the opt-in Stage 1 -> Stage 2 handoff and Stage 2 Lorentz-Berthelot pair mixing strictly within this module.
+`slices.decoding_strategies` is **strictly opt-in**. Default `SLICES.to_structures()`, `SLICES.SLICES2structure()`, and `Net.get_lattice_basis()` **never import or invoke** any function from this module (`DEF-002`). Opt-in multi-stage recovery includes automatic Stage 1 -> Stage 2 handoff on incomplete GFN-FF targets (`DEF-015`, `DEF-031`), Lorentz-Berthelot pair mixing (`DEF-001`), SNF-first basis lookup (`DEF-003`), and transitive `math.isclose` lattice symmetry classification (`DEF-014`).
 
 To use multi-stage recovery decoding, callers must explicitly invoke either:
 - `slices_inst.robust_SLICES2structure(slices_str, ...)` on a `SLICES` instance,
@@ -41,14 +41,14 @@ def robust_decode(
 
 Decodes `slices_str` using a three-stage fallback cascade:
 
-1. **Stage 1 (Exact v4.0.2 Fast Path & Incomplete-GFN-FF Detection):** Validates `strategy in (1, 3, 4)` (raising `SLICESDecodingError` on encode-only `strategy=2` or unknown strategies), parses via `slices_inst.from_SLICES(...)`, and executes untouched `slices_inst.to_structures()`. Checks `gfnff_incomplete = bool(getattr(slices_inst, "_last_gfnff_incomplete", False))` (`DEF-015`, `DEF-031`):
-   - When `(slices_inst.relaxer is None or len(structures) == 3)` **and** `not gfnff_incomplete`, returns `(structures[-1], float(energy))` immediately with `0%` overhead and bit-for-bit v4.0.2 output.
+1. **Stage 1 (Standard Fast Path & Incomplete-GFN-FF Detection):** Validates `strategy in (1, 3, 4)` (raising `SLICESDecodingError` on encode-only `strategy=2` or unknown strategies), parses via `slices_inst.from_SLICES(...)`, and executes standard `slices_inst.to_structures()`. Checks `gfnff_incomplete = bool(getattr(slices_inst, "_last_gfnff_incomplete", False))` (`DEF-015`, `DEF-031`):
+   - When `(slices_inst.relaxer is None or len(structures) == 3)` **and** `not gfnff_incomplete`, returns `(structures[-1], float(energy))` immediately with `0%` overhead and bit-for-bit `SLICES2structure()` output.
    - When `gfnff_incomplete` is `True` (indicating `"Cannot find bond!!!"`, a non-positive diagonal in `inner_p_target`, or a GFN-FF target error during Stage 1), saves `(structures[-1], float(energy))` as `stage1_result` and automatically advances into Stage 2/3 recovery rather than stopping on Stage 1's incomplete-GFN-FF geometry.
 2. **Stage 2 (Opt-In Recovery with Covalent-Radius Fallback & Lorentz-Berthelot Multi-Start ZL\*):** Runs `_reconstruct_zl_multistart(slices_inst, n_starts=n_starts, seed=seed)`:
-   - Retries lattice-basis discovery via `CycleBasisOptimizer.find_lattice_basis` when needed.
+   - Retries lattice-basis discovery via `CycleBasisOptimizer.find_lattice_basis` (which calls SNF-backed `net.get_lattice_basis()` first) when needed.
    - Switches to `BondParameterFallback.build_inner_p_target(...)` whenever `get_inner_p_target()` returns `None`, `gfnff_incomplete` is `True` (before or after `get_inner_p_target`), or `np.any(np.diag(target_res[0]) <= 0.0)`.
    - Evaluates uncovered and covered pair Lennard-Jones `[4*sigma, sigma]` parameters using **exact Lorentz-Berthelot arithmetic mixing** (`_evaluate_lorentz_lj_pairs` / `_compute_lorentz_pair_lj`, temporarily setting `slices_inst.lj_mixing = "lorentz"` inside a `try ... finally` block so the caller's original `lj_mixing` setting is always restored, even on exceptions; `DEF-001`).
-   - Runs `AdaptiveConvergence` and seeded `MultiStartOptimizer` (`n_starts`, `seed`).
+   - Classifies `lattice_type` via `_classify_lattice_type(metric_tensor_std)` (`math.isclose(1e-9, 1e-12)` with transitive closure; `DEF-014`) and runs `AdaptiveConvergence` and seeded `MultiStartOptimizer` (`n_starts`, `seed`).
    - If Stage 2 raises an exception and `stage1_result` is available, cleanly returns `stage1_result` so Stage 2 never regresses a valid Stage 1 structure.
 3. **Stage 3 (Progressive Relaxation & Graceful Fallback):** When `slices_inst.relaxer is not None`, attempts `ProgressiveRelaxer.relax_with_fallbacks` across `(opt_struct, std_struct)`. If relaxation fails across all candidates, returns `stage1_result` when available, otherwise returns `(opt_struct, 0.0)` rather than crashing; raises `SLICESDecodingError` only if parsing or all reconstruction stages fail without any fallback structure.
 
@@ -85,7 +85,7 @@ Opt-in cycle-ordering and lattice-basis retry utilities (never mutates `tobascco
 
 - `is_approximately_integral(vect: np.ndarray, tolerance: float = 1e-6) -> bool` (`@staticmethod`): Delegates to module-level `is_approximately_integral`.
 - `select_optimal_cycle_basis(cycle_rep: np.ndarray, max_attempts: int = 50, seed: int | None = 0) -> np.ndarray` (`@staticmethod`): Samples seeded row permutations via `np.random.default_rng(seed)` and scores leading spanning subsets by SVD conditioning (`s_min / s_max`) rather than permutation-invariant matrix rank.
-- `find_lattice_basis(cls, net: Net, max_attempts: int = 20, tolerance: float = 1e-6, seed: int | None = 0) -> bool` (`@classmethod`): Attempts to populate `net.lattice_basis` via SymPy nullspace search across seeded cycle-row permutations using `is_approximately_integral(..., tolerance=tolerance)`.
+- `find_lattice_basis(cls, net: Net, max_attempts: int = 20, tolerance: float = 1e-6, seed: int | None = 0) -> bool` (`@classmethod`): Invokes `net.get_lattice_basis()` (including its exact integer Smith Normal Form fallback) first so unimodular nets are solved deterministically without RNG (`if net.get_lattice_basis() != -1 and net.lattice_basis is not None: return True`), retaining the seeded cycle-row permutation SymPy nullspace search (`is_approximately_integral(..., tolerance=tolerance)`) only when `get_lattice_basis()` still returns `-1` (`DEF-003`).
 
 ### `BondParameterFallback`
 
@@ -131,12 +131,13 @@ def calculate_topology_timeout(num_atoms: int, num_bonds: int) -> int
 
 Computes an adaptive external topology-helper timeout in seconds (`min(120, ...)`). `calculate_xtb_timeout` is preserved as an alias.
 
-### Stage 2 Reconstruction & Lorentz-Berthelot Internals
+### Stage 2 Reconstruction, Symmetry Classification & Lorentz-Berthelot Internals
 
-`_reconstruct_zl_multistart(slices_inst, n_starts=3, seed=0, ...)` orchestrates Stage 2 reconstruction and uses two internal helpers for exact Lorentz-Berthelot pair mixing (`DEF-001`):
+`_reconstruct_zl_multistart(slices_inst, n_starts=3, seed=0, ...)` orchestrates Stage 2 reconstruction and uses three internal helpers:
 
-- `_compute_lorentz_pair_lj(atom_types, pairs) -> list[list[float]]`: Computes exact arithmetic-mean `[(p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0]` on `LJ_PARAMS_LIST` `[4*sigma, sigma]` length columns in Angstrom.
-- `_evaluate_lorentz_lj_pairs(slices_inst, uncovered_pair) -> tuple[list[list[float]], list[list[float]]]`: When `hasattr(slices_inst, "lj_mixing")`, temporarily sets `slices_inst.lj_mixing = "lorentz"` inside a `try ... finally` block around `get_uncovered_pair_lj` / `get_covered_pair_lj` and unconditionally restores the original `slices_inst.lj_mixing`; otherwise falls back directly to `_compute_lorentz_pair_lj`.
+- `_compute_lorentz_pair_lj(atom_types, pairs) -> list[list[float]]`: Computes exact arithmetic-mean `[(p0[0] + p1[0]) / 2.0, (p0[1] + p1[1]) / 2.0]` on `LJ_PARAMS_LIST` `[4*sigma, sigma]` length columns in Angstrom (`DEF-001`).
+- `_evaluate_lorentz_lj_pairs(slices_inst, uncovered_pair) -> tuple[list[list[float]], list[list[float]]]`: When `hasattr(slices_inst, "lj_mixing")`, temporarily sets `slices_inst.lj_mixing = "lorentz"` inside a `try ... finally` block around `get_uncovered_pair_lj` / `get_covered_pair_lj` and unconditionally restores the original `slices_inst.lj_mixing`; otherwise falls back directly to `_compute_lorentz_pair_lj` (`DEF-001`).
+- `_classify_lattice_type(metric_tensor_std: np.ndarray, rel_tol: float = 1e-9, abs_tol: float = 1e-12) -> int`: Mirrors `slices.core._classify_lattice_type` verbatim using pairwise `math.isclose` with transitive closure (`1`, `23`, `22`, `21`, `3`), preserving crystallographic axial-length constraints on `metric_tensor_std` diagonals during Stage 2 multi-start ZL\* optimization (`DEF-014`).
 
 ### Example
 

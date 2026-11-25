@@ -35,7 +35,7 @@ Validates whether `slices_str` satisfies SLICES syntax and 3D quotient-graph con
   - `slices_str`: Input SLICES representation string.
   - `strategy`: Encoding strategy (`1`, `3`, or `4`). Defaults to `4`.
   - `dupli_check`: If `True`, reject duplicate quotient-graph edges rather than deduplicating them. Defaults to `False`.
-  - `graph_rank_check`: If `True`, require first Betti number `H1(X, Z) >= 3`. Defaults to `True`.
+  - `graph_rank_check`: If `True`, require first homology group rank `H1(X, Z) >= 3`, a valid 3D lattice basis (`net.get_lattice_basis() != -1` and `net.lattice_basis is not None`, including the exact SNF fallback), and (for multi-vertex nets `net.order > 1`) a full-rank 2D cocycle basis (`len(net.cocycle) >= net.order - 1`). Defaults to `True`.
 - **Returns:** `True` if valid; `False` otherwise.
 
 ---
@@ -69,7 +69,7 @@ Exception
 
 ---
 
-## 3. Timeout Decorator & Constants (`slices.core`)
+## 3. Constants, Timeout Decorator & Internal Helpers (`slices.core`)
 
 ### `slices.core.VALID_ELEMENT_MODES`
 
@@ -105,13 +105,25 @@ def function_timeout(
 
 Enforces a wall-clock timeout using `signal.SIGALRM` whenever `hasattr(signal, "SIGALRM")` and `threading.current_thread() is threading.main_thread()` (Linux and macOS main threads), raising `TimeoutException("Timed out!")` and unconditionally clearing `signal.alarm(0)` in a `finally:` block. On Windows or non-main worker threads, it yields directly without attempting signal registration.
 
+### `slices.core._classify_lattice_type` (Internal Helper)
+
+```python
+def _classify_lattice_type(
+    metric_tensor_std: np.ndarray,
+    rel_tol: float = 1e-9,
+    abs_tol: float = 1e-12,
+) -> int
+```
+
+Classifies squared axial-length symmetry constraints on the diagonal of `metric_tensor_std` (`g0, g1, g2`) using pairwise `math.isclose(..., rel_tol=rel_tol, abs_tol=abs_tol)` with transitive closure (`DEF-014`). Returns `1` when any two pairs match (`a == b == c`), `23` (`a == b != c`), `22` (`a == c != b`), `21` (`b == c != a`), or `3` (all distinct). Invoked by `SLICES.to_structures()` (and mirrored identically in `slices.decoding_strategies._classify_lattice_type`).
+
 ---
 
 ## 4. `slices.core.SLICES` Class Reference
 
 `SLICES` implements invertible crystal-structure encoding and reconstruction using labeled quotient graphs (`slices.tobascco_net.Net`), topology-only GFN-FF targets (`slices.gfnff_helper`), ZL* L-BFGS-B optimization, and NequIP or optional MLIP cell relaxation (`slices.relax_backends` / `slices.mlip_relaxer`).
 
-> **Import-Time Environment & Warning Behavior (`DEF-005`, resolved in Wave 1):** Importing `slices.core` defaults `TF_CPP_MIN_LOG_LEVEL` to `"3"` and `OMP_NUM_THREADS` to `"1"` via `os.environ.setdefault(...)` — preserving single-thread defaults when unset while honoring explicit user overrides. It no longer sets `PYTHONWARNINGS="ignore"` or blanket warning filters; instead, `DeprecationWarning` filtering is scoped strictly to `module=r"^spglib\."`, `BrunnerNNReciprocal` is imported before legacy aliases, and `relax_backends._cell_filter` locally suppresses ASE's `ExpCellFilter` `DeprecationWarning`. See [API_CONFIG.md](API_CONFIG.md) and [DEFERRED_CORE_REGISTER.md](../migration/DEFERRED_CORE_REGISTER.md).
+> **Import-Time Environment & Warning Behavior (`DEF-005`):** Importing `slices.core` defaults `TF_CPP_MIN_LOG_LEVEL` to `"3"` and `OMP_NUM_THREADS` to `"1"` via `os.environ.setdefault(...)` — preserving single-thread defaults when unset while honoring explicit user overrides. It no longer sets `PYTHONWARNINGS="ignore"` or blanket warning filters; instead, `DeprecationWarning` filtering is scoped strictly to `module=r"^spglib\."`, `BrunnerNNReciprocal` is imported before legacy aliases, and `relax_backends._cell_filter` locally suppresses ASE's `ExpCellFilter` `DeprecationWarning`. See [API_CONFIG.md](API_CONFIG.md) and [DEFERRED_CORE_REGISTER.md](../migration/DEFERRED_CORE_REGISTER.md).
 
 ### 4.1 Initialization & Context Helpers
 
@@ -175,7 +187,7 @@ class SLICES:
 | `get_slices1` / `get_slices2` / `get_slices3` (`@staticmethod`) | `(atom_symbols, edge_indices, to_jimages, space_group_num: int | None = None) -> str` | Format-specific serializers (Strategy `1` interleaved, Strategy `2` fixed-width unspaced encode-only, Strategy `3` atom header + spaced labels). |
 | `get_slices4` (`@staticmethod`) | `(atom_symbols, edge_indices, to_jimages, space_group_num: int | None) -> str` | Strategy `4` serializer: optional tokenized Wyckoff space-group prefix (`utils_wyckoff.get_tokenized_enc`) + atom symbols + compact `o`/`+`/`-` image triplets. |
 | `check_structural_validity` (`@staticmethod`) | `(str1: IStructure) -> bool` | Enforces `isinstance(str1, IStructure)` (`TypeError`), returns `False` on 0-site structures, and checks all distinct site and periodic self-image distances via `str1.get_neighbor_list(r=0.5 + 1e-9)` excluding `(i == j) & (img == 0)` (`True` iff all exceed `0.5` Angstrom; `DEF-025`, `DEF-019` Part 2). |
-| `check_SLICES` | `(self, SLICES: str, strategy: int = 4, dupli_check: bool = False, graph_rank_check: bool = True, strict: bool = False) -> bool` | Full syntax, connectivity, duplicate-edge, `H1(X, Z) >= 3`, and `Net` basis validation. Forwards `strict` to `from_SLICES` (returning `False` on trailing partial edge tokens when `strict=True`; `DEF-024`). Returns `bool` without raising. |
+| `check_SLICES` | `(self, SLICES: str, strategy: int = 4, dupli_check: bool = False, graph_rank_check: bool = True, strict: bool = False) -> bool` | Full syntax, connectivity, duplicate-edge, `H1(X, Z) >= 3`, and `Net` basis validation. Under `graph_rank_check=True` (default), enforces `net.get_lattice_basis() != -1` / `net.lattice_basis is not None` (including the exact SNF fallback) and, for multi-vertex nets (`net.order > 1`), requires `net.cocycle is not None`, `net.cocycle_rep is not None`, `net.cocycle.ndim == 2`, and `len(net.cocycle) >= net.order - 1`, returning `False` otherwise while preserving 1-atom cells (`net.order == 1`) and `graph_rank_check=False` workflows (`DEF-021`). Forwards `strict` to `from_SLICES` (`DEF-024`). Returns `bool` without raising. |
 | `check_SLICES_basic` | `(self, SLICES: str, strategy: int = 4, strict: bool = False) -> bool` | Lightweight syntax and node-coverage check (for encoding verification); forwards `strict` to `from_SLICES` (`DEF-024`). |
 | `get_canonical_SLICES` | `(self, SLICES: str, strategy: int = 4) -> str` | Sorts atoms, edges, and periodic image signs into canonical form. |
 | `SLICES2formula` | `(self, SLICES: str) -> str | None` | Grammar-aware extraction of the compact chemical formula from Strategy `1`, `2`, `3`, or `4` SLICES strings; returns `None` cleanly on malformed or digit-free inputs (`DEF-012`). |
@@ -186,8 +198,8 @@ class SLICES:
 | Method | Signature | Description |
 |---|---|---|
 | `get_nbf_blist` | `(self) -> tuple[str, np.ndarray]` | Builds the `3x3x3` supercell NBF neighbor table (`testBonds_cut.top` text, capped at 19 neighbors per site) and central-cell 1-based bond list `blist`. |
-| `get_inner_p_target` | `(self, bond_scaling: float = 1.05) -> tuple[np.ndarray, list[list[int]], list[float]] | None` | Resets `self._last_gfnff_incomplete = False`, calls `slices.gfnff_helper.run_gfnff_helper` (skipping non-finite `vangl` entries; `DEF-030`), and builds `(inner_p_target, colattice_inds, colattice_weights)`. Sets `self._last_gfnff_incomplete = True` whenever `"Cannot find bond!!!"` fires, `np.any(np.diag(inner_p_target) <= 0)`, or an exception occurs (inspected by opt-in `robust_decode`; `DEF-015`, `DEF-031`). Returns `None` on failure. |
-| `get_inner_p_target_debug` | `(self, bond_scaling: float = 1.05) -> tuple[np.ndarray, list[list[int]], list[float]]` | Debug variant (also tracking `self._last_gfnff_incomplete` and guarding non-finite `vangl`; `DEF-015`, `DEF-030`) that writes `testBonds_cut.top` and `gfnff_lists.json` via `write_debug_files`. |
+| `get_inner_p_target` | `(self, bond_scaling: float = 1.05) -> tuple[np.ndarray, list[list[int]], list[float]] | None` | Resets `self._last_gfnff_incomplete = False`, calls `slices.gfnff_helper.run_gfnff_helper` (skipping non-finite `vangl` entries; `DEF-030`), and builds `(inner_p_target, colattice_inds, colattice_weights)`. Tracks `matched_bond_indices` alongside `bond_weight` and iterates `zip(matched_bond_indices, bond_weight, strict=True)` so diagonal `(edge_idx, edge_idx)` entries and normalized weights align strictly with matched bond indices whenever `"Cannot find bond!!!"` skips edges (`DEF-031`). Sets `self._last_gfnff_incomplete = True` whenever `"Cannot find bond!!!"` fires, `np.any(np.diag(inner_p_target) <= 0)`, or an exception occurs (`DEF-015`). Returns `None` on failure. |
+| `get_inner_p_target_debug` | `(self, bond_scaling: float = 1.05) -> tuple[np.ndarray, list[list[int]], list[float]]` | Debug variant (mirroring `matched_bond_indices` diagonal alignment, `_last_gfnff_incomplete` tracking, and non-finite `vangl` guards; `DEF-015`, `DEF-030`, `DEF-031`) that writes `testBonds_cut.top` and `gfnff_lists.json` via `write_debug_files`. |
 | `convert_graph` | `(self) -> tuple[list[tuple[str, str, dict[str, str]]], np.ndarray]` | Converts stored edges and image translations into `Net` input edge tuples (1-based `'e1'`, `'e2'`, ...) and voltage matrix. |
 | `get_uncovered_pair` (`@staticmethod`) | `(graph: nx.Graph) -> list[list[Any]]` | Returns 0-based upper-triangular atom index pairs not directly bonded in `graph` (canonicalizing bonded edges as `(min(u, v), max(u, v))`; `DEF-032`). |
 | `get_uncovered_pair_lj` / `get_covered_pair_lj` | `(self, uncovered_pair: list[list[Any]]) -> list[list[float]]` / `(self) -> list[list[float]]` | Retrieves Lennard-Jones `[r_cut, sigma]` (`[4*sigma, sigma]` lengths in Angstrom) from `slices.config.LJ_PARAMS_LIST`. Validates `self.lj_mixing in VALID_LJ_MIXING_MODES` (`ValueError` otherwise): `"legacy"` (default) preserves frozen v4.0.2 `i[0]`-twice indexing, while `"lorentz"` computes exact arithmetic Lorentz-Berthelot averages `[(r_cut_0 + r_cut_1) / 2, (sigma_0 + sigma_1) / 2]` for heteronuclear pairs (`DEF-001`). |
@@ -202,7 +214,7 @@ class SLICES:
 
 | Method | Signature | Description |
 |---|---|---|
-| `to_structures` | `(self, bond_scaling: float = 1.05, delta_theta: float = 0.005, delta_x: float = 0.45, lattice_shrink: float = 1, lattice_expand: float = 1.25, angle_weight: float = 0.5, vbond_param_ave_covered: float = 0.0, vbond_param_ave: float = 0.01, repul: bool = True) -> tuple[list[Structure], float]` | Runs `Net` basis + GFN-FF target + L-BFGS-B ZL* optimization + force-field relaxation. Raises `LatticeBasisError` if `net.get_lattice_basis() == -1` (or `net.lattice_basis is None`) and `CocycleBasisError` if a multi-vertex graph (`net.order > 1`) lacks a full-rank cocycle basis (`DEF-021` Wave 1). Returns `([std, opt, opt2], energy_per_atom)`, or `([std, opt], 0)` cleanly when `self.relaxer is None` (`DEF-013`) or relaxation fails. |
+| `to_structures` | `(self, bond_scaling: float = 1.05, delta_theta: float = 0.005, delta_x: float = 0.45, lattice_shrink: float = 1, lattice_expand: float = 1.25, angle_weight: float = 0.5, vbond_param_ave_covered: float = 0.0, vbond_param_ave: float = 0.01, repul: bool = True) -> tuple[list[Structure], float]` | Runs `Net` basis (with exact integer SNF fallback; `DEF-003`) + GFN-FF target (`matched_bond_indices` alignment; `DEF-031`) + `_classify_lattice_type(metric_tensor_std)` (`math.isclose(1e-9, 1e-12)` transitive symmetry classification; `DEF-014`) + L-BFGS-B ZL* optimization + force-field relaxation. Raises `LatticeBasisError` if `net.get_lattice_basis() == -1` (or `net.lattice_basis is None`) and `CocycleBasisError` if a multi-vertex graph (`net.order > 1`) lacks a full-rank cocycle basis (`DEF-021`). Returns `([std, opt, opt2], energy_per_atom)`, or `([std, opt], 0)` cleanly when `self.relaxer is None` (`DEF-013`) or relaxation fails. |
 | `SLICES2structure` | `(self, SLICES: str, strategy: int = 4, fix_duplicate_edge: bool = True) -> tuple[Structure, float]` | Calls `from_SLICES` then `to_structures()` and returns `(structures[-1], final_energy_per_atom)`. |
 | `robust_SLICES2structure` | `(self, SLICES: str, strategy: int = 4, fix_duplicate_edge: bool = True, n_starts: int = 3, seed: int = 0) -> tuple[Structure, float]` | **Opt-in** multi-stage recovery decoder delegating lazily to `slices.decoding_strategies.robust_decode` (automatically entering Stage 2 with `BondParameterFallback` + Lorentz-Berthelot multi-start ZL* when `_last_gfnff_incomplete` is `True`). Never called by default `SLICES2structure` / `to_structures`. See [API_DECODING_STRATEGIES.md](API_DECODING_STRATEGIES.md). |
 | `to_relaxed_structure` | `(self, ...) -> tuple[Structure, float]` | Calls `to_structures(...)` and raises `Exception("relax failed")` if fewer than 3 structures were returned. |

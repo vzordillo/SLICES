@@ -4,6 +4,32 @@ All notable changes to SLICES are documented in this file. Commit hashes referen
 
 ---
 
+## [Unreleased — `exp/v4.1-algo-upgrades`] — 2026-11-25 (`d922032`..`36fa8e5`)
+
+Experimental algorithmic upgrade branch (`exp/v4.1-algo-upgrades`, branched from `9a51a73`) implementing four core mathematical and topological upgrades (`d922032`, `cd76ac5`, `36fa8e5`) verified against the locked `v4.0.2-baseline` (`f248b3c`) control group (`294 passed, 5 skipped, 0 failed` pytest + full `2,383`-crystal MP-20 & `39,244`-string `cRNN` paired A/B evaluation).
+
+### Changed & Fixed
+
+- **Exact Integer Smith Normal Form Lattice-Basis Fallback (`DEF-003`, `src/slices/tobascco_net.py`, `src/slices/decoding_strategies.py`):**
+  - Added `Net._get_lattice_basis_via_snf()` using exact `sympy` `DomainMatrix` + `smith_normal_decomp` over $\mathbb{Z}$, invoked strictly inside `Net.get_lattice_basis()` when the primary single-nullspace-vector search fails (`basis == -1`) so already-passing nets remain bit-identical (`0.0` ULP drift, zero overhead).
+  - Updated `CycleBasisOptimizer.find_lattice_basis()` to invoke `net.get_lattice_basis()` first so unimodular 3D nets are solved deterministically without RNG, retaining seeded row-permutation search only when `get_lattice_basis()` still returns `-1`.
+- **3D Lattice & Cocycle Basis Enforcement in `check_SLICES` (`DEF-021`, `src/slices/core.py`):**
+  - Updated `SLICES.check_SLICES(..., graph_rank_check=True)` to return `False` when `net.get_lattice_basis() == -1` (`net.lattice_basis is None`) or when a multi-vertex graph (`net.order > 1`) lacks a full-rank 2D cocycle basis (`len(net.cocycle) < net.order - 1`), preserving 1-atom primitive cells (`net.order == 1`) and `graph_rank_check=False` workflows.
+- **Transitive `math.isclose` Lattice Symmetry Classification (`DEF-014`, `src/slices/core.py`, `src/slices/decoding_strategies.py`):**
+  - Added `_classify_lattice_type(metric_tensor_std, rel_tol=1e-9, abs_tol=1e-12)` with pairwise `math.isclose` and transitive closure (`1`, `23`, `22`, `21`, `3`) and replaced exact float `set`/`==` classification in `SLICES.to_structures()` and `_reconstruct_zl_multistart()`, restoring symmetry-constrained ZL\* parameterizations perturbed by IEEE-754 rounding noise.
+- **Matched Bond-Index Alignment in Incomplete GFN-FF Targets (`DEF-031`, `src/slices/core.py`):**
+  - Tracked `matched_bond_indices` alongside `bond_weight` in `SLICES.get_inner_p_target()` and `SLICES.get_inner_p_target_debug()` so diagonal `colattice_inds` pairs `(edge_idx, edge_idx)` and normalized weights attach strictly to their true matched edges whenever GFN-FF skips unmatched bonds (`"Cannot find bond!!!"`).
+
+### Tests & Benchmarks
+
+- **Test Suite (`294 passed, 5 skipped, 0 failed`):** Added `tests/regression/test_v41_algo_upgrades.py` (`20` parametrized regression tests), aligned `E11` and `mininn` expectations in `tests/regression/test_wave1_fixes.py` and `tests/unit/test_encoding.py`, and enforced bounded symmetry-restored tolerances in `tests/baseline/test_golden_equivalence.py` (`max |dE| < 1e-6 eV/atom`, `0` match regressions) while keeping frozen `v4.0.2` fixtures in `tests/baseline/fixtures/` untouched.
+- **Full MP-20 & `cRNN` Paired A/B Evaluation ([`AB_COMPARISON_REPORT.md`](benchmark/v4_1_experimental/AB_COMPARISON_REPORT.md), [`tools/benchmarks/compare_ab_baselines.py`](tools/benchmarks/compare_ab_baselines.py)):**
+  - **`v4.1 default` vs `v4.0.2 default` (`N = 2,383`):** Rescued `7 / 7` unimodular `LatticeBasisError` crystals (`+7 / -0` `ok` `99.92%`, strict `94.04%`, loose `96.22%`, McNemar `p = 0.0156`), matching `v4.0.2 robust` on every recovery metric at `-1.28%` lower wall-clock (`-65.23 CPU-s`) with `0` regressions across `2,374` shared `ok` crystals (`88.04%` within `<= 1e-6 eV/atom`, Wilcoxon `p = 0.1861`).
+  - **Incomplete-GFN-FF Oxyhydrides (`DEF-031`):** Improved `mp-1176505` (`Lu4H4O8`) by `-12.16 meV/atom` (`preoptimized: True -> False`, BFGS `44 -> 18`) and `mp-625477` (`Eu2H6O6`) by `-48.06 meV/atom` in `default` (`-55.81 meV/atom` in `lorentz`).
+  - **`cRNN` Scan (`39,244` strings):** Rescued `5` and rejected `4` on `sampled.sli`; rescued `98 / 401` unimodular crystals and rejected `303 / 401` non-invertible graphs across `38,244` published `unique.sli` strings (`0 / 303` survived `4_inverse`).
+
+---
+
 ## [Unreleased — `v4.0.2-baseline` MP-20 Quantitative Benchmark] — 2026-11-25 (`f248b3c`)
 
 Locked annotated baseline tag **`v4.0.2-baseline`** at commit `f248b3c` (verified `89/89` golden equivalence tests at `0.0` ULP drift and `274 passed, 5 skipped` across the full test suite) and archived the complete 2,383-structure MP-20 non-metal quantitative benchmark as a reproducible control group for future algorithmic work.
