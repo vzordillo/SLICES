@@ -1,0 +1,767 @@
+{
+  "benchmark_metadata": {
+    "suite": "v4.1-extended-qmof-21-40",
+    "timestamp_utc": "2026-11-25T17:46:19Z",
+    "dataset_json": "benchmark/Match_rate_QMOF-21-40/0_get_json/cifs_filtered.json",
+    "total_rows": 339,
+    "atom_count_min": 21,
+    "atom_count_max": 40,
+    "atom_count_mean": 33.012,
+    "graph_method": "econnn",
+    "workers": 24,
+    "n_gpus": 2,
+    "gpu_pinning": "CUDA_VISIBLE_DEVICES = worker_id % n_gpus",
+    "total_wall_seconds": 837.238,
+    "upstream_table_s1_baseline": {
+      "strict_rate": 0.0295,
+      "loose_rate": 0.0619,
+      "strict_pct": 2.95,
+      "loose_pct": 6.19,
+      "dataset_size": 339
+    },
+    "environment": {
+      "git_commit": "0bde1191e0f47f670fc523d8609bdab3c33f120c",
+      "slices_version": "4.1.0",
+      "python_version": "3.10.22",
+      "torch_version": "2.9.1+cu128",
+      "cuda_version": "12.8",
+      "cuda_available": true,
+      "gpu_count": 2,
+      "gpu_names": [
+        "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+        "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition"
+      ],
+      "pymatgen_version": "2025.10.7",
+      "ase_version": "3.29.0",
+      "numpy_version": "2.2.6",
+      "scipy_version": "1.15.3",
+      "cpu_count": 32,
+      "nequip_version": "0.17.1",
+      "openequivariance_version": "0.8.0"
+    }
+  },
+  "passes": {
+    "default": {
+      "config": {
+        "name": "default",
+        "protocol": "CIF -> structure2SLICES(strategy=4, econnn) -> SLICES2structure()",
+        "device": "cuda",
+        "relax_model": "nequip-s+l",
+        "resolved_relax_model": "nequip-s+l",
+        "relaxer_description": "relax NequIP-OAM-S-0.1__aotinductor-oeq__cuda__NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition__sm120__cu12.8__torch2.9.1__nequip0.17.1.nequip.pt2, energy NequIP-OAM-L-0.1__aotinductor-oeq__cuda__NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition__sm120__cu12.8__torch2.9.1__nequip0.17.1.nequip.pt2, optimizer BFGS",
+        "graph_method": "econnn",
+        "lj_mixing": "legacy",
+        "relax_method": "relax_large_cell1 (21..40 atoms)",
+        "workers": 24,
+        "n_gpus": 2
+      },
+      "wall_seconds": 415.479,
+      "throughput_structures_per_sec": 0.8159,
+      "vram_telemetry": {
+        "gpus_assigned": [
+          0,
+          1
+        ],
+        "workers_spawned": 24,
+        "max_worker_torch_allocated_mib": 130.52,
+        "max_worker_torch_reserved_mib": 206.0,
+        "sum_worker_torch_allocated_mib": 2735.94,
+        "nvidia_smi": {
+          "max_gpu_peak_used_mib": 11392.0,
+          "per_gpu": {
+            "gpu_0": {
+              "name": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+              "memory_total_mib": 97887.0,
+              "baseline_used_mib": 15.0,
+              "peak_used_mib": 11392.0,
+              "peak_delta_mib": 11377.0,
+              "mean_gpu_util_pct": 1.66,
+              "max_gpu_util_pct": 40.0,
+              "sample_count": 394
+            },
+            "gpu_1": {
+              "name": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+              "memory_total_mib": 97887.0,
+              "baseline_used_mib": 15.0,
+              "peak_used_mib": 11278.0,
+              "peak_delta_mib": 11263.0,
+              "mean_gpu_util_pct": 2.01,
+              "max_gpu_util_pct": 30.0,
+              "sample_count": 394
+            }
+          }
+        }
+      },
+      "all_structures": {
+        "total_count": 339,
+        "cif_matched_count": 339,
+        "encoded_count": 339,
+        "failed_encode_count": 0,
+        "decoded_count": 305,
+        "ok_count": 304,
+        "failed_count": 35,
+        "failed_decode_count": 34,
+        "unrelaxed_fallback_count": 1,
+        "ok_rate": 0.896755,
+        "decoded_rate": 0.899705,
+        "match_strict_count": 12,
+        "match_strict_rate_all": 0.035398,
+        "match_strict_rate_ok": 0.039474,
+        "match_loose_count": 27,
+        "match_loose_rate_all": 0.079646,
+        "match_loose_rate_ok": 0.088816,
+        "struct_valid_count": 304,
+        "struct_valid_rate_all": 0.896755,
+        "struct_valid_rate_ok": 1.0,
+        "sg_match_count": 30,
+        "sg_match_rate_all": 0.088496,
+        "sg_match_rate_ok": 0.098684,
+        "preoptimized_count": 142,
+        "preoptimized_rate_ok": 0.467105,
+        "retry_struct_count": 47,
+        "retry_total_count": 47,
+        "retry_rate_ok": 0.154605,
+        "gfnff_incomplete_count": 3,
+        "gfnff_incomplete_rate_all": 0.00885,
+        "extreme_outlier_count": 0,
+        "extreme_outliers": [],
+        "relax_steps": {
+          "mean": 100.668,
+          "median": 100.0,
+          "p90": 200.0,
+          "p95": 200.0,
+          "max": 200,
+          "total": 30603
+        },
+        "timing_seconds": {
+          "mean_s": 18.4326,
+          "median_s": 15.5324,
+          "p90_s": 34.3792,
+          "p95_s": 38.6783,
+          "p99_s": 54.7988,
+          "max_s": 225.553,
+          "sum_s": 6248.65
+        },
+        "stage_timings_seconds": {
+          "encode_s": {
+            "mean_s": 0.0647,
+            "median_s": 0.0618,
+            "p90_s": 0.0809,
+            "p95_s": 0.0878,
+            "max_s": 0.2768,
+            "sum_s": 21.94
+          },
+          "gfnff_s": {
+            "mean_s": 4.9486,
+            "median_s": 4.1819,
+            "p90_s": 10.0658,
+            "p95_s": 12.4117,
+            "max_s": 19.993,
+            "sum_s": 1677.56
+          },
+          "zl_s": {
+            "mean_s": 11.2911,
+            "median_s": 8.9544,
+            "p90_s": 26.6157,
+            "p95_s": 28.6578,
+            "max_s": 48.8032,
+            "sum_s": 3827.69
+          },
+          "relax_s": {
+            "mean_s": 2.0984,
+            "median_s": 0.6904,
+            "p90_s": 1.5345,
+            "p95_s": 2.035,
+            "max_s": 211.9932,
+            "sum_s": 711.34
+          },
+          "topo_s": {
+            "mean_s": 0.0298,
+            "median_s": 0.0249,
+            "p90_s": 0.0442,
+            "p95_s": 0.058,
+            "max_s": 0.2158,
+            "sum_s": 10.11
+          },
+          "decode_s": {
+            "mean_s": 18.3679,
+            "median_s": 15.4595,
+            "p90_s": 34.3184,
+            "p95_s": 38.5988,
+            "max_s": 225.5205,
+            "sum_s": 6226.71
+          },
+          "seconds": {
+            "mean_s": 18.4326,
+            "median_s": 15.5324,
+            "p90_s": 34.3792,
+            "p95_s": 38.6783,
+            "max_s": 225.553,
+            "sum_s": 6248.65
+          }
+        },
+        "failure_taxonomy": {
+          "CocycleBasisError": 33,
+          "LatticeBasisError": 1,
+          "RelaxFallback:CellCollapse": 1
+        }
+      },
+      "by_crystal_system": {
+        "hexagonal": {
+          "total_count": 3,
+          "ok_count": 3,
+          "ok_rate": 1.0,
+          "match_strict_count": 2,
+          "match_strict_rate_all": 0.666667,
+          "match_loose_count": 2,
+          "match_loose_rate_all": 0.666667,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 13.7365
+        },
+        "trigonal": {
+          "total_count": 2,
+          "ok_count": 2,
+          "ok_rate": 1.0,
+          "match_strict_count": 1,
+          "match_strict_rate_all": 0.5,
+          "match_loose_count": 1,
+          "match_loose_rate_all": 0.5,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 26.0689
+        },
+        "tetragonal": {
+          "total_count": 3,
+          "ok_count": 3,
+          "ok_rate": 1.0,
+          "match_strict_count": 0,
+          "match_strict_rate_all": 0.0,
+          "match_loose_count": 1,
+          "match_loose_rate_all": 0.333333,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 23.4638
+        },
+        "orthorhombic": {
+          "total_count": 27,
+          "ok_count": 24,
+          "ok_rate": 0.888889,
+          "match_strict_count": 2,
+          "match_strict_rate_all": 0.074074,
+          "match_loose_count": 5,
+          "match_loose_rate_all": 0.185185,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 23.1381
+        },
+        "monoclinic": {
+          "total_count": 129,
+          "ok_count": 114,
+          "ok_rate": 0.883721,
+          "match_strict_count": 6,
+          "match_strict_rate_all": 0.046512,
+          "match_loose_count": 11,
+          "match_loose_rate_all": 0.085271,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 17.3485
+        },
+        "triclinic": {
+          "total_count": 175,
+          "ok_count": 158,
+          "ok_rate": 0.902857,
+          "match_strict_count": 1,
+          "match_strict_rate_all": 0.005714,
+          "match_loose_count": 7,
+          "match_loose_rate_all": 0.04,
+          "sg_match_count": 30,
+          "sg_match_rate_all": 0.171429,
+          "mean_seconds": 18.4128
+        }
+      },
+      "by_atom_count_bin": {
+        "21_25": {
+          "atom_range": "21..25",
+          "total_count": 34,
+          "ok_count": 33,
+          "ok_rate": 0.970588,
+          "match_strict_count": 2,
+          "match_strict_rate_all": 0.058824,
+          "match_loose_count": 3,
+          "match_loose_rate_all": 0.088235,
+          "sg_match_rate_all": 0.029412,
+          "mean_seconds": 7.7856,
+          "mean_relax_steps": 104.242
+        },
+        "26_30": {
+          "atom_range": "26..30",
+          "total_count": 83,
+          "ok_count": 75,
+          "ok_rate": 0.903614,
+          "match_strict_count": 6,
+          "match_strict_rate_all": 0.072289,
+          "match_loose_count": 10,
+          "match_loose_rate_all": 0.120482,
+          "sg_match_rate_all": 0.048193,
+          "mean_seconds": 11.7239,
+          "mean_relax_steps": 83.907
+        },
+        "31_35": {
+          "atom_range": "31..35",
+          "total_count": 81,
+          "ok_count": 71,
+          "ok_rate": 0.876543,
+          "match_strict_count": 1,
+          "match_strict_rate_all": 0.012346,
+          "match_loose_count": 5,
+          "match_loose_rate_all": 0.061728,
+          "sg_match_rate_all": 0.111111,
+          "mean_seconds": 20.0862,
+          "mean_relax_steps": 94.366
+        },
+        "36_40": {
+          "atom_range": "36..40",
+          "total_count": 141,
+          "ok_count": 125,
+          "ok_rate": 0.886525,
+          "match_strict_count": 3,
+          "match_strict_rate_all": 0.021277,
+          "match_loose_count": 9,
+          "match_loose_rate_all": 0.06383,
+          "sg_match_rate_all": 0.113475,
+          "mean_seconds": 23.9991,
+          "mean_relax_steps": 113.36
+        }
+      },
+      "vs_upstream_table_s1": {
+        "upstream_strict_rate": 0.0295,
+        "upstream_loose_rate": 0.0619,
+        "strict_rate_delta_pp": 0.59,
+        "loose_rate_delta_pp": 1.77,
+        "strict_fold_improvement_x": 1.2,
+        "loose_fold_improvement_x": 1.287
+      }
+    },
+    "lorentz": {
+      "config": {
+        "name": "lorentz",
+        "protocol": "CIF -> structure2SLICES(strategy=4, econnn) -> SLICES2structure()",
+        "device": "cuda",
+        "relax_model": "nequip-s+l",
+        "resolved_relax_model": "nequip-s+l",
+        "relaxer_description": "relax NequIP-OAM-S-0.1__aotinductor-oeq__cuda__NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition__sm120__cu12.8__torch2.9.1__nequip0.17.1.nequip.pt2, energy NequIP-OAM-L-0.1__aotinductor-oeq__cuda__NVIDIA-RTX-PRO-6000-Blackwell-Max-Q-Workstation-Edition__sm120__cu12.8__torch2.9.1__nequip0.17.1.nequip.pt2, optimizer BFGS",
+        "graph_method": "econnn",
+        "lj_mixing": "lorentz",
+        "relax_method": "relax_large_cell1 (21..40 atoms)",
+        "workers": 24,
+        "n_gpus": 2
+      },
+      "wall_seconds": 414.807,
+      "throughput_structures_per_sec": 0.8172,
+      "vram_telemetry": {
+        "gpus_assigned": [
+          0,
+          1
+        ],
+        "workers_spawned": 24,
+        "max_worker_torch_allocated_mib": 130.56,
+        "max_worker_torch_reserved_mib": 214.0,
+        "sum_worker_torch_allocated_mib": 2686.66,
+        "nvidia_smi": {
+          "max_gpu_peak_used_mib": 11316.0,
+          "per_gpu": {
+            "gpu_0": {
+              "name": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+              "memory_total_mib": 97887.0,
+              "baseline_used_mib": 18.0,
+              "peak_used_mib": 11316.0,
+              "peak_delta_mib": 11298.0,
+              "mean_gpu_util_pct": 1.89,
+              "max_gpu_util_pct": 33.0,
+              "sample_count": 393
+            },
+            "gpu_1": {
+              "name": "NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",
+              "memory_total_mib": 97887.0,
+              "baseline_used_mib": 18.0,
+              "peak_used_mib": 11296.0,
+              "peak_delta_mib": 11278.0,
+              "mean_gpu_util_pct": 1.49,
+              "max_gpu_util_pct": 24.0,
+              "sample_count": 393
+            }
+          }
+        }
+      },
+      "all_structures": {
+        "total_count": 339,
+        "cif_matched_count": 339,
+        "encoded_count": 339,
+        "failed_encode_count": 0,
+        "decoded_count": 305,
+        "ok_count": 304,
+        "failed_count": 35,
+        "failed_decode_count": 34,
+        "unrelaxed_fallback_count": 1,
+        "ok_rate": 0.896755,
+        "decoded_rate": 0.899705,
+        "match_strict_count": 12,
+        "match_strict_rate_all": 0.035398,
+        "match_strict_rate_ok": 0.039474,
+        "match_loose_count": 28,
+        "match_loose_rate_all": 0.082596,
+        "match_loose_rate_ok": 0.092105,
+        "struct_valid_count": 304,
+        "struct_valid_rate_all": 0.896755,
+        "struct_valid_rate_ok": 1.0,
+        "sg_match_count": 33,
+        "sg_match_rate_all": 0.097345,
+        "sg_match_rate_ok": 0.108553,
+        "preoptimized_count": 136,
+        "preoptimized_rate_ok": 0.447368,
+        "retry_struct_count": 51,
+        "retry_total_count": 51,
+        "retry_rate_ok": 0.167763,
+        "gfnff_incomplete_count": 3,
+        "gfnff_incomplete_rate_all": 0.00885,
+        "extreme_outlier_count": 0,
+        "extreme_outliers": [],
+        "relax_steps": {
+          "mean": 101.819,
+          "median": 100.0,
+          "p90": 200.0,
+          "p95": 200.0,
+          "max": 200,
+          "total": 30953
+        },
+        "timing_seconds": {
+          "mean_s": 18.4891,
+          "median_s": 15.486,
+          "p90_s": 34.5122,
+          "p95_s": 38.6994,
+          "p99_s": 54.0356,
+          "max_s": 226.0398,
+          "sum_s": 6267.81
+        },
+        "stage_timings_seconds": {
+          "encode_s": {
+            "mean_s": 0.0658,
+            "median_s": 0.0619,
+            "p90_s": 0.0808,
+            "p95_s": 0.0874,
+            "max_s": 0.2948,
+            "sum_s": 22.32
+          },
+          "gfnff_s": {
+            "mean_s": 4.9535,
+            "median_s": 4.1316,
+            "p90_s": 10.1126,
+            "p95_s": 12.3711,
+            "max_s": 19.9581,
+            "sum_s": 1679.23
+          },
+          "zl_s": {
+            "mean_s": 11.3203,
+            "median_s": 8.9459,
+            "p90_s": 27.2503,
+            "p95_s": 28.9893,
+            "max_s": 48.1416,
+            "sum_s": 3837.57
+          },
+          "relax_s": {
+            "mean_s": 2.1197,
+            "median_s": 0.693,
+            "p90_s": 1.5801,
+            "p95_s": 2.1482,
+            "max_s": 212.459,
+            "sum_s": 718.58
+          },
+          "topo_s": {
+            "mean_s": 0.0298,
+            "median_s": 0.0249,
+            "p90_s": 0.0441,
+            "p95_s": 0.0581,
+            "max_s": 0.2189,
+            "sum_s": 10.1
+          },
+          "decode_s": {
+            "mean_s": 18.4233,
+            "median_s": 15.4132,
+            "p90_s": 34.4508,
+            "p95_s": 38.6663,
+            "max_s": 226.0067,
+            "sum_s": 6245.49
+          },
+          "seconds": {
+            "mean_s": 18.4891,
+            "median_s": 15.486,
+            "p90_s": 34.5122,
+            "p95_s": 38.6994,
+            "max_s": 226.0398,
+            "sum_s": 6267.81
+          }
+        },
+        "failure_taxonomy": {
+          "CocycleBasisError": 33,
+          "LatticeBasisError": 1,
+          "RelaxFallback:CellCollapse": 1
+        }
+      },
+      "by_crystal_system": {
+        "hexagonal": {
+          "total_count": 3,
+          "ok_count": 3,
+          "ok_rate": 1.0,
+          "match_strict_count": 2,
+          "match_strict_rate_all": 0.666667,
+          "match_loose_count": 2,
+          "match_loose_rate_all": 0.666667,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 13.6994
+        },
+        "trigonal": {
+          "total_count": 2,
+          "ok_count": 2,
+          "ok_rate": 1.0,
+          "match_strict_count": 1,
+          "match_strict_rate_all": 0.5,
+          "match_loose_count": 1,
+          "match_loose_rate_all": 0.5,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 25.9097
+        },
+        "tetragonal": {
+          "total_count": 3,
+          "ok_count": 3,
+          "ok_rate": 1.0,
+          "match_strict_count": 0,
+          "match_strict_rate_all": 0.0,
+          "match_loose_count": 1,
+          "match_loose_rate_all": 0.333333,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 23.5864
+        },
+        "orthorhombic": {
+          "total_count": 27,
+          "ok_count": 24,
+          "ok_rate": 0.888889,
+          "match_strict_count": 1,
+          "match_strict_rate_all": 0.037037,
+          "match_loose_count": 5,
+          "match_loose_rate_all": 0.185185,
+          "sg_match_count": 0,
+          "sg_match_rate_all": 0.0,
+          "mean_seconds": 22.953
+        },
+        "monoclinic": {
+          "total_count": 129,
+          "ok_count": 114,
+          "ok_rate": 0.883721,
+          "match_strict_count": 5,
+          "match_strict_rate_all": 0.03876,
+          "match_loose_count": 11,
+          "match_loose_rate_all": 0.085271,
+          "sg_match_count": 1,
+          "sg_match_rate_all": 0.007752,
+          "mean_seconds": 17.3524
+        },
+        "triclinic": {
+          "total_count": 175,
+          "ok_count": 158,
+          "ok_rate": 0.902857,
+          "match_strict_count": 3,
+          "match_strict_rate_all": 0.017143,
+          "match_loose_count": 8,
+          "match_loose_rate_all": 0.045714,
+          "sg_match_count": 32,
+          "sg_match_rate_all": 0.182857,
+          "mean_seconds": 18.5482
+        }
+      },
+      "by_atom_count_bin": {
+        "21_25": {
+          "atom_range": "21..25",
+          "total_count": 34,
+          "ok_count": 33,
+          "ok_rate": 0.970588,
+          "match_strict_count": 3,
+          "match_strict_rate_all": 0.088235,
+          "match_loose_count": 4,
+          "match_loose_rate_all": 0.117647,
+          "sg_match_rate_all": 0.088235,
+          "mean_seconds": 7.6818,
+          "mean_relax_steps": 106.848
+        },
+        "26_30": {
+          "atom_range": "26..30",
+          "total_count": 83,
+          "ok_count": 75,
+          "ok_rate": 0.903614,
+          "match_strict_count": 5,
+          "match_strict_rate_all": 0.060241,
+          "match_loose_count": 10,
+          "match_loose_rate_all": 0.120482,
+          "sg_match_rate_all": 0.060241,
+          "mean_seconds": 11.7744,
+          "mean_relax_steps": 86.64
+        },
+        "31_35": {
+          "atom_range": "31..35",
+          "total_count": 81,
+          "ok_count": 71,
+          "ok_rate": 0.876543,
+          "match_strict_count": 1,
+          "match_strict_rate_all": 0.012346,
+          "match_loose_count": 5,
+          "match_loose_rate_all": 0.061728,
+          "sg_match_rate_all": 0.123457,
+          "mean_seconds": 20.1957,
+          "mean_relax_steps": 94.563
+        },
+        "36_40": {
+          "atom_range": "36..40",
+          "total_count": 141,
+          "ok_count": 125,
+          "ok_rate": 0.886525,
+          "match_strict_count": 3,
+          "match_strict_rate_all": 0.021277,
+          "match_loose_count": 9,
+          "match_loose_rate_all": 0.06383,
+          "sg_match_rate_all": 0.106383,
+          "mean_seconds": 24.0674,
+          "mean_relax_steps": 113.72
+        }
+      },
+      "vs_upstream_table_s1": {
+        "upstream_strict_rate": 0.0295,
+        "upstream_loose_rate": 0.0619,
+        "strict_rate_delta_pp": 0.59,
+        "loose_rate_delta_pp": 2.07,
+        "strict_fold_improvement_x": 1.2,
+        "loose_fold_improvement_x": 1.334
+      }
+    }
+  },
+  "paired_comparisons": {
+    "lorentz_vs_default": {
+      "baseline": "default",
+      "candidate": "lorentz",
+      "wall_clock": {
+        "base_wall_s": 415.479,
+        "cand_wall_s": 414.807,
+        "wall_delta_s": -0.672,
+        "wall_speedup_x": 1.0016
+      },
+      "paired_boolean_transitions": {
+        "ok": {
+          "base_true_count": 304,
+          "cand_true_count": 304,
+          "base_rate_all": 0.896755,
+          "cand_rate_all": 0.896755,
+          "both_true": 304,
+          "gained_count": 0,
+          "lost_count": 0,
+          "both_false": 35,
+          "net_delta": 0,
+          "rate_delta_pp": 0.0,
+          "mcnemar_two_sided_p": 1.0,
+          "gained_ids_sample": [],
+          "lost_ids_sample": []
+        },
+        "match_strict": {
+          "base_true_count": 12,
+          "cand_true_count": 12,
+          "base_rate_all": 0.035398,
+          "cand_rate_all": 0.035398,
+          "both_true": 10,
+          "gained_count": 2,
+          "lost_count": 2,
+          "both_false": 325,
+          "net_delta": 0,
+          "rate_delta_pp": 0.0,
+          "mcnemar_two_sided_p": 1.0,
+          "gained_ids_sample": [
+            "qmof-a0e80c5",
+            "qmof-c468324"
+          ],
+          "lost_ids_sample": [
+            "qmof-50671ea",
+            "qmof-b806efd"
+          ]
+        },
+        "match_loose": {
+          "base_true_count": 27,
+          "cand_true_count": 28,
+          "base_rate_all": 0.079646,
+          "cand_rate_all": 0.082596,
+          "both_true": 24,
+          "gained_count": 4,
+          "lost_count": 3,
+          "both_false": 308,
+          "net_delta": 1,
+          "rate_delta_pp": 0.295,
+          "mcnemar_two_sided_p": 1.0,
+          "gained_ids_sample": [
+            "qmof-291d96d",
+            "qmof-79ed331",
+            "qmof-e5458b1",
+            "qmof-d7f9a50"
+          ],
+          "lost_ids_sample": [
+            "qmof-6e1b2a5",
+            "qmof-76bef6e",
+            "qmof-b806efd"
+          ]
+        },
+        "sg_match": {
+          "base_true_count": 30,
+          "cand_true_count": 33,
+          "base_rate_all": 0.088496,
+          "cand_rate_all": 0.097345,
+          "both_true": 29,
+          "gained_count": 4,
+          "lost_count": 1,
+          "both_false": 305,
+          "net_delta": 3,
+          "rate_delta_pp": 0.885,
+          "mcnemar_two_sided_p": 0.375,
+          "gained_ids_sample": [
+            "qmof-1ed0a7d",
+            "qmof-d7f9a50",
+            "qmof-c468324",
+            "qmof-6a436c8"
+          ],
+          "lost_ids_sample": [
+            "qmof-000512e"
+          ]
+        },
+        "struct_valid": {
+          "base_true_count": 304,
+          "cand_true_count": 304,
+          "base_rate_all": 0.896755,
+          "cand_rate_all": 0.896755,
+          "both_true": 304,
+          "gained_count": 0,
+          "lost_count": 0,
+          "both_false": 35,
+          "net_delta": 0,
+          "rate_delta_pp": 0.0,
+          "mcnemar_two_sided_p": 1.0,
+          "gained_ids_sample": [],
+          "lost_ids_sample": []
+        }
+      },
+      "paired_timing_and_steps": {
+        "seconds_delta_mean_s": 0.0565,
+        "seconds_delta_median_s": 0.032,
+        "seconds_wilcoxon_two_sided_p": 1.52e-06,
+        "shared_ok_relax_steps_delta_mean": 1.151,
+        "shared_ok_relax_steps_wilcoxon_two_sided_p": 0.6868164
+      }
+    }
+  }
+}
