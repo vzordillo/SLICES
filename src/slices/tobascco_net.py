@@ -339,7 +339,6 @@ class Net:
     def simple_cycle_basis(self) -> None:
         """Construct fundamental cycle basis and cycle voltages from a minimum spanning tree."""
         edges = self.all_edges()
-        st_vtx = np.random.choice(range(self.graph.order()))  # noqa: F841 (DEF-004 frozen RNG)
         mst_tree = nx.minimum_spanning_tree(self.graph.to_undirected())
         mspt_edges = [(i, j, d["label"]) for (i, j, d) in mst_tree.edges(data=True)]
         cycle_completes = [
@@ -386,13 +385,21 @@ class Net:
         self,
         node: str | None = None,
         edge: tuple[Any, ...] | None = None,
-        cycle: list[Any] = [],  # noqa: B006 (DEF-010 frozen signature)
-        used: list[Any] = [],  # noqa: B006
-        nodes_visited: list[Any] = [],  # noqa: B006
-        cycle_baggage: list[Any] = [],  # noqa: B006
+        cycle: list[Any] | None = None,
+        used: list[Any] | None = None,
+        nodes_visited: list[Any] | None = None,
+        cycle_baggage: list[Any] | None = None,
         counter: int = 0,
     ) -> Iterator[list[Any]]:
         """Recursively yield simple oriented cycles of the net."""
+        if cycle is None:
+            cycle = []
+        if used is None:
+            used = []
+        if nodes_visited is None:
+            nodes_visited = []
+        if cycle_baggage is None:
+            cycle_baggage = []
         if node is None:
             node = self.vertices(0)
         if node in nodes_visited:
@@ -430,15 +437,17 @@ class Net:
 
     def linear_independent_vectors(self, r_mat: Any, dim: int) -> np.ndarray:
         """Select ``rank(r_mat)`` non-collinear columns from ``r_mat``."""
-        mat = np.matrix(r_mat)  # DEF-011 frozen np.matrix
-        r = np.linalg.matrix_rank(mat)
-        index = np.zeros(r)
+        mat = np.atleast_2d(np.asarray(r_mat))
+        r = int(np.linalg.matrix_rank(mat))
+        if r == 0:
+            return np.zeros((0, dim))
+        index = np.zeros(r, dtype=int)
         counter = 0
         index[0] = 0
         j = 0
         for i in range(mat.shape[1]):
-            if i != j:
-                inner_product = np.dot(mat[:, i].T, mat[:, j])
+            if i != j and counter < r - 1:
+                inner_product = float(np.dot(mat[:, i], mat[:, j]))
                 norm_i = np.linalg.norm(mat[:, i])
                 norm_j = np.linalg.norm(mat[:, j])
                 if np.abs(inner_product - norm_j * norm_i) > 1e-4:
@@ -447,10 +456,12 @@ class Net:
                     j = i
 
         r_independent = np.zeros((r, dim))
-        i = 0
-        while i < r:
-            r_independent[i, :] = mat[int(index[i]), :]
-            i += 1
+        for i in range(r):
+            idx = int(index[i])
+            if mat.shape[1] == dim and idx < mat.shape[0]:
+                r_independent[i, :] = mat[idx, :]
+            else:
+                r_independent[i, :] = mat[:, idx]
         return r_independent
 
     def get_lattice_basis(self) -> int:
@@ -459,9 +470,6 @@ class Net:
         Returns:
             ``1`` if all ``ndim`` integral basis vectors were found, ``-1`` otherwise.
         """
-        L = []  # noqa: F841
-        inds = list(range(self.cycle_rep.shape[0]))
-        np.random.shuffle(inds)  # DEF-004 frozen RNG draw
         cycle_rep = self.cycle_rep.copy()
         cycle = self.cycle.copy()
         lattice: list[np.ndarray] = []
@@ -672,10 +680,14 @@ class Net:
         self,
         edges: list[Any],
         used: list[Any],
-        pos: dict[str, np.ndarray] = {},  # noqa: B006 (DEF-010 frozen signature)
-        bad_ones: dict[Any, Any] = {},  # noqa: B006
+        pos: dict[str, np.ndarray] | None = None,
+        bad_ones: dict[Any, Any] | None = None,
     ) -> dict[str, np.ndarray]:
         """Recursively assign fractional unit-cell positions to vertices along ``edges``."""
+        if pos is None:
+            pos = {}
+        if bad_ones is None:
+            bad_ones = {}
         lattice_arcs = self.lattice_arcs
         if self.ndim == 2:
             lattice_arcs = np.hstack(
@@ -829,7 +841,7 @@ class Net:
         """Orthogonal projection matrix onto the orthogonal complement of ``kernel``."""
         if not self.minimal:
             d = np.dot(self.kernel, self.kernel.T)
-            d_inv = np.array(np.matrix(d).I)  # DEF-011 frozen np.matrix.I
+            d_inv = np.linalg.inv(d)
             sub_mat = np.dot(np.dot(self.kernel.T, d_inv), self.kernel)
             return np.identity(self.shape) - sub_mat
         return np.identity(self.shape)
@@ -839,7 +851,7 @@ class Net:
         """Orthogonal projection matrix onto the column space of ``lattice_arcs``."""
         la = self.lattice_arcs
         d = np.dot(la.T, la)
-        d_inv = np.array(np.matrix(d).I)  # DEF-011 frozen np.matrix.I
+        d_inv = np.linalg.inv(d)
         return np.dot(np.dot(la, d_inv), la.T)
 
     @property
@@ -872,7 +884,7 @@ class Net:
         try:
             return self._cycle_cocycle_I
         except AttributeError:
-            self._cycle_cocycle_I = np.array(np.matrix(self.cycle_cocycle).I)  # DEF-011 frozen
+            self._cycle_cocycle_I = np.linalg.inv(self.cycle_cocycle)
             return self._cycle_cocycle_I
 
     @property

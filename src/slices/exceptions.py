@@ -1,10 +1,13 @@
 """Structured exception hierarchy for the SLICES crystal representation package.
 
-All package-specific exceptions inherit from :class:`SLICESError`. Force-field
-backend exceptions (:class:`RelaxBackendError` and :class:`ModelDownloadError`)
+All package-specific exceptions inherit from :class:`SLICESError`. Encoding and
+decoding exceptions (:class:`SLICESEncodingError` and :class:`SLICESDecodingError`)
+additionally inherit from :class:`ValueError`, while force-field backend
+exceptions (:class:`RelaxBackendError` and :class:`ModelDownloadError`)
 additionally inherit from :class:`RuntimeError` as sibling classes so callers
-catching either ``RuntimeError`` or ``SLICESError`` behave consistently while
-preventing network download failures from being recorded as compilation failures.
+catching either built-in exceptions or :class:`SLICESError` behave consistently
+while preventing network download failures from being recorded as compilation
+failures.
 """
 
 from __future__ import annotations
@@ -29,12 +32,22 @@ class SLICESError(Exception):
     """Base exception for all SLICES encoding, decoding, and backend errors."""
 
 
-class SLICESEncodingError(SLICESError):
-    """Raised when converting a crystal structure into a SLICES string fails."""
+class SLICESEncodingError(SLICESError, ValueError):
+    """Raised when converting a crystal structure into a SLICES string fails.
+
+    Inherits from both :class:`SLICESError` and :class:`ValueError` so callers
+    catching either SLICES-specific or standard value errors handle invalid
+    structures consistently.
+    """
 
 
-class SLICESDecodingError(SLICESError):
-    """Raised when reconstructing a crystal structure from a SLICES string fails."""
+class SLICESDecodingError(SLICESError, ValueError):
+    """Raised when reconstructing a crystal structure from a SLICES string fails.
+
+    Inherits from both :class:`SLICESError` and :class:`ValueError` so callers
+    catching either SLICES-specific or standard value errors handle malformed
+    SLICES strings or unsupported decoding strategies consistently.
+    """
 
 
 class GraphTopologyError(SLICESError):

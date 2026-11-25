@@ -56,6 +56,8 @@ _VENDOR_DIR = Path(__file__).resolve().parent / "_vendor"
 LEGACY86_PARAM_FILE = _VENDOR_DIR / "gfnff_extra" / "param_gfnff_legacy86.xtb"
 _XTB_BINARY_NAME = "xtb_noring_nooutput_nostdout_noCN"
 _XTB_TIMEOUT_SECONDS = 30
+_MIN_GFNFF_Z = 1
+_MAX_GFNFF_Z = 103
 
 _PARAM_ALIASES: dict[str, str] = {
     "": "legacy86_overlay",
@@ -112,7 +114,10 @@ def parse_nbf_text(nbf_text: str) -> tuple[np.ndarray, np.ndarray]:
         Tuple ``(atomic_numbers, nbf_table)`` of ``int32`` NumPy arrays.
 
     Raises:
-        ValueError: If ``nbf_text`` has fewer than 22 non-empty lines or mismatched shapes.
+        ValueError: If ``nbf_text`` has fewer than 22 non-empty lines, mismatched shapes,
+            or unrecognized chemical element symbols.
+        GFNFFExecutionError: If any parsed atomic number lies outside ``1 <= Z <= 103``
+            (e.g., trans-lawrencium elements ``Rf..Og``).
     """
     global _SYMBOL_TO_Z
     if _SYMBOL_TO_Z is None:
@@ -131,7 +136,24 @@ def parse_nbf_text(nbf_text: str) -> tuple[np.ndarray, np.ndarray]:
     nbf = np.array([[int(v) for v in line.split()] for line in lines[2:22]], dtype=np.int32)
     if nbf.shape != (20, nat):
         raise ValueError(f"NBF neighbor table has shape {nbf.shape}, expected (20, {nat})")
-    return np.array([_SYMBOL_TO_Z[s] for s in symbols], dtype=np.int32), nbf
+    unknown = [s for s in symbols if s not in _SYMBOL_TO_Z]
+    if unknown:
+        unique_unknown = ", ".join(dict.fromkeys(unknown))
+        raise ValueError(f"Unknown chemical element symbol(s) in NBF text: {unique_unknown}")
+    z_arr = np.array([_SYMBOL_TO_Z[s] for s in symbols], dtype=np.int32)
+    if np.any((z_arr < _MIN_GFNFF_Z) | (z_arr > _MAX_GFNFF_Z)):
+        unsupported = ", ".join(
+            dict.fromkeys(
+                f"{sym} (Z={int(z)})"
+                for sym, z in zip(symbols, z_arr, strict=True)
+                if z < _MIN_GFNFF_Z or z > _MAX_GFNFF_Z
+            )
+        )
+        raise GFNFFExecutionError(
+            f"GFN-FF only supports atomic numbers {_MIN_GFNFF_Z} <= Z <= {_MAX_GFNFF_Z} "
+            f"(H..Lr); got unsupported element(s): {unsupported}"
+        )
+    return z_arr, nbf
 
 
 def _resolve_external_xtb_binary() -> Path | None:

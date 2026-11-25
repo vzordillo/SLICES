@@ -14,11 +14,9 @@ import os
 import random
 import warnings
 
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["PYTHONWARNINGS"] = "ignore"
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"^spglib\.")
 
 import copy
 import gc
@@ -45,6 +43,7 @@ from pymatgen.analysis.dimensionality import (
 from pymatgen.analysis.graphs import StructureGraph
 from pymatgen.analysis.local_env import CrystalNN, EconNN, MinimumDistanceNN
 from pymatgen.analysis.structure_matcher import ElementComparator, StructureMatcher
+from pymatgen.core import IStructure
 from pymatgen.core.composition import Composition
 from pymatgen.core.periodic_table import Element, ElementBase
 from pymatgen.core.structure import Structure
@@ -52,11 +51,11 @@ from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from scipy.optimize import fmin_l_bfgs_b
 
 try:
-    from pymatgen.analysis.local_env import BrunnerNN_reciprocal
-except ImportError:  # renamed to BrunnerNNReciprocal in pymatgen 2026.3
     from pymatgen.analysis.local_env import (
         BrunnerNNReciprocal as BrunnerNN_reciprocal,
     )
+except ImportError:  # fallback for pymatgen < 2024.3
+    from pymatgen.analysis.local_env import BrunnerNN_reciprocal
 
 from slices.config import LJ_PARAMS_LIST, OFFSET, PERIODIC_DATA
 from slices.exceptions import (
@@ -78,8 +77,11 @@ from slices.relax_backends import make_relaxer
 from slices.tobascco_net import Net
 from slices.utils_wyckoff import get_space_group_num_from_letter_enc, get_tokenized_enc
 
+VALID_GRAPH_METHODS: tuple[str, ...] = ("econnn", "crystalnn", "brunnernn", "mininn")
+
 __all__ = [
     "SLICES",
+    "VALID_GRAPH_METHODS",
     "CocycleBasisError",
     "GFNFFExecutionError",
     "GraphTopologyError",
@@ -182,8 +184,7 @@ class SLICES:
                 ``"FIRE"``, or ``"FIRE+BFGS"``). Defaults to ``"BFGS"``.
             fmax: Maximum atomic force convergence threshold in eV/Angstrom.
                 Defaults to ``0.2``.
-            steps: Maximum force-field optimization steps for cells up to 40
-                atoms. Defaults to ``100``.
+            steps: Maximum force-field optimization steps. Defaults to ``100``.
             relax_model: Force field used for final structural relaxation.
                 Defaults to ``"auto"``, which resolves to ``"nequip-s+l"`` on CPU
                 (or ``SLICES_RELAX_MODEL`` when set; GPU execution is opt-in via
@@ -194,8 +195,15 @@ class SLICES:
                 ``"m3gnet"``) are supported when their packages are installed.
                 After initialization, ``self.relax_model`` stores the resolved
                 canonical backend name.
+
+        Raises:
+            ValueError: If ``graph_method`` is not in ``VALID_GRAPH_METHODS``.
         """
         gc.collect()
+        if graph_method not in VALID_GRAPH_METHODS:
+            raise ValueError(
+                f"Unsupported graph_method {graph_method!r}; choose from {VALID_GRAPH_METHODS}."
+            )
         self.atom_types = atom_types
         self.edge_indices = edge_indices
         self.to_jimages = to_jimages
@@ -255,7 +263,12 @@ class SLICES:
 
         Returns:
             ``True`` if all sites satisfy ``Z < 87``, else ``False``.
+
+        Raises:
+            SLICESEncodingError: If ``structure`` contains zero sites.
         """
+        if len(structure) == 0:
+            raise SLICESEncodingError("Cannot check elements on an empty Structure with 0 sites.")
         atom_types = np.array(structure.atomic_numbers)
         return bool(atom_types.max() < 87)
 
@@ -293,7 +306,15 @@ class SLICES:
 
         Returns:
             Constructed ``StructureGraph`` instance.
+
+        Raises:
+            SLICESEncodingError: If ``structure`` contains zero sites.
+            ValueError: If ``self.graph_method`` is not in ``VALID_GRAPH_METHODS``.
         """
+        if len(structure) == 0:
+            raise SLICESEncodingError(
+                "Cannot construct a StructureGraph from an empty Structure with 0 sites."
+            )
         if self.graph_method == "brunnernn":
             structure_graph = StructureGraph.from_local_env_strategy(
                 structure, BrunnerNN_reciprocal()
@@ -311,7 +332,10 @@ class SLICES:
                 structure, CrystalNN(porous_adjustment=False, weighted_cn=True)
             )
         else:
-            print("ERROR - graph_method not implemented")
+            raise ValueError(
+                f"Unsupported graph_method {self.graph_method!r}; "
+                f"choose from {VALID_GRAPH_METHODS}."
+            )
         return structure_graph
 
     # === SLICES String Parsing & Serialization ===
@@ -331,27 +355,52 @@ class SLICES:
                 deduplicate identical edges. Defaults to ``True``.
 
         Raises:
+            SLICESDecodingError: If ``strategy`` is unsupported (including
+                encode-only ``strategy=2``) or no numeric edge tokens are present.
             Exception: If element tokens, space-group prefix tokens, atom indices,
                 or periodic image labels are malformed.
         """
         self.atom_types = None
         self.edge_indices = None
         self.to_jimages = None
+        self.unstable_graph = False
+        if strategy not in (1, 3, 4):
+            if strategy == 2:
+                raise SLICESDecodingError(
+                    "Decoding strategy 2 is not supported (strategy 2 is encode-only)."
+                )
+            raise SLICESDecodingError(
+                f"Unsupported decoding strategy {strategy!r}; choose from (1, 3, 4)."
+            )
         tokens = SLICES.strip().split(" ")
         if strategy == 3:
+            num_atoms: int | None = None
             for i in range(len(tokens)):
-                if tokens[i].isnumeric():
+                if self._is_int_token(tokens[i]):
                     num_atoms = i
                     break
+            if num_atoms is None or num_atoms == 0:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 3 SLICES string: missing atom symbols or numeric edge tokens."
+                )
             self.atom_symbols = tokens[:num_atoms]
             num_edges = int((len(tokens) - len(self.atom_symbols)) / 5)
+            if num_edges == 0:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 3 SLICES string: no complete edges found."
+                )
             edge_indices = np.zeros([num_edges, 2], dtype=int)
             to_jimages = np.zeros([num_edges, 3], dtype=int)
             for i in range(num_edges):
                 edge = tokens[num_atoms + i * 5 : num_atoms + (i + 1) * 5]
                 edge_indices[i, 0] = int(edge[0])
                 edge_indices[i, 1] = int(edge[1])
-                if edge_indices[i, 0] > num_atoms - 1 or edge_indices[i, 1] > num_atoms - 1:
+                if (
+                    edge_indices[i, 0] < 0
+                    or edge_indices[i, 0] > num_atoms - 1
+                    or edge_indices[i, 1] < 0
+                    or edge_indices[i, 1] > num_atoms - 1
+                ):
                     raise Exception("Error: wrong edge indices")
                 for j in range(3):
                     if edge[j + 2] == "-":
@@ -366,10 +415,20 @@ class SLICES:
         if strategy == 1:
             temp_list = []
             for i in range(len(tokens)):
-                if tokens[i].isnumeric():
+                if self._is_int_token(tokens[i]):
                     temp_list.append(int(tokens[i]))
+            if not temp_list:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 1 SLICES string: no numeric edge tokens found."
+                )
+            if min(temp_list) < 0:
+                raise Exception("Error: wrong edge indices")
             num_atoms = max(temp_list) + 1
             num_edges = int(len(tokens) / 7)
+            if num_edges == 0:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 1 SLICES string: no complete edges found."
+                )
             edge_indices = np.zeros([num_edges, 2], dtype=int)
             to_jimages = np.zeros([num_edges, 3], dtype=int)
             self.atom_symbols = ["NaN"] * num_atoms
@@ -377,10 +436,15 @@ class SLICES:
                 edge = tokens[i * 7 : (i + 1) * 7]
                 edge_indices[i, 0] = int(edge[2])
                 edge_indices[i, 1] = int(edge[3])
+                if (
+                    edge_indices[i, 0] < 0
+                    or edge_indices[i, 0] > num_atoms - 1
+                    or edge_indices[i, 1] < 0
+                    or edge_indices[i, 1] > num_atoms - 1
+                ):
+                    raise Exception("Error: wrong edge indices")
                 self.atom_symbols[edge_indices[i, 0]] = edge[0]
                 self.atom_symbols[edge_indices[i, 1]] = edge[1]
-                if edge_indices[i, 0] > num_atoms - 1 or edge_indices[i, 1] > num_atoms - 1:
-                    raise Exception("Error: wrong edge indices")
                 for j in range(3):
                     if edge[j + 4] == "-":
                         to_jimages[i, j] = -1
@@ -407,14 +471,23 @@ class SLICES:
                     raise Exception("Error: space_group_num = None") from err
             else:
                 space_group_num = None
+            num_atoms = None
             for i in range(first_elem_idx, len(tokens)):
-                if tokens[i].isnumeric():
+                if self._is_int_token(tokens[i]):
                     num_atoms = i - first_elem_idx
                     break
+            if num_atoms is None:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 4 SLICES string: no numeric edge tokens found."
+                )
             self.space_group_num = space_group_num
             self.atom_symbols = tokens[first_elem_idx : first_elem_idx + num_atoms]
             start_idx = first_elem_idx + len(self.atom_symbols)
             num_edges = int((len(tokens) - start_idx) / 3)
+            if num_edges == 0:
+                raise SLICESDecodingError(
+                    "Invalid Strategy 4 SLICES string: no complete edges found."
+                )
             edge_indices = np.zeros([num_edges, 2], dtype=int)
             to_jimages = np.zeros([num_edges, 3], dtype=int)
 
@@ -422,8 +495,15 @@ class SLICES:
                 edge = tokens[start_idx + i * 3 : start_idx + (i + 1) * 3]
                 edge_indices[i, 0] = int(edge[0])
                 edge_indices[i, 1] = int(edge[1])
-                if edge_indices[i, 0] > num_atoms - 1 or edge_indices[i, 1] > num_atoms - 1:
+                if (
+                    edge_indices[i, 0] < 0
+                    or edge_indices[i, 0] > num_atoms - 1
+                    or edge_indices[i, 1] < 0
+                    or edge_indices[i, 1] > num_atoms - 1
+                ):
                     raise Exception("Error: wrong edge indices")
+                if len(edge[2]) != 3:
+                    raise Exception("Error: wrong edge label")
                 for j in range(3):
                     if edge[2][j] == "-":
                         to_jimages[i, j] = -1
@@ -456,6 +536,13 @@ class SLICES:
                 for i in self.atom_symbols
             ]
         )
+
+    @staticmethod
+    def _is_int_token(token: str) -> bool:
+        """Return whether ``token`` is an ASCII signed or unsigned base-10 integer."""
+        if token.startswith("-"):
+            return len(token) > 1 and token[1:].isascii() and token[1:].isdigit()
+        return len(token) > 0 and token.isascii() and token.isdigit()
 
     @staticmethod
     def _first_element_index(tokens: list[str]) -> int | None:
@@ -617,23 +704,31 @@ class SLICES:
     # === Syntax Validation, Canonicalization & Formula Extraction ===
 
     @staticmethod
-    def check_structural_validity(str1: Structure) -> bool:
-        """Return whether distinct sites in ``str1`` have pairwise distance ``> 0.5`` Angstrom.
+    def check_structural_validity(str1: IStructure) -> bool:
+        """Return whether all non-trivial site pairs (including periodic self-images) exceed 0.5 A.
 
         Args:
-            str1: Input pymatgen ``Structure``.
+            str1: Input pymatgen ``Structure`` or ``IStructure``.
 
         Returns:
-            ``True`` if all distinct site pairs exceed ``0.5`` Angstrom, else ``False``.
-        """
-        distance_matrix = str1.lattice.get_all_distances(str1.frac_coords, str1.frac_coords)
-        min_value = 10000000  # inf
+            ``True`` if ``str1`` is non-empty and all distinct site or periodic
+            image pairs have Euclidean distance strictly greater than ``0.5``
+            Angstrom, else ``False``.
 
-        rows, cols = len(distance_matrix), len(distance_matrix[0])
-        for i in range(rows):
-            for j in range(i + 1, cols):
-                min_value = min(min_value, distance_matrix[i][j])
-        return bool(min_value > 0.5)
+        Raises:
+            TypeError: If ``str1`` is not a pymatgen ``IStructure`` instance.
+        """
+        if not isinstance(str1, IStructure):
+            raise TypeError(
+                f"Expected a pymatgen Structure or IStructure, got {type(str1).__name__}."
+            )
+        if len(str1) == 0:
+            return False
+        i_idx, j_idx, img, dists = str1.get_neighbor_list(r=0.5 + 1e-9)
+        if len(dists) == 0:
+            return True
+        self_image = (i_idx == j_idx) & np.all(img == 0, axis=1)
+        return bool(not np.any(dists[~self_image] <= 0.5))
 
     def check_SLICES(
         self,
@@ -822,28 +917,104 @@ class SLICES:
         )
 
     def SLICES2formula(self, SLICES: str) -> str | None:
-        """Extract the compact chemical formula from a Strategy 3 or Strategy 4 SLICES string.
+        """Extract the compact chemical formula from a Strategy 1, 2, 3, or 4 SLICES string.
 
         Args:
-            SLICES: Input SLICES string containing an atom-symbol header followed
-                by numeric edge indices.
+            SLICES: Input SLICES string encoded in Strategy 1, 2, 3, or 4 format.
 
         Returns:
             Unspaced formula string (e.g., ``'Nd2Si2Ru2'``), or ``None`` if
-            composition parsing fails.
+            ``SLICES`` is malformed or lacks edge/composition tokens.
         """
-        tokens = SLICES.split()
-        first_elem_idx = self._first_element_index(tokens)
-        if first_elem_idx:  # skip the space-group tokens of Strategy 4
-            SLICES = " ".join(tokens[first_elem_idx:])
-        match = re.search(r"^(.*?)(\d+)", SLICES)
-        extracted_string = match.group(1)  # type: ignore[union-attr]
+        if not isinstance(SLICES, str):
+            return None
+        tokens = SLICES.strip().split()
+        if not tokens:
+            return None
+
+        atom_symbols: list[str] | None = None
+        if len(tokens) == 1:
+            # Strategy 2: unspaced 2-character '_'-padded element header followed by digits.
+            match_s2 = re.match(r"^([A-Za-z_]+?)(\d.*)$", tokens[0])
+            if match_s2 is None:
+                return None
+            header, tail = match_s2.group(1), match_s2.group(2)
+            if len(header) < 2 or len(header) % 2 != 0 or len(tail) < 7:
+                return None
+            cand_s2 = [header[k : k + 2].rstrip("_") for k in range(0, len(header), 2)]
+            try:
+                for sym in cand_s2:
+                    if not sym:
+                        return None
+                    Element(sym)
+            except ValueError:
+                return None
+            atom_symbols = cand_s2
+        else:
+            # Detect Strategy 1: 7-token edge tuples (sym_u, sym_v, u, v, j0, j1, j2).
+            num_s1_edges = len(tokens) // 7
+            if num_s1_edges >= 1:
+                s1_edges: list[tuple[str, str, int, int]] = []
+                is_s1 = True
+                for idx in range(num_s1_edges):
+                    edge_tok = tokens[idx * 7 : (idx + 1) * 7]
+                    if not (
+                        edge_tok[2].isascii()
+                        and edge_tok[2].isdigit()
+                        and edge_tok[3].isascii()
+                        and edge_tok[3].isdigit()
+                        and edge_tok[4] in ("-", "o", "+")
+                        and edge_tok[5] in ("-", "o", "+")
+                        and edge_tok[6] in ("-", "o", "+")
+                    ):
+                        is_s1 = False
+                        break
+                    try:
+                        Element(edge_tok[0])
+                        Element(edge_tok[1])
+                    except ValueError:
+                        is_s1 = False
+                        break
+                    s1_edges.append(
+                        (edge_tok[0], edge_tok[1], int(edge_tok[2]), int(edge_tok[3]))
+                    )
+                if is_s1:
+                    n_atoms_s1 = max(max(u, v) for _, _, u, v in s1_edges) + 1
+                    rebuilt = [""] * n_atoms_s1
+                    consistent = True
+                    for sym_u, sym_v, u, v in s1_edges:
+                        if rebuilt[u] not in ("", sym_u) or rebuilt[v] not in ("", sym_v):
+                            consistent = False
+                            break
+                        rebuilt[u] = sym_u
+                        rebuilt[v] = sym_v
+                    if consistent and "" not in rebuilt:
+                        atom_symbols = rebuilt
+
+            if atom_symbols is None:
+                # Strategy 3 or Strategy 4: optional SG prefix + atom symbols + integer indices.
+                first_elem_idx = self._first_element_index(tokens)
+                if first_elem_idx is None:
+                    return None
+                first_int_idx: int | None = None
+                for i in range(first_elem_idx, len(tokens)):
+                    if self._is_int_token(tokens[i]):
+                        first_int_idx = i
+                        break
+                if first_int_idx is None or first_int_idx <= first_elem_idx:
+                    return None
+                cand_s34 = tokens[first_elem_idx:first_int_idx]
+                try:
+                    for sym in cand_s34:
+                        Element(sym)
+                except ValueError:
+                    return None
+                atom_symbols = cand_s34
+
         try:
-            composition = Composition(extracted_string)
-            formula = composition.formula.replace(" ", "")
-            return formula
+            composition = Composition(" ".join(atom_symbols))
+            return composition.formula.replace(" ", "")
         except Exception:
-            print(SLICES, extracted_string)
             return None
 
     # === Primitive-Cell Encoding & Data Augmentation ===
@@ -861,7 +1032,12 @@ class SLICES:
         Returns:
             Primitive cell when strictly smaller with identical reduced formula,
             otherwise ``structure``.
+
+        Raises:
+            SLICESEncodingError: If ``structure`` contains zero sites.
         """
+        if len(structure) == 0:
+            raise SLICESEncodingError("Cannot encode an empty Structure with 0 sites.")
         try:
             primitive = SpacegroupAnalyzer(structure).get_primitive_standard_structure()
             if len(primitive) < len(structure):
@@ -1095,6 +1271,9 @@ class SLICES:
 
         Returns:
             Integer dimensionality (0, 1, 2, or 3).
+
+        Raises:
+            ValueError: If ``self.graph_method`` is not in ``VALID_GRAPH_METHODS``.
         """
         if self.graph_method == "brunnernn":
             bonded_structure = BrunnerNN_reciprocal().get_bonded_structure(structure)
@@ -1107,7 +1286,10 @@ class SLICES:
                 porous_adjustment=False, weighted_cn=True
             ).get_bonded_structure(structure)
         else:
-            print("ERROR - graph_method not implemented")
+            raise ValueError(
+                f"Unsupported graph_method {self.graph_method!r}; "
+                f"choose from {VALID_GRAPH_METHODS}."
+            )
         dim = get_dimensionality_larsen(bonded_structure)
         return int(dim)
 
@@ -1352,6 +1534,8 @@ class SLICES:
             temp3 = np.where((blist_original == ac).all(axis=1))
             temp4 = np.where((blist_flip == ac).all(axis=1))
             if (len(temp1[0]) + len(temp2[0])) and (len(temp3[0]) + len(temp4[0])):
+                if not np.isfinite(data["vangl"][i][0]) or not np.isfinite(data["vangl"][i][1]):
+                    continue
                 sign = 1
                 if len(temp1[0]):
                     index_x = temp1[0][0]
@@ -1380,15 +1564,18 @@ class SLICES:
         temp_max: float = 0
         for i in range(len(colattice_weights)):
             temp_max = max(temp_max, colattice_weights[i])
-        for i in range(len(colattice_weights)):
-            colattice_weights[i] = round(colattice_weights[i] / temp_max, 2)
+        if temp_max > 0:
+            for i in range(len(colattice_weights)):
+                colattice_weights[i] = round(colattice_weights[i] / temp_max, 2)
         temp_max = 0
         for i in range(len(bond_weight)):
             temp_max = max(temp_max, bond_weight[i])
         for i in range(len(bond_weight)):
             colattice_inds[0].append(i)
             colattice_inds[1].append(i)
-            colattice_weights.append(round(bond_weight[i] / temp_max, 2))
+            colattice_weights.append(
+                round(bond_weight[i] / temp_max, 2) if temp_max > 0 else 0.0
+            )
         if self.check_results:
             inner_p_target_dict = {
                 "inner_p_target": inner_p_target.tolist(),
@@ -1451,6 +1638,10 @@ class SLICES:
                 temp3 = np.where((blist_original == ac).all(axis=1))
                 temp4 = np.where((blist_flip == ac).all(axis=1))
                 if (len(temp1[0]) + len(temp2[0])) and (len(temp3[0]) + len(temp4[0])):
+                    if not np.isfinite(data["vangl"][i][0]) or not np.isfinite(
+                        data["vangl"][i][1]
+                    ):
+                        continue
                     sign = 1
                     if len(temp1[0]):
                         index_x = temp1[0][0]
@@ -1479,15 +1670,18 @@ class SLICES:
             temp_max: float = 0
             for i in range(len(colattice_weights)):
                 temp_max = max(temp_max, colattice_weights[i])
-            for i in range(len(colattice_weights)):
-                colattice_weights[i] = round(colattice_weights[i] / temp_max, 2)
+            if temp_max > 0:
+                for i in range(len(colattice_weights)):
+                    colattice_weights[i] = round(colattice_weights[i] / temp_max, 2)
             temp_max = 0
             for i in range(len(bond_weight)):
                 temp_max = max(temp_max, bond_weight[i])
             for i in range(len(bond_weight)):
                 colattice_inds[0].append(i)
                 colattice_inds[1].append(i)
-                colattice_weights.append(round(bond_weight[i] / temp_max, 2))
+                colattice_weights.append(
+                    round(bond_weight[i] / temp_max, 2) if temp_max > 0 else 0.0
+                )
             if self.check_results:
                 inner_p_target_dict = {
                     "inner_p_target": inner_p_target.tolist(),
@@ -1530,12 +1724,11 @@ class SLICES:
         """
         num_nodes = len(graph.nodes)
         covered_pair = []
-        for i in graph.edges:
-            covered_pair.append(i[0] + "," + i[1])
-        unique_covered_pair = list(dict.fromkeys(covered_pair))
-        unique_covered_pair_int = []
-        for i in unique_covered_pair:
-            unique_covered_pair_int.append([int(i.split(",")[0]) - 1, int(i.split(",")[1]) - 1])
+        for edge in graph.edges:
+            u = int(edge[0]) - 1
+            v = int(edge[1]) - 1
+            covered_pair.append((min(u, v), max(u, v)))
+        unique_covered_pair_int = [list(pair) for pair in dict.fromkeys(covered_pair)]
         uncovered_pair = []
         index_i, index_j = np.triu_indices(num_nodes)
         triu_pair = []
@@ -1947,15 +2140,17 @@ class SLICES:
         coordinates_temp = self.get_coordinates(lattice_arcs, num_nodes, shortest_path, spanning)
         coordinates_temp_cart = np.dot(coordinates_temp, lattice_vectors_scaled)
         distance_matrix = self.all_distances(coordinates_temp_cart, coordinates_temp_cart)
+        epsilon2 = 1e-10
         for k in range(len(colattice_inds[0])):
             i = colattice_inds[0][k]
             j = colattice_inds[1][k]
             if i == j:
                 # inner_p units are Angstrom^2
+                denom_ij = np.sqrt(max(inner_p[i][j], epsilon2))
                 square_diff += (inner_p[i][j] - mat_target[i][j]) ** 2 + (
                     4
                     * vbond_param_ave_covered
-                    * (covered_pair_lj[i][1] / np.sqrt(inner_p[i][j])) ** 12
+                    * (covered_pair_lj[i][1] / denom_ij) ** 12
                 )
                 print(
                     "bond:"
@@ -1963,9 +2158,9 @@ class SLICES:
                     + ","
                     + str(j)
                     + ","
-                    + str(round(np.sqrt(inner_p[i][j]), 2))
+                    + str(round(np.sqrt(max(inner_p[i][j], epsilon2)), 2))
                     + ","
-                    + str(round(np.sqrt(mat_target[i][j]), 2))
+                    + str(round(np.sqrt(max(mat_target[i][j], epsilon2)), 2))
                     + ","
                     + str(round((inner_p[i][j] - mat_target[i][j]) ** 2, 5))
                     + ","
@@ -1973,7 +2168,7 @@ class SLICES:
                         round(
                             4
                             * vbond_param_ave_covered
-                            * (covered_pair_lj[i][1] / np.sqrt(inner_p[i][j])) ** 12,
+                            * (covered_pair_lj[i][1] / denom_ij) ** 12,
                             5,
                         )
                     )
@@ -1982,6 +2177,10 @@ class SLICES:
                 square_diff += (
                     angle_weight * colattice_weights[k] * (inner_p[i][j] - mat_target[i][j]) ** 2
                 )
+                denom_ii = np.sqrt(max(inner_p[i][i], epsilon2))
+                denom_jj = np.sqrt(max(inner_p[j][j], epsilon2))
+                target_ii = np.sqrt(max(mat_target[i][i], epsilon2))
+                target_jj = np.sqrt(max(mat_target[j][j], epsilon2))
                 print(
                     "angle:"
                     + str(i)
@@ -1990,7 +2189,7 @@ class SLICES:
                     + ","
                     + str(
                         round(
-                            inner_p[i][j] / np.sqrt(inner_p[i][i]) / np.sqrt(inner_p[j][j]),
+                            inner_p[i][j] / denom_ii / denom_jj,
                             5,
                         )
                     )
@@ -1998,8 +2197,8 @@ class SLICES:
                     + str(
                         round(
                             mat_target[i][j]
-                            / np.sqrt(mat_target[i][i])
-                            / np.sqrt(mat_target[j][j]),
+                            / target_ii
+                            / target_jj,
                             5,
                         )
                     )
@@ -2016,6 +2215,7 @@ class SLICES:
         if repul:
             for i in range(len(uncovered_pair)):
                 r_temp = distance_matrix[uncovered_pair[i][0], uncovered_pair[i][1]]
+                r_temp = max(r_temp, 1e-8)
                 if r_temp < uncovered_pair_lj[i][0]:
                     square_diff += 4 * vbond_param_ave * (uncovered_pair_lj[i][1] / r_temp) ** 12
                     print(
@@ -2097,10 +2297,6 @@ class SLICES:
             spanning_graph.add_edges_from(spanning)
             shortest_path = nx.shortest_path(spanning_graph, source="1")
             arc_coord_std = net.lattice_arcs
-            if self.unstable_graph:
-                net.cocycle_rep = np.zeros((net.order - 1, net.ndim)) + 0.5
-                net.periodic_rep = np.concatenate((net.cycle_rep, net.cocycle_rep), axis=0)
-                arc_coord_std = net.lattice_arcs
             coordinates_std = self.get_coordinates(
                 arc_coord_std, num_nodes, shortest_path, spanning
             )
@@ -2156,6 +2352,12 @@ class SLICES:
             Tuple ``(structures, final_energy_per_atom)`` where ``structures`` has
             length 3 when relaxed or length 2 when unrelaxed/failed, and
             ``final_energy_per_atom`` is in eV/atom (``0`` if unrelaxed).
+
+        Raises:
+            LatticeBasisError: If a 3D integral lattice basis cannot be obtained
+                from the quotient-graph cycle vectors.
+            CocycleBasisError: If a full-rank cocycle basis cannot be constructed
+                for a multi-vertex quotient graph.
         """
         x_dat, net_voltage = self.convert_graph()
         net = Net(x_dat, dim=3)
@@ -2165,8 +2367,21 @@ class SLICES:
             nx.draw(net.graph, ax=fig.add_subplot(111))
             fig.savefig("graph.png")
         net.simple_cycle_basis()
-        net.get_lattice_basis()
+        basis_status = net.get_lattice_basis()
+        if basis_status == -1 or net.lattice_basis is None:
+            raise LatticeBasisError(
+                "Could not obtain a 3D integral lattice basis from quotient-graph cycle vectors."
+            )
         net.get_cocycle_basis()
+        if net.order > 1 and (
+            net.cocycle is None
+            or net.cocycle_rep is None
+            or net.cocycle.ndim != 2
+            or net.cocycle.shape[0] != net.order - 1
+        ):
+            raise CocycleBasisError(
+                f"Could not construct a full-rank cocycle basis of size {net.order - 1}."
+            )
         if self.check_results:
             inner_p_target, colattice_inds, colattice_weights = self.get_inner_p_target_debug(
                 bond_scaling
@@ -2535,9 +2750,6 @@ class SLICES:
     def relax_large_cell2(self, struc: Structure) -> tuple[Structure, float]:
         """Relax ``struc`` (> 40 atoms) with ``self.relaxer`` under a 2000-second timeout.
 
-        Calls ``self.relaxer.relax(struc)`` using the relaxer's own default
-        ``fmax`` and ``steps`` parameters.
-
         Args:
             struc: Input pymatgen ``Structure``.
 
@@ -2545,10 +2757,10 @@ class SLICES:
             Tuple ``(final_structure, final_energy_per_atom)`` in eV/atom.
         """
         if self.check_results:
-            relax_results = self.relaxer.relax(struc)
+            relax_results = self.relaxer.relax(struc, fmax=self.fmax, steps=self.steps)
         else:
             with self.suppress_output():
-                relax_results = self.relaxer.relax(struc)
+                relax_results = self.relaxer.relax(struc, fmax=self.fmax, steps=self.steps)
         final_structure = relax_results["final_structure"]
         final_energy_per_atom = float(relax_results["trajectory"].energies[-1] / len(struc))
         return final_structure, final_energy_per_atom

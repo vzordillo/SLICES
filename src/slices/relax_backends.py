@@ -41,6 +41,7 @@ import subprocess
 import sys
 import time
 import types
+import warnings
 from typing import TYPE_CHECKING, Any
 
 from typing_extensions import Self
@@ -538,11 +539,13 @@ def get_calculator(size: str, device: str) -> tuple[Any, str]:
 
 def _cell_filter(atoms: Any) -> Any:
     """Wrap ``atoms`` in ASE ``ExpCellFilter`` for variable-cell relaxation."""
-    try:
-        from ase.filters import ExpCellFilter
-    except ImportError:  # ase < 3.23
-        from ase.constraints import ExpCellFilter
-    return ExpCellFilter(atoms)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        try:
+            from ase.filters import ExpCellFilter
+        except ImportError:  # ase < 3.23
+            from ase.constraints import ExpCellFilter
+        return ExpCellFilter(atoms)
 
 
 def _optimize(target: Any, optimizer: str, fmax: float, steps: int) -> int:
