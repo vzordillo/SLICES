@@ -4,7 +4,37 @@ All notable changes to SLICES are documented in this file. Commit hashes referen
 
 ---
 
-## [Unreleased — Wave 1 (`SAFE_NOW`)] — 2026-11-25 — Zero-Drift Bugfixes & Memory-Safety Guards
+## [Unreleased — Wave 3 (`VERSIONED_OPT_IN`)] — 2026-11-25 (`e5c7f0d`, `0e51ff0`) — Opt-In Scientific & API Upgrades
+
+Five clean opt-in upgrades across `src/slices/{core,relax_backends,decoding_strategies}.py` derived from [REEVAL_SYNTHESIS.md](docs/migration/reeval/REEVAL_SYNTHESIS.md) Section 5 Wave 3, preserving **100% default v4.0.2 numerical parity (`89/89` frozen golden baseline tests at `atol=1e-12`, `0.0` ULP drift)**:
+
+### Added
+
+- **Lorentz-Berthelot LJ Mixing (`DEF-001`, `src/slices/core.py`, `src/slices/decoding_strategies.py`):**
+  - Exported `VALID_LJ_MIXING_MODES = ("legacy", "lorentz")` in `slices.core.__all__` and appended `lj_mixing: Literal["legacy", "lorentz"] = "legacy"` to `SLICES.__init__` (`ValueError` on invalid modes).
+  - Under `lj_mixing="lorentz"`, `get_uncovered_pair_lj()` and `get_covered_pair_lj()` compute exact arithmetic Lorentz-Berthelot averages `[(r_cut_0 + r_cut_1) / 2, (sigma_0 + sigma_1) / 2]` on `[4*sigma, sigma]` length parameters, restoring atom-order permutation invariance (`5.0x` steric swing eliminated on `YHO2`) while preserving `"legacy"` bit-for-bit by default.
+  - Updated opt-in `_reconstruct_zl_multistart()` to evaluate Lorentz-Berthelot pair parameters inside a `try ... finally` block that unconditionally restores `slices_inst.lj_mixing`.
+- **Backend-Aware Element Validation & NequIP-OAM Pre-Check (`DEF-006`, `DEF-029`, `src/slices/core.py`, `src/slices/relax_backends.py`):**
+  - Exported `VALID_ELEMENT_MODES = ("legacy86", "nequip_oam", "gfnff103")` in `slices.core.__all__` and added `mode: Literal["legacy86", "nequip_oam", "gfnff103"] = "legacy86"` to `SLICES.check_element()` (`"legacy86"`: `Z <= 86` default; `"nequip_oam"`: 89-element OAM set `{1..83, 89..94}`; `"gfnff103"`: `1 <= Z <= 103`; raises `ValueError` on invalid mode and `SLICESEncodingError` on 0-site structures).
+  - Exported `NEQUIP_OAM_ATOMIC_NUMBERS: frozenset[int]` (`{1..83, 89..94}`) in `slices.relax_backends.__all__` and added a pre-relaxation element validation check in `NequIPRelaxer.relax()` (prior to `preoptimize()` and calculator execution), raising an informative `RelaxBackendError` naming unsupported symbols and atomic numbers (`Po..Ra`, `Am..Og`) instead of raw TorchScript `KeyError`.
+- **Incomplete-GFN-FF Automatic Stage 2 Recovery (`DEF-015`, `DEF-031` Wave 3, `src/slices/core.py`, `src/slices/decoding_strategies.py`):**
+  - Tracked transient `self._last_gfnff_incomplete` in `SLICES` whenever `get_inner_p_target()` / `get_inner_p_target_debug()` skips unmatched bonds (`"Cannot find bond!!!"`), leaves non-positive diagonal targets (`diag(inner_p_target) <= 0`), or catches a target-generation exception.
+  - Updated opt-in `robust_decode()` / `SLICES.robust_SLICES2structure()` to automatically advance from Stage 1 into Stage 2 (`BondParameterFallback` + Lorentz-Berthelot multi-start ZL\* + `ProgressiveRelaxer`) when `_last_gfnff_incomplete` is `True`, cleanly falling back to Stage 1's valid structure on Stage 2/3 error while preserving `0%` fast-path overhead and bit-for-bit v4.0.2 output on complete-GFN-FF crystals.
+- **Seeded `PYTHONHASHSEED`-Invariant Data Augmentation (`DEF-022`, `DEF-033`, `src/slices/core.py`):**
+  - Added `seed: int | None = None` to `SLICES.structure2randomSLICES()` and `SLICES.structure2SLICESAug_atom_order()`.
+  - Passing an integer `seed` uses an isolated `random.Random(seed)`, insertion-ordered `dict` deduplication, and a pre-loop `if len(seen) >= num: break` termination guard (guaranteeing `num=1` deterministically returns `[original_SLICES]`) for `100%` cross-`PYTHONHASHSEED` reproducibility with zero global `random` mutation, while `seed=None` preserves exact v4.0.2 behavior.
+- **Strict Trailing-Token Parsing (`DEF-024` Gap 3a, `src/slices/core.py`):**
+  - Added `strict: bool = False` to `SLICES.from_SLICES()`, `SLICES.check_SLICES()`, and `SLICES.check_SLICES_basic()`.
+  - Under `strict=True`, trailing partial edge tokens that violate strategy token stride (`7` for Strategy 1, `5` for Strategy 3, `3` for Strategy 4) raise `SLICESDecodingError` (and return `False` in `check_SLICES` / `check_SLICES_basic`), while `strict=False` preserves lenient replay compatibility for historical datasets (`HTS/9_EAH_Band_gap_PBE`).
+
+### Tests & Documentation
+
+- Added `tests/regression/test_wave3_opt_in.py` (`0e51ff0`, `9` `@pytest.mark.regression` tests covering all 5 opt-in Wave 3 features and `13` authentic truncated HTS PBE rows; full suite `274 passed, 5 skipped`).
+- Updated [DEFERRED_CORE_REGISTER.md](docs/migration/DEFERRED_CORE_REGISTER.md) (`34/34` entries synchronized), appended Post-Migration Cycle 2 to [LAB_LOG.md](docs/migration/LAB_LOG.md), and updated Wave 3 API contracts in `docs/api/API_{CORE,MLIP,DECODING_STRATEGIES}.md`.
+
+---
+
+## [Wave 1 (`SAFE_NOW`)] — 2026-11-25 (`a85e832`..`f9d675b`) — Zero-Drift Bugfixes & Memory-Safety Guards
 
 Post-migration empirical re-evaluation across `125,174` SLICES strings, `18,093` MP-20 CIFs, `3,883` GFN-FF topology evaluations, and controlled CPU `NequIP-OAM-S/L` A/B benchmarks ([REEVAL_SYNTHESIS.md](docs/migration/reeval/REEVAL_SYNTHESIS.md)), followed by **15 zero-drift (`0.0` ULP, `89/89` golden baseline parity at `atol=1e-12`) Wave 1 fixes** across `src/slices/{exceptions,core,gfnff_helper,tobascco_net,relax_backends}.py`:
 

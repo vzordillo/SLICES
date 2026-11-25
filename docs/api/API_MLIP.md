@@ -19,13 +19,14 @@ SLICES v4.0.2 separates the **frozen default NequIP-OAM relaxation backend** (`s
 
 ### Public Exports (`slices.relax_backends.__all__`)
 
-`COLLAPSE_VOLUME`, `DOWNLOAD_RETRY_WAITS`, `DOWNLOAD_TIMEOUT`, `FIRE_PRESTEPS`, `NEQUIP_MODEL_IDS`, `NEQUIP_PLANS`, `OPTIMIZERS`, `OVERLAP_TARGET`, `OVERLAP_TRIGGER`, `RELAX_MODELS`, `CellCollapse`, `ModelDownloadError`, `NequIPRelaxer`, `RelaxBackendError`, `choose_device`, `closest_pair_ratio`, `get_calculator`, `make_relaxer`, `nequip_available`, `preoptimize`, `remove_overlaps`, `resolve_relax_model`.
+`COLLAPSE_VOLUME`, `DOWNLOAD_RETRY_WAITS`, `DOWNLOAD_TIMEOUT`, `FIRE_PRESTEPS`, `NEQUIP_MODEL_IDS`, `NEQUIP_OAM_ATOMIC_NUMBERS`, `NEQUIP_PLANS`, `OPTIMIZERS`, `OVERLAP_TARGET`, `OVERLAP_TRIGGER`, `RELAX_MODELS`, `CellCollapse`, `ModelDownloadError`, `NequIPRelaxer`, `RelaxBackendError`, `choose_device`, `closest_pair_ratio`, `get_calculator`, `make_relaxer`, `nequip_available`, `preoptimize`, `remove_overlaps`, `resolve_relax_model`.
 
 ### Constants & Plans
 
 | Constant | Value | Purpose |
 |---|---|---|
 | `NEQUIP_MODEL_IDS` | `{"S": "mir-group/NequIP-OAM-S:0.1", "M": "mir-group/NequIP-OAM-M:0.1", "L": "mir-group/NequIP-OAM-L:0.1"}` | Official `nequip.net` model identifiers |
+| `NEQUIP_OAM_ATOMIC_NUMBERS` | `frozenset(range(1, 84)) \| frozenset(range(89, 95))` (`89` elements `{1..83, 89..94}`) | Exact 89-element NequIP-OAM vocabulary (`H`–`Bi` and `Ac`–`Pu`; excludes `Po`–`Ra` `[84..88]` and `Am`–`Og` `[95..118]`), shared by `NequIPRelaxer.relax()` pre-validation and `SLICES.check_element(..., mode="nequip_oam")` (`DEF-029`) |
 | `NEQUIP_PLANS` | `{"nequip-l": ("L", None), "nequip-s+l": ("S", "L"), "nequip-m+l": ("M", "L")}` | `(relax_size, energy_single_point_size)` pairs |
 | `RELAX_MODELS` | `("auto", "none", "nequip-l", "nequip-s+l", "nequip-m+l")` | Built-in v4.0.2 model choices |
 | `OPTIMIZERS` | `("BFGS", "LBFGS", "FIRE", "FIRE+BFGS")` | Supported ASE optimizers (`FIRE+BFGS` runs `min(FIRE_PRESTEPS, steps)` FIRE steps then BFGS) |
@@ -38,7 +39,7 @@ SLICES v4.0.2 separates the **frozen default NequIP-OAM relaxation backend** (`s
 
 ### Exceptions
 
-- `RelaxBackendError(SLICESError, RuntimeError)` (imported from `slices.exceptions`): Raised on model compilation, loading, or evaluation failures.
+- `RelaxBackendError(SLICESError, RuntimeError)` (imported from `slices.exceptions`): Raised on model compilation, loading, evaluation, or unsupported-element validation failures (elements outside `NEQUIP_OAM_ATOMIC_NUMBERS`).
 - `ModelDownloadError(SLICESError, RuntimeError)` (imported from `slices.exceptions`, **sibling** of `RelaxBackendError`): Raised on Zenodo/network download failures without writing `.failed` cache markers.
 - `CellCollapse(RelaxBackendError)`: Raised by `_collapse_guard` when unit-cell volume, aspect ratio (`> 20x`), or cell angle (`< 5 deg`) degenerates during relaxation.
 
@@ -68,10 +69,13 @@ class NequIPRelaxer:
 
 - **Attributes:** `name: str`, `device: str`, `optimizer: str`, `description: str`, `relax_calc`, `energy_calc`.
 - **Execution Pipeline:**
-  1. Runs `preoptimize(structure)` when `closest_pair_ratio(structure) < OVERLAP_TRIGGER`.
-  2. Converts to ASE `Atoms`, wraps in `_cell_filter` (`ExpCellFilter`, frozen per `DEF-009`), and minimizes under `_collapse_guard` via `_optimize`.
-  3. On `CellCollapse`, retries once from the post-`preoptimize` structure using `NequIP-OAM-S` with `FIRE(maxstep=0.1)` and `2 * steps` (`retry = 1`).
-  4. Evaluates final total energy (in eV) with `energy_calc` (`L` for `nequip-s+l` / `nequip-m+l`) or the relaxation calculator (`nequip-l`).
+  1. Converts `structure` to ASE `Atoms` via `AseAtomsAdaptor.get_atoms(structure)` and invokes `_validate_nequip_elements(atoms)` **before** `preoptimize()` or any calculator evaluation. If any site atomic number falls outside `NEQUIP_OAM_ATOMIC_NUMBERS` (`{1..83, 89..94}`), raises `RelaxBackendError` naming the unsupported element symbol(s) and atomic number(s) (e.g., `Po (Z=84)`, `Rn (Z=86)`, `Am (Z=95)`) and the supported `{1..83, 89..94}` set rather than failing with a raw TorchScript `KeyError` (`DEF-029`).
+  2. Runs `preoptimize(structure)` when `closest_pair_ratio(structure) < OVERLAP_TRIGGER` (re-converting `atoms` only when `preoptimize` modifies `structure`).
+  3. Wraps `atoms` in `_cell_filter` (`ExpCellFilter`, frozen per `DEF-009` with locally scoped ASE `DeprecationWarning` suppression) and minimizes under `_collapse_guard` via `_optimize`.
+  4. On `CellCollapse`, retries once from the post-`preoptimize` structure using `NequIP-OAM-S` with `FIRE(maxstep=0.1)` and `2 * steps` (`retry = 1`).
+  5. Evaluates final total energy (in eV) with `energy_calc` (`L` for `nequip-s+l` / `nequip-m+l`) or the relaxation calculator (`nequip-l`).
+- **Raises:**
+  - `RelaxBackendError`: If `structure` contains any element outside `NEQUIP_OAM_ATOMIC_NUMBERS` (`{1..83, 89..94}`) or if cell collapse persists after retry.
 - **Return Dictionary Protocol (5 Keys):**
   ```python
   {
