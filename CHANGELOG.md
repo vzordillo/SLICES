@@ -4,6 +4,30 @@ All notable changes to SLICES are documented in this file. Commit hashes referen
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Energy-Aware Stage 1 vs Stage 2 Selection in `robust_decode` (`src/slices/decoding_strategies.py`, `docs/api/API_DECODING_STRATEGIES.md`, `tests/regression/test_v41_algo_upgrades.py`):**
+  - Added `_is_valid_relaxed_candidate()` (finite-energy and `check_structural_validity` checks) and updated `robust_decode()` to compare Stage 1 and Stage 2 candidates and keep the lower-energy structurally valid structure whenever a relaxer is active (while preferring a valid Stage 2 geometry when `relaxer is None`).
+  - Improved `mp-625477` (`Eu2H6O6`) by `+464.05 meV/atom` (`eform = -1.646373` vs Stage 2's `-1.182321 eV/atom`) while preserving Stage 2's lower-energy structure on `mp-1176505` (`Lu4H4O8`, `-2.724169 eV/atom`), verified by 3 new regression tests (`297 passed, 5 skipped, 0 failed` across the full unified suite).
+
+### Added
+
+- **GitHub Actions CI Workflow & `v4.1.0` Release ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)):**
+  - Added automated CI running Ruff lint, bytecode compilation, `tools/validate_installation.py --quick`, and offline unit/regression tests on `push`/`pull_request` to `main` (resolving against `https://pypi.org/simple` via `uv`), plus an opt-in `workflow_dispatch` job for the full NequIP-OAM suite.
+  - Published the [`v4.1.0` GitHub Release](https://github.com/vzordillo/SLICES/releases/tag/v4.1.0) on commit `0bde119`.
+- **Extended Blackwell GPU & Multi-Dataset Benchmarks ([`tools/benchmarks/run_gpu_extended_benchmarks.py`](tools/benchmarks/run_gpu_extended_benchmarks.py), [`EXTENDED_BENCHMARK_REPORT.md`](benchmark/v4_1_extended/EXTENDED_BENCHMARK_REPORT.md)):**
+  - **Full `MP-20` 5-Model GPU Suite (`N = 2,383` + 64-crystal stage breakdown):** Verified exact `0 / 0` match parity for CUDA `nequip-s+l` (`181.54 s`, `4.96x` relax speedup), Pareto-optimal `nequip-m+l` (`95.09%` strict [`p = 0.00263`], `96.43%` loose, `64.16%` SG in `180.61 s`), `nequip-l` (`94.88%` strict, `64.54%` SG, `0.0211 eV/atom` med AE), `chgnet 0.4.2` (`94.17%` strict, `0.0521 eV/atom` MAE, `0` outliers), and `mace 0.3.16` (`94.08%` strict, `6` Bi/Tl oxyhalide outliers).
+  - **Full `QMOF-21-40` (`N = 339` MOFs, `econnn`):** Achieved `3.54%` strict / `7.96%` loose (`default`) and `3.54%` strict / `8.26%` loose / `9.73%` SG (`lorentz`), beating the published Table S1 baseline (`2.95%` / `6.19%`).
+  - **Stratified `MP-21-40` (`N = 1,000 / 4,454` held-out test crystals, `crystalnn`, `seed=0`):** Achieved `99.40%` ok, `90.10%` strict (`+4.03 pp` vs Table S1 `86.07%`), and `93.70%` loose (`+4.73 pp` vs `88.97%`), with `lorentz` raising SG match from `47.60%` to `48.80%` (`+12` net, `p = 0.0576`).
+
+### Changed
+
+- **Streamlined Documentation ([`README.md`](README.md), [`docs/README.md`](docs/README.md)):** Rewrote `README.md` into a concise, scannable guide with CI/release badges, copy-pasteable `uv` installation and API/CLI quickstarts, a unified `v4.1` benchmark summary, and an updated documentation index.
+
+---
+
 ## [4.1.0] — 2026-11-25
 
 Promoted `exp/v4.1-algo-upgrades` (`d922032`..`9df6d8a`, branched from `9a51a73`) onto `main` via linear fast-forward merge and bumped the package version to `4.1.0`, delivering four core mathematical and topological upgrades verified against the locked `v4.0.2-baseline` (`f248b3c`) control group (`294 passed, 5 skipped, 0 failed` pytest + full `2,383`-crystal MP-20 & `39,244`-string `cRNN` paired A/B evaluation).

@@ -1,6 +1,6 @@
 # SLICES Documentation Index
 
-Central navigation hub for **SLICES v4.0.2** documentation, API references, benchmarks, and migration audit records.
+Central navigation hub for **SLICES v4.1** documentation, API references, benchmarks, and migration audit records.
 
 ---
 
@@ -8,15 +8,15 @@ Central navigation hub for **SLICES v4.0.2** documentation, API references, benc
 
 | Document | Scope |
 |---|---|
-| [README](../README.md) | Overview, `uv` installation, Python API & `slices` CLI quickstart, MP-20 benchmark summary, and testing commands |
-| [Technical Architecture Guide](../TECHNICAL.md) | Detailed design of Strategies 1–4, primitive-cell pre-reduction, periodic net embedding, bundled GFN-FF + non-Linux fallback, ZL\* optimization, NequIP relaxers, optional MLIPs, opt-in robust decoding, and baseline freeze invariant |
-| [Changelog](../CHANGELOG.md) | Chronological release history from upstream v1.0 through v4.0.2 and `slices-4-personal` migration commits |
+| [README](../README.md) | Overview, `uv` installation, Python API & `slices` CLI quickstart, v4.1 benchmark summary, and testing commands |
+| [Technical Architecture Guide](../TECHNICAL.md) | Detailed design of Strategies 1–4, primitive-cell pre-reduction, periodic net embedding, bundled GFN-FF + non-Linux fallback, ZL\* optimization, NequIP relaxers, optional MLIPs, and opt-in robust decoding |
+| [Changelog](../CHANGELOG.md) | Chronological release history from upstream v1.0 through v4.1.0 and post-release updates |
 | [Benchmarks Reproduction Guide](../benchmark/benchmarks.md) | Historical MP-20, MP-21-40, QMOF-21-40, and RNN validity/success benchmark workflows |
 | [License](../LICENSE) | GNU Lesser General Public License v2.1 (plus LGPL-3.0 for vendored GFN-FF in `src/slices/_vendor/gfnff_extra/LICENSE`) |
 
 ---
 
-## Quantitative Benchmarks (`v4.0.2-baseline` & `exp/v4.1-algo-upgrades`)
+## Quantitative Benchmarks (`v4.0.2-baseline` & `v4.1`)
 
 Locked full-dataset MP-20 non-metal control baseline (`2,383` structures, `nequip-s+l` CPU, paired `default` / `lorentz` / `robust` passes) archived on tag `v4.0.2-baseline` (`f248b3c`):
 
@@ -27,7 +27,7 @@ Locked full-dataset MP-20 non-metal control baseline (`2,383` structures, `nequi
 | [per_structure_metrics.csv](../benchmark/v4_0_2_baseline/per_structure_metrics.csv) | Wide-format control-group dataset (`2,383` rows × `53` columns) with lossless float64 formation energies and per-structure relaxation telemetry |
 | [run_mp20_baseline.py](../tools/benchmarks/run_mp20_baseline.py) | Reproducible multi-process benchmark runner (`24` spawned CPU workers, 1-to-1 MP-20 reference CIF join) |
 
-Paired A/B evaluation of experimental branch `exp/v4.1-algo-upgrades` (`DEF-003`, `DEF-014`, `DEF-021`, `DEF-031`) against locked `v4.0.2-baseline` across `2,383` MP-20 structures and `39,244` conditioned-RNN (`cRNN`) strings:
+Paired A/B evaluation of `v4.1` core algorithmic upgrades (`DEF-003`, `DEF-014`, `DEF-021`, `DEF-031`) against locked `v4.0.2-baseline` across `2,383` MP-20 structures and `39,244` conditioned-RNN (`cRNN`) strings:
 
 | Artifact | Scope |
 |---|---|
@@ -36,6 +36,16 @@ Paired A/B evaluation of experimental branch `exp/v4.1-algo-upgrades` (`DEF-003`
 | [summary.json](../benchmark/v4_1_experimental/summary.json) | Candidate 3-pass aggregate metrics, crystal-system summaries, and environment metadata on `exp/v4.1-algo-upgrades` |
 | [per_structure_metrics.csv](../benchmark/v4_1_experimental/per_structure_metrics.csv) | Candidate wide-format dataset (`2,383` rows × `53` columns) aligned 1-to-1 with `v4.0.2-baseline` |
 | [compare_ab_baselines.py](../tools/benchmarks/compare_ab_baselines.py) | Paired statistical A/B comparison and `cRNN` validity-rate audit CLI |
+
+Extended multi-GPU (`2x RTX PRO 6000 Blackwell`) and large-cell benchmark suites on `v4.1.0` covering 5-model `MP-20` (`N = 2,383` + 64-crystal stage breakdown), full `QMOF-21-40` (`N = 339`), and crystal-system-stratified `MP-21-40` (`N = 1,000 / 4,454`):
+
+| Artifact | Scope |
+|---|---|
+| [EXTENDED_BENCHMARK_REPORT.md](../benchmark/v4_1_extended/EXTENDED_BENCHMARK_REPORT.md) | Publication-grade report covering 5-model GPU MP-20 comparison (`nequip-s+l`, `nequip-m+l`, `nequip-l`, `chgnet`, `mace`), CPU vs CUDA stage breakdown, transparent outlier audit, full `QMOF-21-40`, and stratified `MP-21-40` |
+| [gpu_mp20_summary.json](../benchmark/v4_1_extended/gpu_mp20_summary.json) | Machine-readable 5-model GPU MP-20 metrics, VRAM telemetry, paired McNemar/Wilcoxon tests vs CPU `v4.1`, and `stage_breakdown_64` |
+| [qmof_21_40_summary.json](../benchmark/v4_1_extended/qmof_21_40_summary.json) | Machine-readable full `QMOF-21-40` (`339` MOFs, `econnn`) `default` vs `lorentz` metrics, failure taxonomy, and stage timings |
+| [mp21_40_summary.json](../benchmark/v4_1_extended/mp21_40_summary.json) | Machine-readable stratified `MP-21-40` (`1,000 / 4,454` crystals, `crystalnn`, `seed=0`) `default` vs `lorentz` metrics, 7-system breakdown, and sampled IDs |
+| [run_gpu_extended_benchmarks.py](../tools/benchmarks/run_gpu_extended_benchmarks.py) | Reproducible multi-GPU benchmark runner supporting `--suite mp20|qmof|mp21-40|all` and `--work-dir` multi-environment checkpoint merging |
 
 ---
 
