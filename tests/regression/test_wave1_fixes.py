@@ -569,9 +569,10 @@ def test_def021_def030_def032_topology_errors_nan_vangl_and_reversed_bond_pair(
     meta = _load_golden_metadata(repo_root)
     e11_s4 = meta["edges"]["E11_quasi1d_lattice_basis_neg1"]["slices"]
 
-    # DEF-021 (Wave 1): check_SLICES stays True for E11, while to_structures raises
-    # structured LatticeBasisError instead of TypeError: NoneType * float.
-    assert slices_no_relax.check_SLICES(e11_s4, strategy=4) is True
+    # DEF-021 (v4.1): check_SLICES rejects quasi-1D E11 under graph_rank_check=True,
+    # preserves True under graph_rank_check=False, and raises LatticeBasisError in to_structures.
+    assert slices_no_relax.check_SLICES(e11_s4, strategy=4, graph_rank_check=True) is False
+    assert slices_no_relax.check_SLICES(e11_s4, strategy=4, graph_rank_check=False) is True
     slices_no_relax.from_SLICES(e11_s4, strategy=4)
     with pytest.raises(LatticeBasisError) as lat_exc:
         slices_no_relax.to_structures()

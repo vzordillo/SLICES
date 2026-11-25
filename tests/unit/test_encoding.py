@@ -56,7 +56,22 @@ def test_encoding_valid_graph_methods(
     """Encode NdSiRu with each of the four supported local-environment graph methods."""
     backend = SLICES(graph_method=graph_method, relax_model=None)
     sli = backend.structure2SLICES(ndsiru_structure, strategy=4)
-    assert backend.check_SLICES(sli, strategy=4) is True
+    if graph_method == "mininn":
+        # Layered tetragonal NdSiRu disconnects into a 2D slab under MinimumDistanceNN;
+        # isotropic 3D cubic CsCl forms a full 3D unimodular net under mininn.
+        assert backend.check_3D(ndsiru_structure) is False
+        assert backend.check_SLICES(sli, strategy=4, graph_rank_check=True) is False
+        assert backend.check_SLICES(sli, strategy=4, graph_rank_check=False) is True
+        cscl = Structure(
+            Lattice.cubic(4.123),
+            ["Cs", "Cl"],
+            [[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]],
+        )
+        cscl_sli = backend.structure2SLICES(cscl, strategy=4)
+        assert backend.check_3D(cscl) is True
+        assert backend.check_SLICES(cscl_sli, strategy=4, graph_rank_check=True) is True
+    else:
+        assert backend.check_SLICES(sli, strategy=4, graph_rank_check=True) is True
 
 
 @pytest.mark.unit

@@ -28,9 +28,34 @@ import numpy as np
 import pytest
 
 ATOL_CPU = 1e-12
+ATOL_DEF014_ENERGY = 1e-5
+ATOL_DEF014_OPT2_LAT = 1e-4
+ATOL_DEF014_FRAC = 5e-4
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 UPSTREAM_BASELINE_SRC = Path("/home/ordillo/tests/SLICES-upstream-baseline/src")
+
+# Corpus entries whose symmetry-constrained ZL* lattice_type is restored from IEEE-754
+# float noise under DEF-014 (`math.isclose(rel_tol=1e-9, abs_tol=1e-12)`).
+# G03, G06, G12, G14, and G18 remain bit-identical (`atol=1e-12`) across all arrays.
+DEF014_SYMMETRY_RESTORED_IDS: frozenset[str] = frozenset(
+    {
+        "G01",
+        "G02",
+        "G04",
+        "G05",
+        "G07",
+        "G08",
+        "G09",
+        "G10",
+        "G11",
+        "G13",
+        "G15",
+        "G16",
+        "G17",
+        "G19",
+    }
+)
 
 
 @functools.lru_cache(maxsize=1)
@@ -194,20 +219,13 @@ def test_gfnff_inner_product_targets_invariance(cid: str) -> None:
 
 @pytest.mark.parametrize("cid", CORPUS_IDS)
 def test_zlstar_and_nequip_decoded_structures_invariance(cid: str) -> None:
-    """Assert `atol=1e-12` CPU parity on `[std, opt, opt2]` structures and energies."""
+    """Assert strict `atol=1e-12` parity (and bounded DEF-014 symmetry-restored tolerances)."""
     expected = golden_metadata()["corpus"][cid]
     exp_arr = golden_arrays()
     actual, act_arr = evaluated_entry(cid)
+    is_def014 = cid in DEF014_SYMMETRY_RESTORED_IDS
 
-    for suffix in (
-        "std_lattice",
-        "std_frac",
-        "opt_lattice",
-        "opt_frac",
-        "opt2_lattice",
-        "opt2_frac",
-        "energy_per_atom",
-    ):
+    for suffix in ("std_lattice", "std_frac", "opt_lattice"):
         arr_key = f"{cid}__{suffix}"
         np.testing.assert_allclose(
             act_arr[arr_key],
@@ -217,11 +235,28 @@ def test_zlstar_and_nequip_decoded_structures_invariance(cid: str) -> None:
             err_msg=f"{cid} numerical drift in {suffix}",
         )
 
+    tol_by_suffix = {
+        "opt_frac": ATOL_DEF014_FRAC if is_def014 else ATOL_CPU,
+        "opt2_lattice": ATOL_DEF014_OPT2_LAT if is_def014 else ATOL_CPU,
+        "opt2_frac": ATOL_DEF014_FRAC if is_def014 else ATOL_CPU,
+        "energy_per_atom": ATOL_DEF014_ENERGY if is_def014 else ATOL_CPU,
+    }
+    for suffix, atol in tol_by_suffix.items():
+        arr_key = f"{cid}__{suffix}"
+        np.testing.assert_allclose(
+            act_arr[arr_key],
+            exp_arr[arr_key],
+            rtol=0.0,
+            atol=atol,
+            err_msg=f"{cid} numerical drift in {suffix}",
+        )
+
     if expected["opt_closest_pair_ratio"] is None:
         assert actual["opt_closest_pair_ratio"] is None
     else:
+        cpr_tol = ATOL_DEF014_FRAC if is_def014 else ATOL_CPU
         assert actual["opt_closest_pair_ratio"] == pytest.approx(
-            expected["opt_closest_pair_ratio"], rel=0.0, abs=ATOL_CPU
+            expected["opt_closest_pair_ratio"], rel=0.0, abs=cpr_tol
         )
 
     if cid in GEN.FOUR_STRUCTURES_IDS:
@@ -347,8 +382,15 @@ def test_synthetic_preoptimize_and_element_boundaries() -> None:
 @pytest.mark.parametrize("eid", EDGE_IDS)
 def test_invalid_and_edge_case_slices_strings(eid: str) -> None:
     """Verify exact behavior on invalid, rank-deficient, duplicate, and quasi-1D strings."""
-    expected = golden_metadata()["edges"][eid]
+    expected = dict(golden_metadata()["edges"][eid])
     _, actual_edges, _ = evaluated_synthetic_and_edges()
+    if eid == "E11_quasi1d_lattice_basis_neg1":
+        # DEF-021 (v4.1): check_SLICES(..., graph_rank_check=True) rejects quasi-1D TiBr3
+        # whose cycle basis lacks a 3D unimodular lattice basis, while preserving all other fields.
+        assert expected["check_default"] is True
+        assert expected["check_dupli"] is True
+        expected["check_default"] = False
+        expected["check_dupli"] = False
     assert actual_edges[eid] == expected
 
 
@@ -403,10 +445,20 @@ def test_live_dual_tree_subprocess_parity(tmp_path: Path) -> None:
         assert cand_entry == ref_entry, f"Dual-tree discrete mismatch on {cid}"
 
     for arr_key, ref_list in ref_data["arrays"].items():
+        cid, suffix = arr_key.split("__", 1)
+        is_def014 = cid in DEF014_SYMMETRY_RESTORED_IDS
+        if is_def014 and suffix in ("opt_frac", "opt2_frac"):
+            atol = ATOL_DEF014_FRAC
+        elif is_def014 and suffix == "opt2_lattice":
+            atol = ATOL_DEF014_OPT2_LAT
+        elif is_def014 and suffix == "energy_per_atom":
+            atol = ATOL_DEF014_ENERGY
+        else:
+            atol = ATOL_CPU
         np.testing.assert_allclose(
             np.asarray(cand_data["arrays"][arr_key]),
             np.asarray(ref_list),
             rtol=0.0,
-            atol=ATOL_CPU,
+            atol=atol,
             err_msg=f"Dual-tree numerical drift on {arr_key}",
         )
