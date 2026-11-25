@@ -739,3 +739,29 @@ All measurements were executed against the read-only upstream tree (`PYTHONPATH=
 | `W3-c` | *(this commit)* | *(sealed locally on `main` immediately following `0e51ff0`)* | `docs: record Wave 3 VERSIONED_OPT_IN upgrades in register, lab log, and API docs` | `docs/migration/{DEFERRED_CORE_REGISTER,LAB_LOG}.md`, `CHANGELOG.md`, `docs/api/API_{CORE,MLIP,DECODING_STRATEGIES}.md` |
 
 - **Gate W3 Final Verdict:** **WAVE 3 (`VERSIONED_OPT_IN`) COMPLETE — 100% VERIFIED & COMMITTED LOCALLY ON `main` (`origin/main` untouched at `f9d675b`, `backup/v3-personal` at `301c75f`, `SLICES-upstream-baseline` locked at `94ef8e0`).**
+
+---
+
+### Post-Migration Cycle 3: Baseline Tagging (`v4.0.2-baseline`) & Full 2,383-Structure MP-20 Quantitative Benchmark (2026-11-25 15:57–16:55 JST — Completed)
+
+#### Entry `BL-01` — Reworded Opt-In Commits, `origin/main` Push & Locked `v4.0.2-baseline` Tag (2026-11-25 15:57–16:07 JST)
+- **Action:** Finalized and reworded the three atomic opt-in commits on `main`, pushed `f9d675b..f248b3c` cleanly to `origin/main` (`https://github.com/vzordillo/SLICES.git`), and created annotated reference tag **`v4.0.2-baseline`** at `f248b3c` (`"SLICES v4.0.2 verified parity baseline (89/89 golden tests, 0.0 ULP drift, 274 pytest pass)"`).
+- **Published Commit Ledger (`origin/main` = `v4.0.2-baseline` = `f248b3c`):**
+
+| Short SHA | Full SHA | Subject | Scope |
+|---|---|---|---|
+| `e5c7f0d` | `e5c7f0df9a3582103b07f7e9d39667899e744cf3` | `feat(slices): add opt-in Lorentz LJ, element modes, seeded aug, strict parse` | `src/slices/{core,relax_backends,decoding_strategies}.py` (`3 files, +366 / -35`) |
+| `0e51ff0` | `0e51ff0a7b60a13288aef9d2d71a0f7c2f53fdf8` | `test(regression): verify opt-in LJ, element, seed, strict, and fallback APIs` | `tests/regression/test_wave3_opt_in.py` (`1 file, +614`) |
+| `f248b3c` | `f248b3c725b48ea33b495acb3dd69bb9c1ec57e3` | `docs(api,migration): document opt-in backend APIs and update register` | `CHANGELOG.md`, `docs/api/API_{CORE,MLIP,DECODING_STRATEGIES}.md`, `docs/migration/{DEFERRED_CORE_REGISTER,LAB_LOG}.md` (`6 files, +281 / -139`) |
+
+#### Entry `BL-02` — Full 2,383-Structure MP-20 Quantitative Baseline Run & Determinism Cross-Check (`bench-runner`, 2026-11-25 16:48 JST)
+- **Executor / Artifacts (`#108`):** `bench-runner` (Carbon High) authored [`tools/benchmarks/run_mp20_baseline.py`](../../tools/benchmarks/run_mp20_baseline.py) (`46,929 B`; `ruff check --no-cache` -> `0` errors; `0` CJK hits) and archived [`benchmark/v4_0_2_baseline/summary.json`](../../benchmark/v4_0_2_baseline/summary.json) (`29,471 B`) and [`benchmark/v4_0_2_baseline/per_structure_metrics.csv`](../../benchmark/v4_0_2_baseline/per_structure_metrics.csv) (`611,007 B`, `2,383` data rows × `53` columns, lossless `.17g` float64 `eform`) on locked `v4.0.2-baseline` (`f248b3c`).
+- **Execution Configuration:** `24` spawned CPU workers (`ProcessPoolExecutor`, `OMP_NUM_THREADS=1`, `SLICES_TORCH_THREADS=1`, `PYTHONHASHSEED=0`, `PYTHONDONTWRITEBYTECODE=1`, 1 cached `SLICES` instance + `_RelaxTelemetryProxy` per worker), `relax_model="auto"` (`nequip-s+l`), total suite wall-clock **`626.369 s`**, `2,383 / 2,383` 1-to-1 reference CIF join against `data/mp20/train.csv` (`0` missing, `0` ambiguous; all `2,383` rows have `1 <= n_atoms <= 20`).
+- **Three-Pass Summary (`N = 2,383`):**
+  - **`default` (`legacy`, `SLICES2structure()`):** `192.59 s` (`12.37/s`), `2,374 / 2,383` (`99.62%`) `ok` (`8` `LatticeBasisError`, `1` `CocycleBasisError`), `2,234` (`93.75%`) strict / `2,286` (`95.93%`) loose `StructureMatcher`, `100.0%` structural validity (`ok`), `1,488` (`62.44%`) SG match, `271` (`11.37%`) canonical round-trip, `|eform - DFT|` MAE `0.199109` / Median `0.025299` / RMSE `0.342007 eV/atom`, `40` `preoptimized`, `0` `retry`, `11.854` mean steps.
+  - **`lorentz` (`lorentz`, `SLICES2structure()`):** `192.54 s` (`0.9997x`), `2,374` (`99.62%`) `ok`, `2,232` (`93.66%`, `+4/-6`) strict / `2,290` (`96.10%`, `+4/-0`) loose, **`1,558` (`65.38%`, `+75/-5 = +70`) SG match** (cubic `74.10% -> 80.96%`, `+40/-0`), `280` (`+9`) canonical round-trip, MAE `0.199249` / Median `0.025488 eV/atom`, `1` `retry` (`mp-753510`), `807 / 2,374` bit-identical `eform`.
+  - **`robust` (`legacy`, `robust_SLICES2structure(n_starts=3, seed=0)`):** `196.08 s` (`1.0181x`, `+1.81%`), **`2,381` (`99.92%`, `+7/-0`) `ok`** (rescued `7 / 8` `LatticeBasisError` crystals at `100%` strict/loose match; `2` `SLICESDecodingError` remaining: `mp-643814`, `mp-29816`), `2,241` (`94.04%`, `+7/-0`) strict / `2,293` (`96.22%`, `+7/-0`) loose, `1,491` (`+3/-0`) SG match, MAE `0.200619` / Median `0.025486 eV/atom`, `38` `preoptimized`, and **`2,372 / 2,374` (`99.92%`) fast-path bit-identity** (only the `2` `gfnff_incomplete` oxyhydrides `mp-1176505` `Lu4H4O8` and `mp-625477` `Eu2H6O6` entered Stage 2 fallback).
+- **Single-Process Determinism Parity:** Executed `examples/3.benchmark_relax_models.py --n 10 --seed 0 --models auto` and verified **`0.000e+00` (`0` ULP)** max absolute `eform` difference across all `10 / 10` sampled structures against Pass 1 (`default_eform`) in `per_structure_metrics.csv`. Scratch `/dev/shm/bench-check/` removed; `/` free space verified at `8.3 GB`.
+
+#### Entry `BL-03` — Baseline Benchmark Report & Documentation Archive (`bench-scribe`, 2026-11-25 16:55 JST)
+- **Executor / Artifacts (`#109`):** `bench-scribe` (Neon XHigh) authored publication-grade [`benchmark/v4_0_2_baseline/BASELINE_REPORT.md`](../../benchmark/v4_0_2_baseline/BASELINE_REPORT.md), linked the quantitative baseline suite from [`docs/README.md`](../README.md), added the `v4.0.2-baseline` benchmark release note to [`CHANGELOG.md`](../../CHANGELOG.md), and appended Cycle 3 (`BL-01`–`BL-03`) to `LAB_LOG.md`. Verified `0` CJK hits, `0` broken relative links, and `0` hardcoded host paths across all user-facing documentation.

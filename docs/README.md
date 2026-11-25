@@ -16,6 +16,19 @@ Central navigation hub for **SLICES v4.0.2** documentation, API references, benc
 
 ---
 
+## Quantitative Benchmarks (`v4.0.2-baseline`)
+
+Locked full-dataset MP-20 non-metal baseline (`2,383` structures, `nequip-s+l` CPU, paired `default` / `lorentz` / `robust` passes) archived on tag `v4.0.2-baseline` (`f248b3c`):
+
+| Artifact | Scope |
+|---|---|
+| [BASELINE_REPORT.md](../benchmark/v4_0_2_baseline/BASELINE_REPORT.md) | Publication-grade quantitative baseline report: 3-pass metrics, crystal-system breakdown, failure & rescue taxonomy, paired A/B analysis, and reproduction protocol |
+| [summary.json](../benchmark/v4_0_2_baseline/summary.json) | Machine-readable aggregate metrics, crystal-system summaries, paired transition counts, and environment metadata |
+| [per_structure_metrics.csv](../benchmark/v4_0_2_baseline/per_structure_metrics.csv) | Wide-format control-group dataset (`2,383` rows × `53` columns) with lossless float64 formation energies and per-structure relaxation telemetry |
+| [run_mp20_baseline.py](../tools/benchmarks/run_mp20_baseline.py) | Reproducible multi-process benchmark runner (`24` spawned CPU workers, 1-to-1 MP-20 reference CIF join) |
+
+---
+
 ## API Reference
 
 Module-by-module symbol references verified directly against `src/slices/`:

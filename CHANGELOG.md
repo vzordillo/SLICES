@@ -4,6 +4,24 @@ All notable changes to SLICES are documented in this file. Commit hashes referen
 
 ---
 
+## [Unreleased — `v4.0.2-baseline` MP-20 Quantitative Benchmark] — 2026-11-25 (`f248b3c`)
+
+Locked annotated baseline tag **`v4.0.2-baseline`** at commit `f248b3c` (verified `89/89` golden equivalence tests at `0.0` ULP drift and `274 passed, 5 skipped` across the full test suite) and archived the complete 2,383-structure MP-20 non-metal quantitative benchmark as a reproducible control group for future algorithmic work.
+
+### Added
+
+- **Multi-Process MP-20 Baseline Benchmark Runner ([`tools/benchmarks/run_mp20_baseline.py`](tools/benchmarks/run_mp20_baseline.py)):**
+  - Evaluates all `2,383` structures of `data/mp20_nonmetal/mp20_v4_benchmark_2383.csv` across three paired passes (`default`, `lorentz`, `robust`) using `24` spawned CPU workers (`OMP_NUM_THREADS=1`, `SLICES_TORCH_THREADS=1`, `PYTHONHASHSEED=0`), 1-to-1 Materials Project reference CIF matching against `data/mp20/train.csv`, non-invasive relaxation telemetry, and exact `formation_energy()` parity with [`examples/3.benchmark_relax_models.py`](examples/3.benchmark_relax_models.py).
+- **Archived `v4.0.2-baseline` Quantitative Control Group (`benchmark/v4_0_2_baseline/`):**
+  - [`BASELINE_REPORT.md`](benchmark/v4_0_2_baseline/BASELINE_REPORT.md): Publication-grade baseline report covering 3-pass metrics, 7-system crystallographic breakdown, failure/rescue taxonomy, incomplete-GFN-FF oxyhydride diagnostics, paired A/B deltas, and control-group reproduction protocol.
+  - [`summary.json`](benchmark/v4_0_2_baseline/summary.json) & [`per_structure_metrics.csv`](benchmark/v4_0_2_baseline/per_structure_metrics.csv) (`2,383` rows × `53` columns, lossless float64 `eform`):
+    - **`default` (`legacy` + `SLICES2structure`):** `2,374 / 2,383` (`99.62%`) decoded (`9` failures: `8` `LatticeBasisError`, `1` `CocycleBasisError`), `93.75%` strict / `95.93%` loose `StructureMatcher` recovery, `62.44%` space-group match, `0.199109 eV/atom` MAE (`0.025299 eV/atom` median AE), `192.59 s` wall-clock (`0.000e+00` single-process determinism parity vs `examples/3.benchmark_relax_models.py`).
+    - **`lorentz` (`lj_mixing="lorentz"`):** `0.9997x` runtime (`192.54 s`), `+70` (`+2.94 pp`) space-group preservation gain (`62.44% -> 65.38%`, cubic `74.10% -> 80.96%`), `+4 / -0` loose recovery (`96.10%`), `+9` canonical round-trip matches, neutral strict recovery (`-2`, `+4 / -6`, all `6` losses remain loose matches).
+    - **`robust` (`robust_SLICES2structure(n_starts=3, seed=0)`):** `+1.81%` runtime (`196.08 s`), rescues `7 / 8` (`87.5%`) `LatticeBasisError` crystals at `100%` strict/loose match (`ok` `99.92%`, strict `94.04%`, loose `96.22%`, `2` `SLICESDecodingError` remaining) while preserving `2,372 / 2,374` (`99.92%`) fast-path bit-identity.
+- **Documentation Index:** Linked the `v4.0.2-baseline` quantitative report, JSON/CSV archive, and benchmark runner from [`docs/README.md`](docs/README.md).
+
+---
+
 ## [Unreleased — Wave 3 (`VERSIONED_OPT_IN`)] — 2026-11-25 (`e5c7f0d`, `0e51ff0`) — Opt-In Scientific & API Upgrades
 
 Five clean opt-in upgrades across `src/slices/{core,relax_backends,decoding_strategies}.py` derived from [REEVAL_SYNTHESIS.md](docs/migration/reeval/REEVAL_SYNTHESIS.md) Section 5 Wave 3, preserving **100% default v4.0.2 numerical parity (`89/89` frozen golden baseline tests at `atol=1e-12`, `0.0` ULP drift)**:
