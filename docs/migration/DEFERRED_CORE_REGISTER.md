@@ -1,31 +1,36 @@
 # Deferred Core / Algorithm Register
 
-**Project:** SLICES v4.0.2 Migration (`slices-4-personal`)  
-**Governing Policy:** Strict Math / Algorithm Freeze Boundary ([PLAN.md Section 4](file:///home/ordillo/tests/SLICES/docs/migration/PLAN.md#L140-L166))  
+**Project:** SLICES v4.0.2 Migration & Post-Migration Empirical Re-Evaluation (`slices-4-personal` / `main`)  
+**Governing Policy:** Strict Math / Algorithm Freeze Boundary ([PLAN.md Section 4](PLAN.md#L140-L166)) -> Post-Migration Empirical Re-Evaluation ([REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md))  
 **Baseline Reference:** `/home/ordillo/tests/SLICES-upstream-baseline` (`upstream/main` @ `94ef8e079b69c37138159805e3c701b8df87a5d7`, tag `v4.0.2`)  
-**Last Updated:** 2026-11-25 07:58 JST (Stage 5 Gate Verified at `HEAD=8d9314b` — **27 verified entries**: 2 Resolved in Stage 4 & Verified in Stage 5 [`DEF-007`, `DEF-013`], 3 Blocked [`DEF-016`, `DEF-017`, `DEF-020`], 22 Frozen — Deferred [Baseline Preserved])
+**Last Updated:** 2026-11-25 12:55 JST (Post-Migration Cycle 1: Carbon High Empirical Re-Evaluation at `HEAD=fa4cfc8` + Wave 1 `SAFE_NOW` Implementation sealed in commits `a85e832` [`W1-a`] & `954a56a` [`W1-b`], Gate W1 **PASS** — **34 verified entries**: 2 Resolved in Stage 4 [`DEF-007`, `DEF-013`], 15 Fully Resolved in Wave 1 [`DEF-004`, `DEF-005`, `DEF-008`, `DEF-010`, `DEF-011`, `DEF-012`, `DEF-018`, `DEF-023`, `DEF-025`, `DEF-026`, `DEF-027`, `DEF-028`, `DEF-030`, `DEF-032`, `DEF-034`], 1 Split Wave 1 / Closed [`DEF-019`], 2 Partially Resolved in Wave 1 + Deferred [`DEF-021`, `DEF-024`], 3 Wave 2 `HIGH_VALUE_AB` [`DEF-003`, `DEF-014`, `DEF-031`], 6 Wave 3 `VERSIONED_OPT_IN` [`DEF-001`, `DEF-006`, `DEF-015`, `DEF-022`, `DEF-029`, `DEF-033`], 2 `KEEP_FROZEN` [`DEF-002`, `DEF-009`], 3 `CLOSE_WONTFIX` [`DEF-016`, `DEF-017`, `DEF-020`])
 
 ---
 
 ## Purpose & Governance Rules
 
-During Stages 1–7 of this migration, all core mathematical, crystallographic, graph-theoretic, topological, GFN-FF target-construction, ZL* L-BFGS-B optimization, and default NequIP relaxation code paths are **strictly frozen** to guarantee exact / numerically invariant (`atol=1e-12` on CPU) equivalence against upstream SLICES v4.0.2 (`94ef8e0`).
+During Stages 1–7 of this migration, all core mathematical, crystallographic, graph-theoretic, topological, GFN-FF target-construction, ZL* L-BFGS-B optimization, and default NequIP relaxation code paths were **strictly frozen** to guarantee exact / numerically invariant (`atol=1e-12` on CPU) equivalence against upstream SLICES v4.0.2 (`94ef8e0`).
 
-Every genuine defect, numerical quirk, global-state side effect, or candidate algorithmic improvement discovered in either upstream `v4.0.2` or `backup/v3-personal` (`301c75f`) that touches a frozen path **must not be silently modified during the migration**. Instead, it is formally registered here with verified source coordinates, behavioral analysis, deferral rationale, post-baseline evaluation plan, and risk rating so it can be benchmarked and resolved in a dedicated post-migration scientific experiment cycle.
+Following Stage 7 completion (`HEAD=fa4cfc8`), a 4-agent Carbon High empirical re-evaluation cycle ([REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md), [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md), [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md), [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md)) tested every deferred item against `125,174` SLICES strings, `18,093` MP-20 CIFs, `3,883` GFN-FF topology evaluations, and controlled CPU `NequIP-OAM-S/L` A/B benchmarks, discovering `7` new defects (`DEF-028`–`DEF-034`) and classifying all `34` entries into actionable waves:
+
+- **Wave 1 (`SAFE_NOW`):** Zero-drift (`0.0` ULP, `89/89` golden parity at `atol=1e-12`) bugfixes, memory-safety guards, and hygiene cleanups implemented directly on `main`.
+- **Wave 2 (`HIGH_VALUE_AB`):** High-value scientific upgrades intentionally shifting specific tolerances or edge fixtures (`v4.1` experimental branch with A/B sign-off).
+- **Wave 3 (`VERSIONED_OPT_IN`):** Clean opt-in APIs preserving upstream `v4.0.2` default behavior.
+- **`KEEP_FROZEN` / `CLOSE_WONTFIX`:** Empirically proven regressions or Stage 3 architectural blocks permanently retained/closed.
 
 ### Schema Definition
 
 | Field | Allowed Values / Format |
 |---|---|
-| **ID** | Sequential immutable identifier (`DEF-001`, `DEF-002`, ...) |
+| **ID** | Sequential immutable identifier (`DEF-001`, `DEF-002`, ..., `DEF-034`) |
 | **Source / Location** | Branch/ref, file path, exact verified line numbers, symbol name(s), and relevant commit SHA(s) |
 | **Category** | One or more of: `Math`, `Graph`, `Optimization`, `Relaxation`, `Runtime`, `Compatibility` |
-| **Status** | `Frozen — Deferred (Baseline Preserved)`, `Frozen — Deferred (Baseline Preserved; RUL-03)`, `Resolved in Stage 4 (commit 49237f6; verified in Stage 5)`, `Resolved Upstream — Do Not Regress`, or `Blocked — Do Not Port` |
-| **Provenance** | Stage/slice and source tag (`Stage 1 Seed`, `Stage 2A / FC-*`, `Stage 2B / DEF-UP-*`, `Stage 2C / DEF-BC-*`, `Stage 3 / RUL-*`) |
-| **Observed Behavior** | Factual description of current code behavior verified from source |
-| **Why Deferred under Baseline Freeze** | Concrete explanation of how changing it breaks or risks upstream v4.0.2 parity |
-| **Proposed Post-Baseline Investigation / Fix** | Controlled ablation/benchmark experiment and concrete remediation proposal |
-| **Impact Risk** | `High` / `Medium` / `Low` — expected behavioral divergence on reconstruction rate, energies, or caller parity if changed |
+| **Status** | `Resolved in Stage 4 (...)`, `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`, `Partially Resolved in Wave 1 (...) / Deferred — Wave 2/3 (...)`, `Deferred — Wave 2 (HIGH_VALUE_AB)`, `Deferred — Wave 3 (VERSIONED_OPT_IN)`, `Split — Wave 2 (...) / ...`, `Keep Frozen (...)`, or `Closed — Won't Fix (CLOSE_WONTFIX; ...)` |
+| **Provenance** | Stage/slice and source tag (`Stage 1 Seed`, `Stage 2A / FC-*`, `Stage 2B / DEF-UP-*`, `Stage 2C / DEF-BC-*`, `Stage 3 / RUL-*`, `Post-Migration Re-Eval / REEVAL_*`) |
+| **Observed Behavior** | Factual description of code behavior verified from primary source |
+| **Why Deferred under Baseline Freeze** | Concrete explanation of how changing it affected upstream v4.0.2 parity during Stages 1–7 (or why discovered post-migration) |
+| **Empirical Re-Evaluation & Disposition** | Verified quantitative evidence from `REEVAL_SYNTHESIS.md` and concrete Wave 1 resolution or Wave 2/3/Frozen/Closed disposition |
+| **Impact Risk** | `Critical` / `High` / `Medium` / `Low` — behavioral or memory-safety impact rating |
 
 ---
 
@@ -33,33 +38,40 @@ Every genuine defect, numerical quirk, global-state side effect, or candidate al
 
 | ID | Category | Source / Symbol | Short Description | Provenance | Impact Risk | Status |
 |---|---|---|---|---|---|---|
-| [`DEF-001`](#def-001) | `Math`, `Optimization` | `src/slices/core.py:1293-1294,1312-1313` (`get_uncovered_pair_lj`, `get_covered_pair_lj`) | Heteronuclear LJ mixing averages `atom_types[i[0]]` with itself instead of `i[0]` and `i[1]` | Stage 1 Seed | **High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-002`](#def-002) | `Optimization`, `Relaxation` | `backup/v3-personal:src/slices/core.py:2459-2566` (`to_structures`) | Auto-injection of `MultiStartOptimizer`, `AdaptiveConvergence`, and `ProgressiveRelaxer` (overriding `fmax=0.2` with `0.1`) into default decoding | Stage 1 Seed; Stage 2A (`FC-04`, `FC-05`) | **High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-003`](#def-003) | `Graph`, `Math` | `backup/v3-personal:src/slices/tobascco_net.py:500-704,985-1006` (`iter_cycles`, `get_lattice_basis`, `is_integral`) | Personal `Net` algorithm changes (`CycleBasisOptimizer` + `LatticeBasisError`, `is_integral` float tolerance, BFS `iter_cycles`) | Stage 1 Seed; Stage 2A (`FC-01`, `FC-02`, `FC-03`) | **High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-004`](#def-004) | `Graph`, `Runtime` | `src/slices/tobascco_net.py:359,514` (`simple_cycle_basis`, `get_lattice_basis`) | Dead `np.random.choice` / `np.random.shuffle` calls mutate global NumPy RNG state without affecting graph results | Stage 1 Seed; Stage 3 (`RUL-03`) | **Low–Medium** | Frozen — Deferred (Baseline Preserved; RUL-03) |
-| [`DEF-005`](#def-005) | `Runtime`, `Compatibility` | `src/slices/core.py:5-9` (module import header) | Import-time process-global mutations of `OMP_NUM_THREADS="1"`, `PYTHONWARNINGS="ignore"`, `TF_CPP_MIN_LOG_LEVEL="3"`, and `warnings` filters | Stage 1 Seed; Stage 3 (`RUL-03`, `CA-08`) | **Medium** | Frozen — Deferred (Baseline Preserved; RUL-03) |
-| [`DEF-006`](#def-006) | `Compatibility`, `Math` | `src/slices/core.py:138-151` (`check_element`) vs `src/slices/gfnff_helper.py:11-15` | `check_element` hard-rejects `Z >= 87` while v4.0.2 bundled GFN-FF supports `Z = 87..103` | Stage 1 Seed | **Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-007`](#def-007) | `Runtime`, `Compatibility` | `src/slices/core.py:60` (`function_timeout` -> `signal_handler`) | Undefined `TimeoutException` (`F821`, deleted in `119afaf`) causes `NameError` when any timeout triggers | Stage 2B (`DEF-UP-001`); Stage 3 (`RUL-01`) | **Low** (non-math) | **Resolved in Stage 4 (commit 49237f6; verified in tests/unit/test_exceptions.py)** |
-| [`DEF-008`](#def-008) | `Relaxation`, `Compatibility` | `src/slices/core.py:2007,2010` (`relax_large_cell2`) | Omits `fmax=self.fmax, steps=self.steps`, silently using `NequIPRelaxer.relax` defaults (`fmax=0.1, steps=500`) for `>40` atoms | Stage 2B (`DEF-UP-002`); Stage 2A (`FC-08`) | **Medium–High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-009`](#def-009) | `Relaxation`, `Optimization`, `Compatibility` | `src/slices/relax_backends.py:367-372` (`_cell_filter`) | Uses deprecated `ase.filters.ExpCellFilter` instead of `FrechetCellFilter` on `ase>=3.23` | Stage 2B (`DEF-UP-003`) | **High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-010`](#def-010) | `Graph`, `Runtime` | `src/slices/tobascco_net.py:413-422,767` (`iter_cycles`, `vertex_positions`) | Mutable default arguments (`[]`, `{}`) persist across direct calls lacking explicit containers (cross-ref `DEF-003`) | Stage 2B (`DEF-UP-004`) | **Low–Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-011`](#def-011) | `Math`, `Compatibility` | `src/slices/tobascco_net.py:478,954,964,993` (`linear_independent_vectors`, `eon_projection`, `projection`, `cycle_cocycle_I`) | Pending-deprecated `np.matrix(...).I` usage in NumPy 2.x (cross-ref `DEF-014`) | Stage 2B (`DEF-UP-005`) | **Medium–High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-012`](#def-012) | `Compatibility`, `Runtime` | `src/slices/core.py:652-663` (`SLICES2formula`) | Regex/composition fragility on Strategy 1/2 strings and digit-free invalid strings (`AttributeError` outside `try`) | Stage 2B (`DEF-UP-006`) | **Low–Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-013`](#def-013) | `Relaxation`, `Runtime` | `src/slices/core.py:1900-1910,1944-1949` (`to_structures`, `to_4structures`) | `relax_model=None` triggers `AttributeError` on `self.relaxer.relax`, prints error to stdout, then returns `[std, opt], 0` | Stage 2B (`DEF-UP-007`); Stage 3 (`RUL-02`, `CA-06`) | **Low** | **Resolved in Stage 4 (commit 49237f6; verified in tests/unit/test_decoding.py)** |
-| [`DEF-014`](#def-014) | `Math`, `Optimization` | `src/slices/core.py:1868-1877` (`to_structures` `lattice_type` classifier) | Exact IEEE-754 float `set`/`==` on `metric_tensor_std` diagonals can flip symmetry class & optimizer dimensionality on `~1e-16` rounding (cross-ref `DEF-005`, `DEF-011`) | Stage 2B (`DEF-UP-008`) | **High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-015`](#def-015) | `Optimization`, `Graph` | `backup/v3-personal:src/slices/core.py:1685-1705,1758-1769,2393-2395` (`get_inner_p_target`) | Inline `BondParameterFallback` on unmatched supercell bonds (1-based `IndexError` bug) and failure return changed from `None` to `(None, None, None)` | Stage 2A (`FC-06`; cross-ref `DEF-002`) | **High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-016`](#def-016) | `Compatibility`, `Graph` | `backup/v3-personal:src/slices/core.py:595-635` vs `src/slices/core.py:280-294` (`from_SLICES`) | Fork swallowed invalid strategy-4 space-group header errors (`space_group_num=None`), accepting malformed strings upstream rejects | Stage 2A (`FC-07`) | **High** | Blocked — Do Not Port |
-| [`DEF-017`](#def-017) | `Compatibility` | `backup/v3-personal:src/slices/core.py:483-540` vs `src/slices/core.py:165-200` (`cif2structure_graph`, `structure2structure_graph`) | Fork kept deprecated `StructureGraph.with_local_env_strategy` and duplicated dispatch; superseded upstream by `2635bcc` | Stage 2A (`FC-09`) | **High** | Resolved Upstream — Do Not Regress |
-| [`DEF-018`](#def-018) | `Compatibility`, `Runtime` | `backup/v3-personal:src/slices/core.py:1044-1071` vs `src/slices/core.py:666-722` (`structure2SLICES`) | Fork added explicit empty-`Structure` `ValueError` guard on pre-v4.0 path lacking upstream `to_primitive_if_smaller` fallback | Stage 2A (`FC-10`) | **Low–Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-019`](#def-019) | `Compatibility`, `Runtime` | `backup/v3-personal:src/slices/core.py:698-759,806-829` vs `src/slices/core.py:345-402,449-470` (`get_slices1..3`, `check_structural_validity`) | Fork dropped `space_group_num=None` 4th arg on `get_slices1..3` (breaking 4-arg dispatch) and added `TypeError` check in `check_structural_validity` | Stage 2A (`FC-11`) | **Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-020`](#def-020) | `Runtime`, `Compatibility` | `backup/v3-personal:src/slices/core.py:10-43,164-232` & `mlip_relaxer.py:22-35` (module import headers) | Fork set global root logger to `CRITICAL` and injected import-time `TF_USE_LEGACY_KERAS="1"` / `sys.modules["keras"] = tf_keras` / TF GPU probe (cross-ref `DEF-005`) | Stage 2A (`FC-12`) | **High** | Blocked — Do Not Port |
-| [`DEF-021`](#def-021) | `Graph`, `Math`, `Compatibility` | `src/slices/core.py:549-559` (`check_SLICES`) & `src/slices/tobascco_net.py:233-235,536-541` (`get_lattice_basis`, `get_cocycle_basis`) | `check_SLICES()` ignores `get_lattice_basis() == -1` and cocycle rank failure, silently returning `True` on graphs with no valid 3D lattice basis (reproduced on `E11` `TiBr3`; cross-ref `DEF-003`) | Stage 2C (`DEF-BC-01`) | **High** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-022`](#def-022) | `Runtime`, `Compatibility` | `src/slices/core.py:741,843-845` (`structure2randomSLICES`) | Converts Python `set()` to `list()` before `random.shuffle()`, making cross-process list order dependent on `PYTHONHASHSEED` even with `random.seed(42)` | Stage 2C (`DEF-BC-02`) | **Low–Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-023`](#def-023) | `Graph`, `Runtime` | `src/slices/core.py:110,1332-1335,1746-1750` (`SLICES2space_group_number`) | Reads stale `self.unstable_graph` from prior `to_structures()` calls instead of computing per-call `inner_p_std` degeneracy | Stage 2C (`DEF-BC-03`) | **Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-024`](#def-024) | `Compatibility`, `Runtime` | `src/slices/core.py:202-332` (`from_SLICES`) vs `L372-386` (`get_slices2`) | Missing `strategy == 2` branch (`UnboundLocalError`), missing `num_atoms` guard on zero-edge strings, silent token/label truncation, and missing `< 0` node-index check (cross-ref `DEF-016`, `DEF-019`) | Stage 2C (`DEF-BC-04`) | **Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-025`](#def-025) | `Math`, `Compatibility` | `src/slices/core.py:449-470` (`check_structural_validity`) | Always returns `True` on 1-atom cells and ignores periodic self-image distances `<= 0.5 Å` along short lattice vectors (cross-ref `DEF-019`) | Stage 2C (`DEF-BC-05`) | **Low–Medium** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-026`](#def-026) | `Runtime`, `Compatibility` | `src/slices/core.py:186-200,856-867` (`structure2structure_graph`, `get_dim`) | Invalid `graph_method` prints error message and crashes with `UnboundLocalError` instead of raising `ValueError` | Stage 2C (`DEF-BC-06`); Stage 3 Sign-Off | **Low** | Frozen — Deferred (Baseline Preserved) |
-| [`DEF-027`](#def-027) | `Math`, `Runtime` | `src/slices/core.py:1611-1672` (`func_check`) vs `L1588-1609` (`func`) | Debug objective `func_check()` lacks the `np.sqrt(max(..., 1e-10))` and `r_temp < 1e-8` clamping guards added to `func()` in commit `2635bcc` | Stage 2C (`DEF-BC-07`) | **Low** | Frozen — Deferred (Baseline Preserved) |
+| [`DEF-001`](#def-001) | `Math`, `Optimization` | `src/slices/core.py:1743-1792` (`get_uncovered_pair_lj`, `get_covered_pair_lj`) | Heteronuclear LJ mixing self-averages `atom_types[i[0]]`; `LJ_PARAMS_LIST` cols are `[4*sigma, sigma]` lengths in Å (`vbond_param_ave_covered=0.0`) | Stage 1 Seed; Re-Eval (`REEVAL_MATH_OPT`) | **High** | Deferred — Wave 3 (VERSIONED_OPT_IN) |
+| [`DEF-002`](#def-002) | `Optimization`, `Relaxation` | `backup/v3-personal:src/slices/core.py:2459-2566` vs `src/slices/core.py:2316-2650` (`to_structures`) | Auto-injection of 3-start ZL\*, `AdaptiveConvergence`, and `ProgressiveRelaxer` into default decoding (`1.85x–2.09x` slower for `+0/47` net gain) | Stage 1 Seed; Stage 2A (`FC-04`, `FC-05`); Re-Eval (`REEVAL_GRAPH_RELAX`) | **High** | Keep Frozen (Default) / Wave 3 (VERSIONED_OPT_IN) |
+| [`DEF-003`](#def-003) | `Graph`, `Math` | `src/slices/tobascco_net.py:384-495,724-726` (`iter_cycles`, `get_lattice_basis`, `is_integral`) | Unconditional reorder perturbs `69.1%` valid nets (`KEEP_FROZEN`); exact `SNF==(1,1,1)` fallback strictly on `basis == -1` rescues `180/180` (`100%`) | Stage 1 Seed; Stage 2A (`FC-01`–`FC-03`); Re-Eval (`REEVAL_SYNTHESIS`) | **High** | Split — Wave 2 (HIGH_VALUE_AB: SNF fallback) / Keep Frozen (unconditional reorder, is_integral, iter_cycles) |
+| [`DEF-004`](#def-004) | `Graph`, `Runtime` | `src/slices/tobascco_net.py:339-382,467-494` (`simple_cycle_basis`, `get_lattice_basis`) | Dead `np.random.choice` / `np.random.shuffle` calls mutating global NumPy RNG state removed (`0` `np.random`, `0.0` ULP drift) | Stage 1 Seed; Stage 3 (`RUL-03`); Re-Eval (`REEVAL_RUNTIME_PARSE`) | **Low–Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-005`](#def-005) | `Runtime`, `Compatibility` | `src/slices/core.py:17-19,53-58` (module import header) | Replaced unconditional env/warning overrides with `setdefault` (`TF_CPP_MIN_LOG_LEVEL`, `OMP_NUM_THREADS`), scoped `spglib` warning, and `BrunnerNNReciprocal` priority | Stage 1 Seed; Stage 3 (`RUL-03`, `CA-08`); Re-Eval (`REEVAL_RUNTIME_PARSE`) | **Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-006`](#def-006) | `Compatibility`, `Math` | `src/slices/core.py:254-273` (`check_element`) vs `src/slices/gfnff_helper.py:59-60,107-156` | `check_element` enforces `Z <= 86` while `libgfnff` supports `1..103` (`DEF-028` guarded) and `NequIP-OAM` supports `{1..83, 89..94}` (`DEF-029`) | Stage 1 Seed; Re-Eval (`REEVAL_MATH_OPT`) | **Medium** | Deferred — Wave 3 (VERSIONED_OPT_IN; DEF-028 guard resolved in Wave 1) |
+| [`DEF-007`](#def-007) | `Runtime`, `Compatibility` | `src/slices/core.py:104-149` (`function_timeout`), `src/slices/exceptions.py:77-78` | Undefined `TimeoutException` (`F821`, deleted in `119afaf`) restored with POSIX main-thread `SIGALRM` guard | Stage 2B (`DEF-UP-001`); Stage 3 (`RUL-01`) | **Low** | Resolved in Stage 4 (commit 49237f6; verified in tests/unit/test_exceptions.py) |
+| [`DEF-008`](#def-008) | `Relaxation`, `Compatibility` | `src/slices/core.py:2750-2766` (`relax_large_cell2`) | Forwarded `fmax=self.fmax, steps=self.steps` in both `>40`-atom relaxation branches (`1.24x` faster on `45–64`-atom supercells, `0.0` golden drift) | Stage 2B (`DEF-UP-002`); Stage 2A (`FC-08`); Re-Eval (`REEVAL_GRAPH_RELAX`) | **Medium–High** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-009`](#def-009) | `Relaxation`, `Optimization`, `Compatibility` | `src/slices/relax_backends.py:540-548` (`_cell_filter`) | `ExpCellFilter` beats `FrechetCellFilter` (`93.48%` vs `89.13%` strict match, `8.3%` faster); retained as default with scoped `DeprecationWarning` suppression | Stage 2B (`DEF-UP-003`); Re-Eval (`REEVAL_GRAPH_RELAX`, `REEVAL_SYNTHESIS`) | **High** | Keep Frozen (KEEP_FROZEN; ASE warning scoped in Wave 1) |
+| [`DEF-010`](#def-010) | `Graph`, `Runtime` | `src/slices/tobascco_net.py:384-405,679-692` (`iter_cycles`, `vertex_positions`) | Replaced mutable `[]` / `{}` default arguments with `None` guards and removed `# noqa: B006` | Stage 2B (`DEF-UP-004`); Re-Eval (`REEVAL_GRAPH_RELAX`) | **Low–Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-011`](#def-011) | `Math`, `Compatibility` | `src/slices/tobascco_net.py:438-465,840-855,882-888` (`linear_independent_vectors`, `eon_projection`, `projection`, `cycle_cocycle_I`) | Replaced `np.matrix(...).I` with `np.linalg.inv(...)` (strictly `inv`, zero `pinv`, `0.000e+00` ULP across `2,374` MP-20 crystals) | Stage 2B (`DEF-UP-005`); Re-Eval (`REEVAL_MATH_OPT`) | **Medium–High** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-012`](#def-012) | `Compatibility`, `Runtime` | `src/slices/core.py:919-1018` (`SLICES2formula`) | Replaced fragile regex with grammar-aware Strategy 1–4 token extraction (`100%` parity across Strategies 1–4 & `16,686` MP-20 rows; clean `None` on malformed strings) | Stage 2B (`DEF-UP-006`); Re-Eval (`REEVAL_RUNTIME_PARSE`) | **Low–Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-013`](#def-013) | `Relaxation`, `Runtime` | `src/slices/core.py:2545-2548,2706-2709` (`to_structures`, `to_4structures`) | `if self.relaxer is None:` short-circuit returns `[std, opt], 0` with zero spurious `AttributeError` stdout | Stage 2B (`DEF-UP-007`); Stage 3 (`RUL-02`, `CA-06`) | **Low** | Resolved in Stage 4 (commit 49237f6; verified in tests/unit/test_decoding.py) |
+| [`DEF-014`](#def-014) | `Math`, `Optimization` | `src/slices/core.py:2424-2437` (`to_structures` `lattice_type` classifier) | Exact float `set`/`==` strips symmetry constraints from `73.29%` (`1,734/2,366`) MP-20 crystals across 7-decade empty gap `(1e-13, 1e-9]`; `isclose` speeds up CPU `-11.7%` | Stage 2B (`DEF-UP-008`); Re-Eval (`REEVAL_MATH_OPT`) | **High** | Deferred — Wave 2 (HIGH_VALUE_AB) |
+| [`DEF-015`](#def-015) | `Optimization`, `Graph` | `src/slices/core.py:1589-1696`, `src/slices/decoding_strategies.py:219-305,749-756` (`get_inner_p_target`, `robust_decode`) | `libgfnff` returns `None` on `0/2,883` MP-20 crystals, drops hydride bonds on `0.084%–0.80%`; Stage 2 fallback trigger triples strict recovery (`25% -> 75%`) | Stage 2A (`FC-06`); Re-Eval (`REEVAL_GRAPH_RELAX`) | **High** | Deferred — Wave 3 (VERSIONED_OPT_IN; cross-ref DEF-030, DEF-031) |
+| [`DEF-016`](#def-016) | `Compatibility`, `Graph` | `src/slices/core.py:465-473` (`from_SLICES`) | Fork swallowed invalid Strategy-4 space-group header errors; permanently blocked (`E03_bad_sg_prefix` verified intact) | Stage 2A (`FC-07`); Stage 3 Sign-Off; Re-Eval (`REEVAL_RUNTIME_PARSE`) | **High** | Closed — Won't Fix (CLOSE_WONTFIX; Blocked in Stage 3) |
+| [`DEF-017`](#def-017) | `Compatibility` | `src/slices/core.py:53-58,289-339` (`cif2structure_graph`, `structure2structure_graph`) | Fork kept deprecated `with_local_env_strategy`; permanently closed (`from_local_env_strategy` + `BrunnerNNReciprocal` active) | Stage 2A (`FC-09`); Stage 2B (`2635bcc`); Re-Eval (`REEVAL_RUNTIME_PARSE`) | **High** | Closed — Won't Fix (CLOSE_WONTFIX; Resolved Upstream in 2635bcc) |
+| [`DEF-018`](#def-018) | `Compatibility`, `Runtime` | `src/slices/core.py:270-271,314-317,1039-1040`, `src/slices/exceptions.py:35-41` (`check_element`, `structure2structure_graph`, `to_primitive_if_smaller`) | Added `len(structure) == 0` guards raising `SLICESEncodingError(SLICESError, ValueError)` instead of silently returning `""` / `[""]` | Stage 2A (`FC-10`); Re-Eval (`REEVAL_RUNTIME_PARSE`) | **Low–Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-019`](#def-019) | `Compatibility`, `Runtime` | `src/slices/core.py:553-689,707-731` (`get_slices1..3`, `check_structural_validity`) | Part 1: 4-arg `get_slices1..3(..., space_group_num=None)` permanently retained; Part 2: `isinstance(str1, IStructure)` `TypeError` guard added in Wave 1 | Stage 2A (`FC-11`); Re-Eval (`REEVAL_RUNTIME_PARSE`) | **Medium** | Resolved in Wave 1 (Part 2 SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) / Closed — Won't Fix (Part 1 4-arg get_slices1..3) |
+| [`DEF-020`](#def-020) | `Runtime`, `Compatibility` | `src/slices/core.py:17-19`, `src/slices/__init__.py`, `src/slices/mlip_relaxer.py` | Fork set root logger to `CRITICAL` and eagerly injected `TF_USE_LEGACY_KERAS`/`sys.modules["keras"]`; permanently blocked | Stage 2A (`FC-12`); Stage 3 Sign-Off; Re-Eval (`REEVAL_RUNTIME_PARSE`) | **High** | Closed — Won't Fix (CLOSE_WONTFIX; Blocked in Stage 3) |
+| [`DEF-021`](#def-021) | `Graph`, `Math`, `Compatibility` | `src/slices/core.py:733-831,2370-2384` (`check_SLICES`, `to_structures`) | Wave 1: `to_structures` raises `LatticeBasisError`/`CocycleBasisError`; Wave 2: enforce basis/cocycle in `check_SLICES` under `if graph_rank_check:` paired with `DEF-003` SNF fallback | Stage 2C (`DEF-BC-01`); Re-Eval (`REEVAL_GRAPH_RELAX`, `REEVAL_SYNTHESIS`) | **High** | Partially Resolved in Wave 1 (to_structures LatticeBasisError/CocycleBasisError; commit a85e832, verified in 954a56a, 89/89 golden parity) / Deferred — Wave 2 (HIGH_VALUE_AB: check_SLICES) |
+| [`DEF-022`](#def-022) | `Runtime`, `Compatibility` | `src/slices/core.py:1145-1248` (`structure2randomSLICES`) | `list(set())` has `0/16` list invariance at `num=5` and `3/16` set invariance at `num=1` across `PYTHONHASHSEED`; opt-in `seed` kwarg achieves `16/16` (`100%`) | Stage 2C (`DEF-BC-02`); Re-Eval (`REEVAL_RUNTIME_PARSE`) | **Low–Medium** | Deferred — Wave 3 (VERSIONED_OPT_IN) |
+| [`DEF-023`](#def-023) | `Graph`, `Runtime` | `src/slices/core.py:214,366,2238-2312` (`from_SLICES`, `SLICES2space_group_number`) | Deleted stale `if self.unstable_graph:` branch in `SLICES2space_group_number` and reset `self.unstable_graph = False` in `from_SLICES` (fixes `91.62% -> 4.68%` reuse collapse) | Stage 2C (`DEF-BC-03`); Re-Eval (`REEVAL_GRAPH_RELAX`) | **Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-024`](#def-024) | `Compatibility`, `Runtime` | `src/slices/core.py:343-545` (`from_SLICES`, `_is_int_token`) | Wave 1: `SLICESDecodingError` on `strategy not in (1,3,4)` & zero-edge strings, `0 <= idx < num_atoms`, `len(label) == 3` preserving `E01`–`E05`; Wave 3: opt-in `strict=True` for trailing partial tokens | Stage 2C (`DEF-BC-04`); Re-Eval (`REEVAL_RUNTIME_PARSE`, `REEVAL_SYNTHESIS`) | **Medium** | Partially Resolved in Wave 1 (Gaps 1, 2, 3b, 4 SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) / Deferred — Wave 3 (VERSIONED_OPT_IN: Gap 3a strict=True) |
+| [`DEF-025`](#def-025) | `Math`, `Compatibility` | `src/slices/core.py:707-731` (`check_structural_validity`) | Replaced `i < j` distance loop with `get_neighbor_list(r=0.5 + 1e-9)` excluding `(i == j) & (img == 0)` (catches 1-atom and sheared short-image cells; `0/18,093` MP-20 flips) | Stage 2C (`DEF-BC-05`); Re-Eval (`REEVAL_MATH_OPT`) | **Low–Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-026`](#def-026) | `Runtime`, `Compatibility` | `src/slices/core.py:80,203-206,334-338,1288-1292` (`VALID_GRAPH_METHODS`, `__init__`, `structure2structure_graph`, `get_dim`) | Exported `VALID_GRAPH_METHODS` and raised `ValueError` on invalid `graph_method` instead of printing + `UnboundLocalError` | Stage 2C (`DEF-BC-06`); Stage 3 Sign-Off; Re-Eval (`REEVAL_RUNTIME_PARSE`) | **Low** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-027`](#def-027) | `Math`, `Runtime` | `src/slices/core.py:2143-2236` (`func_check`) | Mirrored `func()`'s `np.sqrt(max(..., 1e-10))` and `r_temp = max(r_temp, 1e-8)` clamping guards in `func_check()` (`0` `NaN`/`RuntimeWarning` on `G18`) | Stage 2C (`DEF-BC-07`); Re-Eval (`REEVAL_MATH_OPT`) | **Low** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-028`](#def-028) | `Compatibility`, `Runtime` | `src/slices/gfnff_helper.py:59-60,107-156` (`parse_nbf_text`) | Critical Fortran OOB guard: enforce `1 <= Z <= 103` before `libgfnff.so.0.1.1` / `xtb`, raising `GFNFFExecutionError` on `Rf..Og` (`Z >= 104`) | Post-Migration Re-Eval (`REEVAL_MATH_OPT`, `REEVAL_SYNTHESIS`) | **Critical** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-029`](#def-029) | `Compatibility`, `Relaxation` | `src/slices/core.py:254-273` (`check_element`), `src/slices/relax_backends.py:454-462` (`NequIPRelaxer`) | `NequIP-OAM-S/L` 89-element OAM set `{1..83, 89..94}` crashes with raw `KeyError` on `Po, At, Rn` (`84..86`) while supporting `Ac..Pu` (`89..94`, `6/6` MP-20 match) | Post-Migration Re-Eval (`REEVAL_MATH_OPT`, `REEVAL_SYNTHESIS`) | **Medium** | Deferred — Wave 3 (VERSIONED_OPT_IN) |
+| [`DEF-030`](#def-030) | `Math`, `Runtime` | `src/slices/core.py:1537-1538,1641-1644` (`get_inner_p_target_debug`, `get_inner_p_target`) | Guarded `math.cos(data["vangl"][i][0])` against non-finite `vangl` entries (`np.isfinite`), eliminating `ValueError: math domain error` (`1/1,000` cRNN strings) | Post-Migration Re-Eval (`REEVAL_GRAPH_RELAX`, `REEVAL_SYNTHESIS`) | **Low–Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-031`](#def-031) | `Optimization`, `Graph` | `src/slices/core.py:1573-1578,1679-1684`, `src/slices/decoding_strategies.py:749-756` (`get_inner_p_target`, `robust_decode`) | Bond-weight index shift (`0..E-k-1`) when `"Cannot find bond!!!"` skips $k$ hydride edges (`0.084%–0.80%`), and missing Stage 2 fallback trigger in `robust_decode` (`25% -> 75%` rescue) | Post-Migration Re-Eval (`REEVAL_GRAPH_RELAX`, `REEVAL_SYNTHESIS`) | **Medium–High** | Split — Wave 2 (HIGH_VALUE_AB: core.py index alignment) / Wave 3 (VERSIONED_OPT_IN: robust_decode Stage 2 trigger) |
+| [`DEF-032`](#def-032) | `Math`, `Graph` | `src/slices/core.py:1716-1741` (`get_uncovered_pair`) | Canonicalized bonded pairs as `(min(u, v), max(u, v))` so reversed `[u, v]` (`u > v`) edges are never misclassified as non-bonded LJ pairs | Post-Migration Re-Eval (`REEVAL_MATH_OPT`, `REEVAL_SYNTHESIS`) | **Low–Medium** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
+| [`DEF-033`](#def-033) | `Runtime`, `Compatibility` | `src/slices/core.py:1145-1248` (`structure2randomSLICES`) | Post-loop `len(SLICES_set) >= num` break inserts 2 strings at `num=1` and returns hash-order-dependent `list(SLICES_set)[:1]` (`13/16` Golden CIFs vary across `PYTHONHASHSEED`) | Post-Migration Re-Eval (`REEVAL_RUNTIME_PARSE`, `REEVAL_SYNTHESIS`) | **Low–Medium** | Deferred — Wave 3 (VERSIONED_OPT_IN) |
+| [`DEF-034`](#def-034) | `Graph`, `Runtime` | `src/slices/tobascco_net.py:438-465` (`linear_independent_vectors`) | Replaced `np.matrix(r_mat)` with `np.atleast_2d(np.asarray(r_mat))` and added `r == 0` and `counter < r - 1` bounds guards against `IndexError` on rank-deficient rectangular matrices | Post-Migration Re-Eval (`REEVAL_MATH_OPT`, `REEVAL_SYNTHESIS`) | **Low** | Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) |
 
 ---
 
@@ -67,414 +79,474 @@ Every genuine defect, numerical quirk, global-state side effect, or candidate al
 
 ### DEF-001
 - **ID:** `DEF-001`
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1275-L1314) — `SLICES.get_uncovered_pair_lj` (lines `1293-1294`) and `SLICES.get_covered_pair_lj` (lines `1312-1313`)
+- **Source / Location:** `upstream/main` (`94ef8e0`) -> `main`, [core.py](../../src/slices/core.py#L1743-L1792) (`SLICES.get_uncovered_pair_lj`, `SLICES.get_covered_pair_lj`) and [decoding_strategies.py](../../src/slices/decoding_strategies.py#L557-L558)
 - **Category:** `Math`, `Optimization`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](file:///home/ordillo/tests/SLICES/docs/migration/PLAN.md#L160)); line numbers verified in Stage 2 initialization.
-- **Observed Behavior:** For heteronuclear atom pairs (`i[0] != i[1]`), both `get_uncovered_pair_lj` and `get_covered_pair_lj` compute the Lorentz–Berthelot arithmetic average using `self.atom_types[i[0]]` twice instead of `self.atom_types[i[0]]` and `self.atom_types[i[1]]`:
+- **Status:** `Deferred — Wave 3 (VERSIONED_OPT_IN)`
+- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](PLAN.md#L160)); empirically re-evaluated in [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) and [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** For heteronuclear atom pairs (`i[0] != i[1]`), both `get_uncovered_pair_lj` and `get_covered_pair_lj` average `self.atom_types[i[0]]` with itself instead of `self.atom_types[i[0]]` and `self.atom_types[i[1]]`:
   ```python
   lj_param[self.atom_types[i[0]]][0]/2 + lj_param[self.atom_types[i[0]]][0]/2,
   lj_param[self.atom_types[i[0]]][1]/2 + lj_param[self.atom_types[i[0]]][1]/2
   ```
-  Consequently, heteronuclear pairs receive atom `i[0]`'s homonuclear Lennard-Jones radius (`r0`) and well depth (`eps`) rather than the arithmetic/geometric mix of species `i[0]` and `i[1]`.
-- **Why Deferred under Baseline Freeze:** Both lists feed directly into `SLICES.func()` repulsive potential terms during ZL* `fmin_l_bfgs_b` optimization (`core.py:1879-1884`). Correcting the indexing changes gradient evaluations, shifts `structure_recreated_opt` coordinates and lattices for every multi-element crystal, and alters downstream NequIP relaxation trajectories, violating golden equivalence against upstream v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** After Stage 7 sign-off, run an A/B reconstruction benchmark on the MP-20 nonmetal dataset (`data/mp20_nonmetal/`) comparing (a) baseline `i[0]` self-averaging, (b) Lorentz arithmetic mean for both `r0` and `eps` (`(p[i[0]] + p[i[1]]) / 2`), and (c) standard Lorentz–Berthelot mixing (`(r0_i + r0_j)/2`, `sqrt(eps_i * eps_j)`). Measure strict/loose `match_check3` recovery rates, closest-pair overlap frequency, and wall-clock L-BFGS-B iterations before deciding whether to adopt as a versioned/opt-in change or upstream PR.
-- **Impact Risk:** **High** — directly alters ZL* objective values and optimized coordinates for all multi-species crystals.
+- **Why Deferred under Baseline Freeze:** Feeds directly into `SLICES.func()` repulsive terms during ZL\* `fmin_l_bfgs_b` optimization, shifting `structure_recreated_opt` fractional coordinates up to `0.110` on `14/19` Golden Corpus entries relative to upstream v4.0.2.
+- **Empirical Re-Evaluation & Disposition:**
+  - **Critical Units Correction:** Direct inspection of [config.py](../../src/slices/config.py#L49-L168) proved that **both columns of `LJ_PARAMS_LIST` are lengths in Angstroms (`[4*sigma, sigma]`, `max |col_0 - 4*col_1| = 6.0e-5 Å`; $\sigma = 2^{-1/6} \cdot 2 r_{\text{cov}}$)**, NOT `[r0, eps]`. The scalar well depth is `vbond_param_ave = 0.01`, and `vbond_param_ave_covered == 0.0` across `core.py` and all `.ini` configs (making `get_covered_pair_lj()` a 100% default no-op).
+  - **Benchmark Result (`68` crystals, `52` heteronuclear-uncovered):** Arithmetic averaging on both columns (`[(r_cut_i + r_cut_j)/2, (sigma_i + sigma_j)/2]`) **is** exact Lorentz–Berthelot mixing, eliminates the `5.00x` $\sum \sigma^{12}$ atom-order permutation swing on `G18`, and cuts MP-20 initial `f(x0)` by `11.5x`, yet produces **`0` `match_check3` wins/losses (`62/68` strict, `63/68` loose; median `|dE| = 5.06e-7 eV/atom`)** because NequIP relaxation absorbs the `0.01..0.11` fractional shifts.
+  - **Wave 3 Plan:** Expose opt-in `lj_mixing: Literal["legacy", "lorentz"] = "legacy"` preserving v4.0.2 default parity while enabling exact Lorentz mixing (and adopting `"lorentz"` inside opt-in `decoding_strategies._reconstruct_zl_multistart`).
+- **Impact Risk:** **High** — shifts intermediate ZL\* `opt` structures for all multi-species crystals while remaining recovery-neutral after NequIP relaxation.
 
 ---
 
 ### DEF-002
 - **ID:** `DEF-002` (Slice 2A Source Tags: `FC-04`, `FC-05`; cross-ref [`DEF-015`](#def-015))
-- **Source / Location:** `backup/v3-personal` (`301c75f`, commits `57c23ff` & `75ddf8b`), `backup/v3-personal:src/slices/core.py:2459-2566` vs frozen upstream [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1770-L1924) (`SLICES.to_structures`, `SLICES.SLICES2structure`)
+- **Source / Location:** `backup/v3-personal` (`301c75f`), `backup/v3-personal:src/slices/core.py:2459-2566` vs [core.py](../../src/slices/core.py#L2316-L2650) (`SLICES.to_structures`, `SLICES.SLICES2structure`) and [decoding_strategies.py](../../src/slices/decoding_strategies.py#L307-L784)
 - **Category:** `Optimization`, `Relaxation`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](file:///home/ordillo/tests/SLICES/docs/migration/PLAN.md#L161)); expanded and deduplicated with Stage 2A `FC-04` & `FC-05` ([AUDIT_FORK_DIFF.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L258-L259)).
-- **Observed Behavior:** In `backup/v3-personal`, `SLICES.to_structures()` automatically attempted to import and execute `slices.decoding_strategies` whenever importable:
-  1. **`FC-04` (`core.py:2459-2501`):** Invoked `AdaptiveConvergence.get_convergence_params(num_nodes)` (loosening L-BFGS-B `factr`/`pgtol` for `>10`-atom cells) and `MultiStartOptimizer.optimize(..., n_starts=3)` with unseeded global `np.random.normal(0, 0.1)` perturbations and `scipy>=1.15`-deprecated `iprint=-1, disp=None` kwargs.
-  2. **`FC-05` (`core.py:2518-2566`):** Invoked `ProgressiveRelaxer` (`tight: fmax=0.1, steps=200` -> `standard: 0.2/100` -> `loose: 0.3/80` -> `very_loose: 0.5/50`), silently overriding caller-configured `SLICES(fmax=0.2, steps=100)` with `fmax=0.1, steps=200` even on the first relaxation attempt.
-  In contrast, upstream v4.0.2 `core.py:1879-1910` runs a single deterministic `fmin_l_bfgs_b` optimization (`m=10`, `factr=1e7`, `pgtol=1e-5`, `maxfun=15000`, `maxiter=15000`) followed by a single-call NequIP relaxation (`relax`, `relax_large_cell1`, or `relax_large_cell2` with built-in overlap pre-optimization and collapse guard in `relax_backends.py`). *(See [`DEF-015`](#def-015) / `FC-06` for the separate `get_inner_p_target` `BondParameterFallback` change.)*
-- **Why Deferred under Baseline Freeze:** Auto-injecting multi-start random restarts, loosened tolerances, or tighter/multi-stage relaxation schedules into default `to_structures()` / `SLICES2structure()` breaks CPU determinism, ~3×'s ZL* compute cost, silently overrides `self.fmax`/`self.steps`, and diverges from upstream v4.0.2 `[std, opt, opt2]` structures and energies. During this migration, `decoding_strategies.py` will be ported strictly as an **explicit opt-in API** (`robust_SLICES2structure()`), with all fork bugs fixed and zero calls from default `to_structures()`.
-- **Proposed Post-Baseline Investigation / Fix:** Benchmark the opt-in `decoding_strategies` pipeline (using seeded `np.random.default_rng`) against v4.0.2's NequIP `FIRE+BFGS` + collapse-guard relaxer on failing MP-20 SLICES cases to quantify whether multi-start ZL* yields statistically significant net recovery gain over v4.0.2's GFN-FF + NequIP pipeline.
-- **Impact Risk:** **High** — fundamentally changes default decoding trajectories, RNG usage, runtime cost, and relaxation outputs.
+- **Status:** `Keep Frozen (Default) / Wave 3 (VERSIONED_OPT_IN)`
+- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](PLAN.md#L161)); Stage 2A `FC-04` & `FC-05`; empirically re-evaluated in [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) and [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** In `backup/v3-personal`, `SLICES.to_structures()` automatically injected `AdaptiveConvergence`, 3-start `MultiStartOptimizer`, and `ProgressiveRelaxer` (silently overriding `fmax=0.2` with `0.1`). In v4.0.2, `decoding_strategies.py` is strictly opt-in via `SLICES.robust_SLICES2structure()`.
+- **Why Deferred under Baseline Freeze:** Auto-injecting multi-start restarts and tighter relaxation schedules breaks CPU determinism, increases runtime, and alters default `[std, opt, opt2]` outputs relative to upstream v4.0.2.
+- **Empirical Re-Evaluation & Disposition:** Controlled 47-crystal (`30` normal + `17` hard) CPU `nequip-s+l` benchmarking proved that always-on `MultiStartOptimizer(n_starts=3)` + `AdaptiveConvergence` slows CPU decoding by **`1.85x–2.09x`** (up to `2.96x` on 14–20 atoms) for **`+0 / 47` net match gain** (`27/30` normal, `12/17` hard). **Default `to_structures()` / `SLICES2structure()` stays permanently frozen (`KEEP_FROZEN`)**; opt-in `robust_SLICES2structure()` remains the explicit Wave 3 vehicle (`0%` default overhead).
+- **Impact Risk:** **High** — doubles default decode runtime without net accuracy gain if enabled unconditionally.
 
 ---
 
 ### DEF-003
-- **ID:** `DEF-003` (Slice 2A Source Tags: `FC-01`, `FC-02`, `FC-03`; cross-ref [`DEF-010`](#def-010))
-- **Source / Location:** `backup/v3-personal` (`301c75f`, commits `54fd2c1`, `b59d31b`, `57c23ff`, `75ddf8b`), `backup/v3-personal:src/slices/tobascco_net.py:500-704,985-1006` vs frozen upstream [tobascco_net.py](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L413-L475), [L511-L541](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L511-L541), [L814-L815](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L814-L815)
+- **ID:** `DEF-003` (Slice 2A Source Tags: `FC-01`, `FC-02`, `FC-03`; cross-ref [`DEF-010`](#def-010), [`DEF-021`](#def-021))
+- **Source / Location:** `backup/v3-personal:src/slices/tobascco_net.py:500-704,985-1006` vs [tobascco_net.py](../../src/slices/tobascco_net.py#L384-L495), [L724-L726](../../src/slices/tobascco_net.py#L724-L726) (`iter_cycles`, `get_lattice_basis`, `is_integral`)
 - **Category:** `Graph`, `Math`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](file:///home/ordillo/tests/SLICES/docs/migration/PLAN.md#L162)); expanded and deduplicated with Stage 2A `FC-01`, `FC-02`, `FC-03` ([AUDIT_FORK_DIFF.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L255-L257)).
-- **Observed Behavior:** `backup/v3-personal` introduced three behavioral changes to `Net`:
-  1. **`FC-01` — `get_lattice_basis()` (`backup/v3-personal:627-704`):** Reorders `self.cycle_rep` and `self.cycle` via `CycleBasisOptimizer.select_optimal_cycle_basis(..., max_attempts=50)` (or random shuffle fallback) before SymPy nullspace computation, raises `LatticeBasisError` on failure instead of returning `-1`, and returns `None` instead of `1` on success. Slice 2A additionally proved that `select_optimal_cycle_basis` had a row-rank permutation-invariance no-op bug (`np.linalg.matrix_rank(cycle_rep[inds])` is invariant under row permutation, so only `attempt == 0` ever won while still consuming 50 global `np.random` draws).
-  2. **`FC-02` — `is_integral(vect, tolerance=1e-6)` (`backup/v3-personal:985-1006`):** Adds a floating-point tolerance fallback after `np.mod(vect, 1) == 0`. Notably, `np.all(fractional_parts < tolerance) or np.all(fractional_parts > 1 - tolerance)` still rejects mixed near-zero and near-one vectors (e.g., `[1e-9, 1 - 1e-9]`), where per-element `(fractional_parts < tol) | (fractional_parts > 1 - tol)` is required.
-  3. **`FC-03` — `iter_cycles()` (`backup/v3-personal:500-591`):** Rewrote recursive DFS into an iterative `deque.append` + `deque.popleft()` BFS traversal with `max_depth=100`, changing cycle enumeration order in `get_cycle_basis()` and truncating cycles deeper than 100 edges. *(See also [`DEF-010`](#def-010) / `DEF-UP-004` regarding upstream's mutable default arguments in `iter_cycles` and `vertex_positions`.)*
-- **Why Deferred under Baseline Freeze:** Reordering `cycle_rep` alters the SymPy nullspace basis vectors selected for `self.lattice_basis`, changing `self.metric_tensor`, Cholesky `lattice_vectors_std`, and `lattice_arcs`, and changing `1`/`-1` returns to `None`/`LatticeBasisError` breaks callers checking `get_lattice_basis() == -1`. Modifying `is_integral` or `iter_cycles` traversal order alters edge-case topology behavior relative to v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Keep fixed, seeded `find_lattice_basis_with_retries` standalone inside opt-in `decoding_strategies.py`. Post-migration, test (a) whether exact SymPy rational arithmetic in `get_lattice_basis` ever yields non-exact floats needing an element-wise integrality tolerance, (b) whether multi-order SymPy nullspace retries recover failed topologies without regressing valid crystals, and (c) replacing `iter_cycles` with an iterative DFS (`pop()` LIFO) and `None`-guarded defaults (`DEF-010`).
-- **Impact Risk:** **High** — modifies fundamental periodic quotient-graph lattice basis selection, metric tensors, and failure control flow.
+- **Status:** `Split — Wave 2 (HIGH_VALUE_AB: SNF fallback) / Keep Frozen (unconditional reorder, is_integral, iter_cycles)`
+- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](PLAN.md#L162)); Stage 2A `FC-01`–`FC-03`; empirically re-evaluated in [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) and [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** `backup/v3-personal` modified `Net` in three ways: (1) reordering `cycle_rep` via `CycleBasisOptimizer` before SymPy nullspace solving, (2) adding floating-point tolerance to `is_integral`, and (3) rewriting `iter_cycles` as depth-limited BFS.
+- **Why Deferred under Baseline Freeze:** Reordering `cycle_rep` alters SymPy nullspace basis vectors, metric tensors, and downstream ZL\* trajectories relative to upstream v4.0.2.
+- **Empirical Re-Evaluation & Disposition:**
+  - **Frozen Components (`KEEP_FROZEN`):** Unconditional `CycleBasisOptimizer` perturbs `lattice_basis` on **`69.1%` (`1,640/2,374`)** of passing MP-20 nets and flips `DEF-014` `lattice_type` on `10.95%` (`260/2,374`); exact SymPy `abs(nulv[0]) == 1` had **`0` float-noise failures** across `4,883` nets; and `iter_cycles` has **`0` callers** across SLICES.
+  - **Wave 2 `HIGH_VALUE_AB` Upgrade (Exact Smith Normal Form Fallback):** Across `518` `Net.get_lattice_basis() == -1` cases in 6 datasets (`67,826` strings), `250` are 1D/2D (`d_3 = 0`), `87` are proper sublattices (`d_3 >= 2`), and **`180` are valid 3D unimodular nets (`SNF(cycle_rep) == (1, 1, 1)`)** where upstream's single-nullspace-vector test produced a false negative. Invoking exact `smith_normal_decomp` integer basis construction strictly inside the `if not found_vector:` failure branch rescues **`180/180` (`100.0%`)** of unimodular nets (including `sampled.sli` `idx=709` missed by 20-shuffle `CycleBasisOptimizer`) in **`0.39–0.43 ms`** (`39x–112x` faster than random shuffles) with **`0.0` ULP drift** on all passing nets and pairs directly with Wave 2 `DEF-021`.
+- **Impact Risk:** **High** — modifies periodic lattice basis fallback behavior and must co-deploy with Wave 2 `DEF-021`.
 
 ---
 
 ### DEF-004
 - **ID:** `DEF-004`
-- **Source / Location:** `upstream/main` (`94ef8e0`), [tobascco_net.py](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L352-L365) (`Net.simple_cycle_basis`, line `359`) and [tobascco_net.py](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L511-L517) (`Net.get_lattice_basis`, line `514`)
+- **Source / Location:** [tobascco_net.py](../../src/slices/tobascco_net.py#L339-L382) (`Net.simple_cycle_basis`) and [tobascco_net.py](../../src/slices/tobascco_net.py#L467-L494) (`Net.get_lattice_basis`)
 - **Category:** `Graph`, `Runtime`
-- **Status:** `Frozen — Deferred (Baseline Preserved; RUL-03)`
-- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](file:///home/ordillo/tests/SLICES/docs/migration/PLAN.md#L163)); strict freeze confirmed in Stage 3 `RUL-03` ([REVIEW_SIGNOFF.md](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L67-L71)).
-- **Observed Behavior:**
-  - Line `359` (`simple_cycle_basis`): executes `st_vtx = np.random.choice(range(self.graph.order()))`, a leftover from commented-out SageMath code (`# mspt = ... min_spanning_tree(starting_vertex=st_vtx)`). The NetworkX replacement on line `363` (`nx.minimum_spanning_tree(...)`) never reads `st_vtx`.
-  - Line `514` (`get_lattice_basis`): creates `inds = list(range(self.cycle_rep.shape[0]))` and calls `np.random.shuffle(inds)`, but lines `515-516` copy `self.cycle_rep.copy()` and `self.cycle.copy()` without indexing by `inds`.
-  Both statements are dead code with respect to `Net` calculations, yet silently advance the global NumPy legacy random generator (`np.random`) on every decode call.
-- **Why Deferred under Baseline Freeze:** Confirmed under Stage 3 `RUL-03`: although neither value is read inside `Net`, both lines remain verbatim in Stage 4 (using `# noqa: F841` on `st_vtx` for `ruff`) so global legacy `np.random` state advances identically to upstream v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Verify no downstream workflow or `remove_overlaps` call depends on global `np.random` (note `relax_backends.remove_overlaps` uses an isolated `np.random.default_rng(seed)`), then remove both dead RNG calls cleanly and add a regression test asserting that `Net.simple_cycle_basis()` and `Net.get_lattice_basis()` leave `np.random.get_state()` unchanged.
-- **Impact Risk:** **Low–Medium** — zero impact on `Net` mathematical outputs; affects only external callers sharing NumPy's legacy global RNG state.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](PLAN.md#L163)); Stage 3 `RUL-03`; re-evaluated in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md); implemented in Wave 1A-1 (`#85`).
+- **Observed Behavior:** `simple_cycle_basis` executed unused `st_vtx = np.random.choice(...)` and `get_lattice_basis` executed unused `np.random.shuffle(inds)`, mutating global NumPy legacy RNG state without reading either result.
+- **Why Deferred under Baseline Freeze:** Frozen under Stage 3 `RUL-03` during Stages 1–7 to preserve identical global `np.random` advancement prior to empirical audit.
+- **Empirical Re-Evaluation & Disposition:** Re-evaluation confirmed `0` repo consumers of legacy global `np.random` and **`max_float_abs_diff = 0.0` (`0` ULP)** across `19/19` Golden Corpus entries. **Resolved in Wave 1 (`#85`):** Deleted both dead RNG calls (`0` remaining `np.random` occurrences in `tobascco_net.py`). Verified `np.random.get_state()` is 100% unchanged, `0` ruff errors, `37/37` unit tests pass, and `89/89` golden baseline tests pass (`0.0` ULP drift).
+- **Impact Risk:** **Low–Medium** — zero impact on `Net` math; restores global RNG purity.
 
 ---
 
 ### DEF-005
-- **ID:** `DEF-005`
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L5-L9) (module import side effects)
+- **ID:** `DEF-005` (cross-ref [`DEF-009`](#def-009), [`DEF-014`](#def-014), [`DEF-020`](#def-020))
+- **Source / Location:** [core.py](../../src/slices/core.py#L17-L19), [L53-L58](../../src/slices/core.py#L53-L58) and [relax_backends.py](../../src/slices/relax_backends.py#L540-L548)
 - **Category:** `Runtime`, `Compatibility`
-- **Status:** `Frozen — Deferred (Baseline Preserved; RUL-03)`
-- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](file:///home/ordillo/tests/SLICES/docs/migration/PLAN.md#L164)); strict freeze confirmed in Stage 3 `RUL-03` & `CA-08` ([REVIEW_SIGNOFF.md](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L67-L71)).
-- **Observed Behavior:** Importing `slices.core` unconditionally mutates process-wide environment variables and Python's warning registry:
-  ```python
-  os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-  warnings.filterwarnings("ignore", category=DeprecationWarning)
-  warnings.filterwarnings("ignore", category=FutureWarning)
-  os.environ["OMP_NUM_THREADS"] = "1"
-  os.environ["PYTHONWARNINGS"] = "ignore"
-  ```
-  This suppresses warnings across host applications embedding `slices` and overrides any user-configured `OMP_NUM_THREADS` before PyTorch/OpenMP/BLAS thread pools initialize.
-- **Why Deferred under Baseline Freeze:** Confirmed under Stage 3 `RUL-03` & `CA-08`: lines 5–9 remain verbatim **above** all scientific imports (with `[tool.ruff.lint.per-file-ignores] "src/slices/core.py" = ["E402"]` in `pyproject.toml`), preventing OpenMP/BLAS thread-pool drift in `np.linalg.cholesky` / `fmin_l_bfgs_b` that could flip `DEF-014` `lattice_type` float equality on 32-core hardware. Meanwhile, `CA-05`/`RUL-07` isolates `python -m slices.relax_backends` from triggering `core.py` via PEP 562 lazy `__getattr__` in `src/slices/__init__.py`.
-- **Proposed Post-Baseline Investigation / Fix:** Empirically test CPU determinism and throughput across `OMP_NUM_THREADS ∈ {1, 4, 8, unset}` on the Golden Reference Corpus (both `numpy`/`scipy` ZL* and CPU `nequip-s+l`). Replace unconditional `os.environ[...] = ...` with `os.environ.setdefault(...)` or explicit CLI/context-manager configuration, and replace global `warnings.filterwarnings` with scoped `warnings.catch_warnings()` blocks around noisy third-party calls.
-- **Impact Risk:** **Medium** — changing `OMP_NUM_THREADS` can alter floating-point summation order and CPU parallelism; scoping warnings affects only stderr diagnostics.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](PLAN.md#L164)); Stage 3 `RUL-03` & `CA-08`; re-evaluated in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md); implemented in Wave 1A-1 (`#85`) & Wave 1A-2 (`#86`).
+- **Observed Behavior:** Importing `slices.core` unconditionally overwrote `TF_CPP_MIN_LOG_LEVEL="3"`, `OMP_NUM_THREADS="1"`, `PYTHONWARNINGS="ignore"`, and installed blanket `DeprecationWarning`/`FutureWarning` filters.
+- **Why Deferred under Baseline Freeze:** Frozen above imports under Stage 3 `RUL-03`/`CA-08` to prevent OpenMP/BLAS thread-pool drift during migration.
+- **Empirical Re-Evaluation & Disposition:** Testing across `OMP_NUM_THREADS ∈ {1, 2, 4, 8, unset}` proved `GFN-FF`/`std`/`ZL*` have `0.0` drift and `0/19` `DEF-014` flips across `1..32` threads, `OMP=8` gives `1.41x` single-process speedup (`2.42x` in `GFN-FF`), whereas fully `unset` spawns `32` threads and slows PyTorch `2.71x`. **Resolved in Wave 1 (`#85`, `#86`):** Replaced unconditional overrides in `core.py` with `os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")` and `os.environ.setdefault("OMP_NUM_THREADS", "1")`, deleted `os.environ["PYTHONWARNINGS"] = "ignore"` and blanket filters, scoped `warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"^spglib\.")`, imported `BrunnerNNReciprocal` first (`0` `FutureWarning`s), and wrapped `ExpCellFilter` in `relax_backends._cell_filter` inside `warnings.catch_warnings()` (`DEF-009`). Preserves `0.0` default drift (`89/89` golden + `161/161` unit/int/reg green).
+- **Impact Risk:** **Medium** — preserves single-thread defaults when unset while honoring explicit user `OMP_NUM_THREADS` overrides and eliminating global warning suppression.
 
 ---
 
 ### DEF-006
-- **ID:** `DEF-006`
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L138-L151) (`SLICES.check_element`) vs [gfnff_helper.py](file:///home/ordillo/tests/SLICES/src/slices/gfnff_helper.py#L11-L22) and [config.py](file:///home/ordillo/tests/SLICES/src/slices/config.py) (`LJ_PARAMS_LIST`, `Z=1..118`)
+- **ID:** `DEF-006` (cross-ref [`DEF-028`](#def-028), [`DEF-029`](#def-029))
+- **Source / Location:** [core.py](../../src/slices/core.py#L254-L273) (`SLICES.check_element`) vs [gfnff_helper.py](../../src/slices/gfnff_helper.py#L59-L60), [L107-L156](../../src/slices/gfnff_helper.py#L107-L156) and [config.py](../../src/slices/config.py)
 - **Category:** `Compatibility`, `Math`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](file:///home/ordillo/tests/SLICES/docs/migration/PLAN.md#L165)); verified directly in upstream `core.py` and `gfnff_helper.py`.
-- **Observed Behavior:** `SLICES.check_element(structure)` returns `True` iff `np.array(structure.atomic_numbers).max() < 87` (i.e., `Z <= 86`, Rn and lighter), with the legacy docstring noting *"due to GFN-FF's limitation"*. However, upstream v4.0.2 replaced the legacy `xtb` binary with the bundled `pprcht/gfnff` library (`gfnff_helper.py`), which supports `Z = 1..86` under `param_gfnff_legacy86.xtb` overlay and `Z = 87..103` (Fr through Lr, including actinides Th, U, Np, Pu) via the library's internal modern parameter table, and `config.py` provides `LJ_PARAMS_LIST` up to `Z = 118`.
-- **Why Deferred under Baseline Freeze:** `check_element()` is part of the frozen validation API tested by the Golden Reference Corpus (including explicit `Z >= 87` rejection cases) and used by `HTS/` and `benchmark/` filtering scripts to match historical Materials Project / xtb-era element coverage. Changing the threshold from `87` to `104` (or `95` to match NequIP-OAM training support) would silently change boolean outputs of `check_element()`.
-- **Proposed Post-Baseline Investigation / Fix:** During Stage 5/6 documentation, document the exact `Z <= 86` historical behavior of `check_element()` accurately in its docstring without altering the threshold. Post-migration, verify element coverage of `NequIP-OAM-S/L` and `pprcht/gfnff` across actinides (`Z = 87..103`), and consider adding an optional parameter `max_z: int = 86` to `check_element(structure, max_z=86)` so existing callers preserve `Z <= 86` while actinide workflows can explicitly opt into higher `Z`.
-- **Impact Risk:** **Medium** — changes validation acceptance sets for actinide-bearing crystals (`Z >= 87`) and downstream dataset filters.
+- **Status:** `Deferred — Wave 3 (VERSIONED_OPT_IN; DEF-028 guard resolved in Wave 1)`
+- **Provenance:** Stage 1 Seed ([PLAN.md Section 4.2](PLAN.md#L165)); empirically re-evaluated in [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) and [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** `SLICES.check_element(structure)` enforces `Z < 87` (`Z <= 86`), whereas bundled `libgfnff` supports `Z = 1..103` and `config.py` covers `Z = 1..118`.
+- **Why Deferred under Baseline Freeze:** `check_element()` is locked by golden fixtures (`G16` `SmThCN` `Z=90`, `S03` `Rn`/`Fr`) and historical Materials Project filters.
+- **Empirical Re-Evaluation & Disposition:** Live probing across `Z = 1..118` uncovered three distinct element tiers — `check_element` (`1..86`), `libgfnff` (`1..103`; `Z >= 104` caused Fortran OOB memory corruption -> **`DEF-028`, guarded in Wave 1**), and `NequIP-OAM-S/L` (**non-contiguous 89-element OAM set `{1..83, 89..94}`** -> **`DEF-029`**) — with `6/6` (`100%`) real MP-20 `Ac..Pu` actinide crystals reconstructing cleanly. **Wave 3 Plan:** Preserve `Z <= 86` default while adding `check_element(structure, mode: Literal["legacy86", "nequip_oam", "gfnff103"] = "legacy86")` paired with `DEF-029`.
+- **Impact Risk:** **Medium** — changes validation acceptance sets for actinides (`Z >= 87`) and `Po/At/Rn` (`Z = 84..86`) if altered by default.
 
 ---
 
 ### DEF-007
 - **ID:** `DEF-007` (Slice 2B Source Tag: `DEF-UP-001`; Stage 3 Ruling: `RUL-01`)
-- **Source / Location:** `upstream/main` (`94ef8e0`, defect introduced in commit `119afaf`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L44-L72) — `function_timeout` -> `signal_handler` (line `60`)
+- **Source / Location:** `upstream/main` (`94ef8e0`, defect introduced in `119afaf`), resolved in [core.py](../../src/slices/core.py#L104-L149) (`function_timeout`) and [exceptions.py](../../src/slices/exceptions.py#L77-L78)
 - **Category:** `Runtime`, `Compatibility`
 - **Status:** `Resolved in Stage 4 (commit 49237f6; verified in tests/unit/test_exceptions.py)`
-- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md#L233-L235)); **MODIFY & APPROVE** in Stage 3 `RUL-01` ([REVIEW_SIGNOFF.md](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L51-L55)); implemented in Stage 4 Wave 4A-2 (commit `49237f6`) and verified in Stage 5 (`tests/unit/test_exceptions.py` & `tests/unit/test_decoding.py`, commit `8d9314b`).
-- **Observed Behavior:** `signal_handler` inside `function_timeout` executes `raise TimeoutException("Timed out!")`, but upstream commit `119afaf` deleted the definition/import of `TimeoutException` (`ruff` `F821`). Consequently, any decorated call (`relax`, `relax_large_cell1`, `relax_large_cell2`) that hits its 360/720/2000 s `SIGALRM` deadline raises `NameError: name 'TimeoutException' is not defined` rather than a structured timeout exception (which still gets caught by `except Exception as e:` in `to_structures`, printing the `NameError`).
-- **Stage 3 Ruling & Rationale (`RUL-01`):** Approved for Stage 4 Wave 4A-2 (`refactor-core`) because `signal_handler` is never invoked on non-timed-out paths, guaranteeing 100.0% numerical, RNG, and timing invariance. Define `class TimeoutException(SLICESError): pass` in `src/slices/exceptions.py`, import it in `core.py`, and guard `SIGALRM` with `hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread()` (yielding directly off-main-thread/Windows; explicitly rejecting fork's broken `threading.Timer` callback).
-- **Proposed Post-Baseline Investigation / Fix:** Implemented in Stage 4 Wave 4A-2 and verified by Stage 5 `tests/unit/test_exceptions.py`.
-- **Impact Risk:** **Low** — zero impact on non-timed-out numerical trajectories; restores intended exception type on timeout.
+- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](AUDIT_UPSTREAM_STYLE.md#L233-L235)); Stage 3 `RUL-01`; implemented in Stage 4 (`49237f6`); verified in Stage 5 (`8d9314b`) and confirmed intact in [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** `signal_handler` raised undefined `TimeoutException` (`F821`), causing `NameError` on timeouts.
+- **Why Deferred under Baseline Freeze:** Approved for Stage 4 (`RUL-01`) as non-math runtime fix with zero impact on non-timed-out paths.
+- **Empirical Re-Evaluation & Disposition:** `TimeoutException(SLICESError)` + POSIX main-thread `SIGALRM` guard verified intact at `HEAD=fa4cfc8` (`tests/unit/test_exceptions.py`).
+- **Impact Risk:** **Low** — restores structured timeout handling without altering numerical paths.
 
 ---
 
 ### DEF-008
 - **ID:** `DEF-008` (Slice 2B Source Tag: `DEF-UP-002`; Slice 2A Source Tag: `FC-08`)
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1993-L2013) — `SLICES.relax_large_cell2` (lines `2007` and `2010`); independently altered in `backup/v3-personal:src/slices/core.py:2763-2782` (commit `665b042`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L2750-L2766) (`SLICES.relax_large_cell2`)
 - **Category:** `Relaxation`, `Compatibility`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md#L236-L238)) & Stage 2A ([AUDIT_FORK_DIFF.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L262)); verified directly in `src/slices/core.py:1951-2013`.
-- **Observed Behavior:** Whereas `relax` (`<=20` atoms, `L1964,1967`) and `relax_large_cell1` (`21..40` atoms, `L1985,1988`) forward `fmax=self.fmax, steps=self.steps` (defaults `0.2`, `100`) to `self.relaxer.relax(...)`, `relax_large_cell2` (`>40` atoms, `L2007,2010`) invokes `self.relaxer.relax(struc)` with no keyword arguments. Under `NequIPRelaxer.relax`, this silently applies the backend's own defaults (`fmax=0.1, steps=500`) and ignores caller-configured `SLICES(fmax=..., steps=...)`.
-- **Why Deferred under Baseline Freeze:** Passing `fmax=self.fmax, steps=self.steps` in `relax_large_cell2` would alter relaxation step counts, force convergence criteria, final geometries, and energies for all structures with `>40` atoms relative to upstream v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** During Stage 5/6, document the exact `>40`-atom behavior explicitly in the `relax_large_cell2` Google docstring without altering runtime kwargs. Post-migration, benchmark `>40`-atom crystals under `(fmax=0.2, steps=100)` vs `(fmax=0.1, steps=500)` and evaluate forwarding `self.fmax`/`self.steps` consistently across all three cell-size branches.
-- **Impact Risk:** **Medium–High** — directly changes force convergence and trajectory length for all `>40`-atom relaxations.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2B (`DEF-UP-002`) & Stage 2A (`FC-08`); re-evaluated in [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** Unlike `relax` (`<=20` atoms) and `relax_large_cell1` (`21..40` atoms), `relax_large_cell2` (`>40` atoms) omitted `fmax=self.fmax, steps=self.steps`, silently running `NequIPRelaxer` defaults (`fmax=0.1, steps=500`) and breaking `ProgressiveRelaxer` tiers on large cells.
+- **Why Deferred under Baseline Freeze:** Deferred in Stages 1–7 to avoid altering `>40`-atom relaxation trajectories prior to empirical verification.
+- **Empirical Re-Evaluation & Disposition:** Audit confirmed **`0` structures `>40` atoms** exist in MP-20 (`16,686`), QMOF (`928`), `examples/`, `HTS/`, or `89/89` golden tests (`0.0` drift). On `10` distorted `45–64`-atom supercells, forwarding `fmax=self.fmax, steps=self.steps` converged `10/10` (`100%`), ran **`1.24x` faster** (`16.58 s` vs `20.55 s`), preserved **`9/10 == 9/10` strict match** (`mean |dE| = 0.37 meV/atom`), and fixed `ProgressiveRelaxer`. **Resolved in Wave 1 (`#86`):** Forwarded `fmax=self.fmax, steps=self.steps` in both branches of `relax_large_cell2` (`L2760`, `L2763`).
+- **Impact Risk:** **Medium–High** — restores caller-configured `fmax`/`steps` for `>40`-atom cells with zero drift on shipped benchmarks.
 
 ---
 
 ### DEF-009
-- **ID:** `DEF-009` (Slice 2B Source Tag: `DEF-UP-003`)
-- **Source / Location:** `upstream/main` (`94ef8e0`), [relax_backends.py](file:///home/ordillo/tests/SLICES/src/slices/relax_backends.py#L367-L372) — `_cell_filter`
+- **ID:** `DEF-009` (Slice 2B Source Tag: `DEF-UP-003`; cross-ref [`DEF-005`](#def-005))
+- **Source / Location:** [relax_backends.py](../../src/slices/relax_backends.py#L540-L548) (`_cell_filter`)
 - **Category:** `Relaxation`, `Optimization`, `Compatibility`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md#L239-L241)); verified directly in `src/slices/relax_backends.py:367-372`.
-- **Observed Behavior:** `_cell_filter(atoms)` imports and instantiates `ase.filters.ExpCellFilter(atoms)` (with fallback to `ase.constraints.ExpCellFilter` for `ase < 3.23`). Under locked `ase==3.29.0`, ASE emits `DeprecationWarning: Use FrechetCellFilter for better convergence w.r.t. cell variables`.
-- **Why Deferred under Baseline Freeze:** `ExpCellFilter` and `FrechetCellFilter` define different strain parameterizations and cell-gradient Jacobians (`dE/dF` vs exponential map), which changes every BFGS/LBFGS/FIRE relaxation step, final lattice parameters, and energy in `NequIPRelaxer.relax`, breaking CPU parity (`atol=1e-12`) against `SLICES-upstream-baseline`.
-- **Proposed Post-Baseline Investigation / Fix:** Keep `ExpCellFilter` frozen as long as `ase` retains it. Post-migration (or ahead of an ASE major release removing `ExpCellFilter`), run a full MP-20 benchmark comparing `ExpCellFilter` vs `FrechetCellFilter` on match rate, energy distribution, convergence steps, and collapse-guard trigger frequency.
-- **Impact Risk:** **High** — alters every NequIP variable-cell relaxation trajectory and final geometry/energy.
+- **Status:** `Keep Frozen (KEEP_FROZEN; ASE warning scoped in Wave 1)`
+- **Provenance:** Stage 2B (`DEF-UP-003`); empirically re-evaluated in [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) and stress-tested in [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md); warning scoped in Wave 1A-1 (`#85`).
+- **Observed Behavior:** `_cell_filter(atoms)` uses `ase.filters.ExpCellFilter(atoms)` (fallback `ase.constraints.ExpCellFilter`), which emits `DeprecationWarning: Use FrechetCellFilter` on `ase >= 3.23`.
+- **Why Deferred under Baseline Freeze:** `ExpCellFilter` and `FrechetCellFilter` have distinct strain Jacobians and alter every variable-cell relaxation trajectory.
+- **Empirical Re-Evaluation & Disposition:** Controlled 49-crystal (`19` Golden + `30` MP-20) CPU `nequip-s+l` A/B testing proved **`ExpCellFilter` strictly outperforms `FrechetCellFilter`** on mean BFGS steps (`11.61` vs `12.45`), wall-clock time (`347.5 ms` vs `376.4 ms`, **`8.3%` faster**), lower final energy (**`31/49` = `63.3%`** vs `10/49` = `20.4%`), and **strict `StructureMatcher` recovery (`93.48%` [`43/46`] vs `89.13%` [`41/46`], `-4.35 pp` regression)**. Verifier stress-testing identified two coarse-tolerance (`fmax=0.2 eV/Å`) `FrechetCellFilter` failure modes: premature filter-force termination on `G05` (`+8.75 meV/at` higher, `phys_fmax > 0.24 eV/Å`), and interlayer `c`-axis over-compression (`6.51 -> 4.42 Å`, `-35.32 meV/at` wrong polymorph basin) on layered `G10` (`BaSn2`). **Disposition (`KEEP_FROZEN` + Wave 1 warning scope `#85`):** Retain `ExpCellFilter` strictly as default (falling back to `FrechetCellFilter` only if a future ASE major release removes it) and suppress its `DeprecationWarning` locally inside `_cell_filter` via `warnings.catch_warnings()`.
+- **Impact Risk:** **High** — switching to `FrechetCellFilter` measurably regresses crystal recovery (`-4.35 pp`).
 
 ---
 
 ### DEF-010
 - **ID:** `DEF-010` (Slice 2B Source Tag: `DEF-UP-004`; cross-ref [`DEF-003`](#def-003))
-- **Source / Location:** `upstream/main` (`94ef8e0`), [tobascco_net.py](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L413-L422) (`Net.iter_cycles`) and [tobascco_net.py](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L767-L785) (`Net.vertex_positions`)
+- **Source / Location:** [tobascco_net.py](../../src/slices/tobascco_net.py#L384-L405) (`Net.iter_cycles`) and [tobascco_net.py](../../src/slices/tobascco_net.py#L679-L692) (`Net.vertex_positions`)
 - **Category:** `Graph`, `Runtime`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md#L242-L244)); verified directly in `src/slices/tobascco_net.py`.
-- **Observed Behavior:** Both methods define mutable default arguments (`cycle=[]`, `used=[]`, `nodes_visited=[]`, `cycle_baggage=[]` in `iter_cycles`; `pos={}`, `bad_ones={}` in `vertex_positions`; `ruff` `B006`). Calling either method directly without passing fresh containers mutates the function-level defaults across subsequent invocations. (`Net.get_cycle_basis` passes explicit empty lists at `L307-310`, masking the bug on that internal call path, and `vertex_positions` itself carries an upstream `# NOTE: NOT WORKING - FIX!!!` comment at `L775`.)
-- **Why Deferred under Baseline Freeze:** Both methods reside inside the frozen `Net` class. While distinct from `backup/v3-personal`'s algorithmic BFS rewrite logged in `DEF-003`, altering frozen `Net` method signatures/bodies is deferred until post-baseline verification confirms zero external callers rely on shared default behavior.
-- **Proposed Post-Baseline Investigation / Fix:** Audit all call sites of `iter_cycles` and `vertex_positions` across `src/slices/`, `HTS/`, and `benchmark/`; replace mutable defaults with `None` guards (`if cycle is None: cycle = []`) and add unit tests verifying repeated calls are stateless.
-- **Impact Risk:** **Low–Medium** — no effect on `SLICES.to_structures()` (which uses `simple_cycle_basis`), but changes repeated direct invocations of `iter_cycles()`/`vertex_positions()`.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2B (`DEF-UP-004`); re-evaluated in [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md); implemented in Wave 1A-1 (`#85`).
+- **Observed Behavior:** Both methods defined mutable default containers (`[]`, `{}`; `ruff` `B006`), causing repeated default calls to `iter_cycles()` to crash on call 2 with `AssertionError` and `vertex_positions()` to hit `RecursionError`.
+- **Why Deferred under Baseline Freeze:** Both methods resided inside frozen `Net` pending caller audit.
+- **Empirical Re-Evaluation & Disposition:** Audit confirmed `0` external callers and `0.0` drift. **Resolved in Wave 1 (`#85`):** Replaced mutable `[]` / `{}` defaults in `Net.iter_cycles` and `Net.vertex_positions` with `None` defaults + `if ... is None:` guards and removed all `# noqa: B006` suppressions. Verified stateless repeated calls (`6 == 6 == 6` cycles), `0` ruff errors, and `89/89` golden parity.
+- **Impact Risk:** **Low–Medium** — eliminates stateful crash on direct calls with zero impact on `to_structures()`.
 
 ---
 
 ### DEF-011
-- **ID:** `DEF-011` (Slice 2B Source Tag: `DEF-UP-005`; cross-ref [`DEF-014`](#def-014))
-- **Source / Location:** `upstream/main` (`94ef8e0`), [tobascco_net.py](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L478) (`linear_independent_vectors`), [L954](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L954) (`eon_projection`), [L964](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L964) (`projection`), and [L993](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L993) (`cycle_cocycle_I`)
+- **ID:** `DEF-011` (Slice 2B Source Tag: `DEF-UP-005`; cross-ref [`DEF-014`](#def-014), [`DEF-034`](#def-034))
+- **Source / Location:** [tobascco_net.py](../../src/slices/tobascco_net.py#L438-L465) (`linear_independent_vectors`), [L840-L855](../../src/slices/tobascco_net.py#L840-L855) (`eon_projection`, `projection`), and [L882-L888](../../src/slices/tobascco_net.py#L882-L888) (`cycle_cocycle_I`)
 - **Category:** `Math`, `Compatibility`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md#L245-L247)); verified directly in `src/slices/tobascco_net.py`.
-- **Observed Behavior:** `Net` relies on `np.matrix(d).I` (which dispatches internally to `np.linalg.inv` or `pinv` through NumPy's pending-deprecated `numpy.matrix` subclass) for `eon_projection`, `projection`, and `cycle_cocycle_I`, plus `np.matrix(R)` in `linear_independent_vectors`.
-- **Why Deferred under Baseline Freeze:** Replacing `np.matrix(d).I` with `np.linalg.inv(d)` / `np.linalg.pinv(d)` can introduce `~1e-16` floating-point differences in `metric_tensor` and `lattice_arcs`. Because `core.py:1868-1877` (`DEF-014`) classifies `lattice_type` using exact IEEE-754 float `set` equality and `fmin_l_bfgs_b` uses finite-difference gradients (`epsilon=1e-8`), even a 1-ULP change in `metric_tensor_std` can flip optimizer dimensionality and cause macroscopic trajectory divergence.
-- **Proposed Post-Baseline Investigation / Fix:** Once `DEF-014` (tolerant `lattice_type` classification) is evaluated, benchmark migrating `np.matrix(...).I` to `np.linalg.inv` (and `np.asarray` in `linear_independent_vectors`) on the Golden Reference Corpus and MP-20 dataset to confirm NumPy 3.x readiness without numerical regression.
-- **Impact Risk:** **Medium–High** — negligible algebraic difference alone, but amplified to discrete branching changes by `DEF-014`.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2B (`DEF-UP-005`); empirically re-evaluated in [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md); implemented in Wave 1A-1 (`#85`).
+- **Observed Behavior:** `Net` relied on pending-deprecated `np.matrix(...).I` in `eon_projection`, `projection`, and `cycle_cocycle_I`, plus `np.matrix(r_mat)` in `linear_independent_vectors`.
+- **Why Deferred under Baseline Freeze:** Stage 2 deferred removal over concern that a 1-ULP shift in `metric_tensor_std` could flip `DEF-014` `lattice_type`.
+- **Empirical Re-Evaluation & Disposition:** Because all three inverted matrices are strictly square and `matrix.I` dispatches directly to `np.linalg.inv` (`dgesv`), replacing `np.array(np.matrix(...).I)` with `np.linalg.inv(...)` achieved **`max_abs_diff = 0.000e+00` (`0` ULP, `0/2,366` `DEF-014` flips)** across all `2,374` MP-20 and `19` Golden crystals (whereas `np.linalg.pinv` drifted up to `6.50e-11` and flipped `231/2,366` [`9.76%`] crystals). **Resolved in Wave 1 (`#85`):** Migrated all three inverses strictly to `np.linalg.inv(...)` (`0` `pinv`, `0` `np.matrix` remaining) and migrated `linear_independent_vectors` to `np.atleast_2d(np.asarray(r_mat))` (`DEF-034`), passing `89/89` golden tests at `0.0` ULP drift.
+- **Impact Risk:** **Medium–High** (if `pinv` were misused) / **Zero** with `np.linalg.inv` — restores NumPy 3.x readiness with bit-exact parity.
 
 ---
 
 ### DEF-012
 - **ID:** `DEF-012` (Slice 2B Source Tag: `DEF-UP-006`)
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L652-L663) — `SLICES.SLICES2formula`
+- **Source / Location:** [core.py](../../src/slices/core.py#L919-L1018) (`SLICES.SLICES2formula`)
 - **Category:** `Compatibility`, `Runtime`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md#L248-L250)); verified directly in `src/slices/core.py:652-663`.
-- **Observed Behavior:** After stripping strategy-4 space-group tokens via `_first_element_index`, `SLICES2formula` runs `match = re.search(r'^(.*?)(\d+)', SLICES)` and immediately calls `match.group(1)` **outside** the `try`/`except` block. Two edge cases fail inconsistently:
-  1. For Strategy 2 strings (e.g., underscore-delimited tokens `Si_O_0001...`), underscores remain in `extracted_string` and cause `Composition(extracted_string)` to fail (printing to stdout and returning `None`).
-  2. For malformed or digit-free strings, `match` is `None`, raising an uncaught `AttributeError: 'NoneType' object has no attribute 'group'` instead of returning `None` or raising a structured `SLICESEncodingError`/`ValueError`.
-- **Why Deferred under Baseline Freeze:** `SLICES2formula` is in the frozen parsing/validation surface; altering its return/exception behavior for invalid or legacy-strategy inputs could diverge from v4.0.2 parity checks.
-- **Proposed Post-Baseline Investigation / Fix:** Document Strategy 3/4 input expectations clearly in Stage 5/6 docstrings. Post-migration, guard `if match is None:` cleanly, decide on a consistent error/return contract, and evaluate direct token-based formula extraction (supporting Strategies 1–4 uniformly).
-- **Impact Risk:** **Low–Medium** — affects only Strategy 1/2 strings and malformed digit-free inputs.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2B (`DEF-UP-006`); re-evaluated in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** Legacy `re.search(r'^(.*?)(\d+)', SLICES)` called `match.group(1)` outside `try`/`except`, silently emitting **wrong non-`None` formulas on `16/16` (`100%`) Strategy 1 strings** (`Nd2Si2Ru2 -> 'Nd1Si1'`), failing on `10/16` (`62.5%`) Strategy 2 strings, and raising uncaught `AttributeError` on digit-free strings (`"Si O"`).
+- **Why Deferred under Baseline Freeze:** Deferred in Stages 1–7 to avoid changing parsing error contracts before empirical corpus verification.
+- **Empirical Re-Evaluation & Disposition:** Grammar-aware Strategy 1/2/3/4 token extraction achieved **`16/16` (`100%`) across all Strategies 1–4**, **`2,383/2,383`** (`mp20_v4`), and **`14,303/14,303`** (`mp20_legacy`) with `0` `AttributeError`s. **Resolved in Wave 1 (`#86`):** Implemented full Strategy 1–4 grammar-aware `SLICES2formula` returning `None` cleanly on malformed/digit-free strings (`89/89` golden + `161/161` existing tests green).
+- **Impact Risk:** **Low–Medium** — fixes silent wrong formulas on Strategy 1 and crashes on malformed inputs while preserving 100% Strategy 3/4 outputs.
 
 ---
 
 ### DEF-013
 - **ID:** `DEF-013` (Slice 2B Source Tag: `DEF-UP-007`; Stage 3 Ruling: `RUL-02`, `CA-06`)
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1900-L1910) (`SLICES.to_structures`) and [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1944-L1949) (`SLICES.to_4structures`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L2545-L2548) (`SLICES.to_structures`) and [core.py](../../src/slices/core.py#L2706-L2709) (`SLICES.to_4structures`)
 - **Category:** `Relaxation`, `Runtime`
 - **Status:** `Resolved in Stage 4 (commit 49237f6; verified in tests/unit/test_decoding.py)`
-- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md#L251-L253)); **APPROVE** in Stage 3 `RUL-02` & `CA-06` ([REVIEW_SIGNOFF.md](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L57-L65)); implemented in Stage 4 Wave 4A-2 (commit `49237f6`) and verified with zero-stdout assertions in Stage 5 (`tests/unit/test_decoding.py`, commit `8d9314b`).
-- **Observed Behavior:** `SLICES.__init__` already unifies both `relax_model=None` and `relax_model="none"` (plus `SLICES_RELAX_MODEL=none`) via `make_relaxer` to `(None, "none")`. However, when `self.relaxer is None`, `to_structures()` (`L1901-1906`) and `to_4structures()` (`L1945`) still enter `@function_timeout` `self.relax(...)`, arm `SIGALRM`, trigger `AttributeError: 'NoneType' object has no attribute 'relax'`, print the error to stdout (twice in `to_4structures`), and catch it to return `[structure_recreated_std, structure_recreated_opt], 0` (or `structures, final_energy_per_atom`).
-- **Stage 3 Ruling & Rationale (`RUL-02` / `CA-06`):** Approved for Stage 4 Wave 4A-2 (`refactor-core`): insert `if self.relaxer is None: return [structure_recreated_std, structure_recreated_opt], 0` before `try:` at `core.py:1900` and `if self.relaxer is None: return structures, final_energy_per_atom` before `try:` at `core.py:1944`. Return tuples are bit-identical for both `None` and `"none"` (`to_relaxed_structure` still raises `Exception("relax failed")` when `len(structures) != 3`), while eliminating spurious stdout `AttributeError` prints and unnecessary `SIGALRM` calls.
-- **Proposed Post-Baseline Investigation / Fix:** Implemented in Stage 4 Wave 4A-2 and verified in Stage 4/5 tests.
-- **Impact Risk:** **Low** — return structures and energy (`0`) are bit-identical; only eliminates spurious stdout `AttributeError` message and `SIGALRM` setup when `relax_model=None` / `"none"`.
+- **Provenance:** Stage 2B (`DEF-UP-007`); Stage 3 `RUL-02` & `CA-06`; implemented in Stage 4 (`49237f6`); verified in Stage 5 (`8d9314b`) and confirmed intact in [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** `relax_model=None` / `"none"` previously called `self.relax(...)`, raised `AttributeError`, and printed to stdout before returning `[std, opt], 0`.
+- **Why Deferred under Baseline Freeze:** Approved for Stage 4 (`RUL-02`/`CA-06`) with bit-identical return values.
+- **Empirical Re-Evaluation & Disposition:** `if self.relaxer is None:` short-circuit in both `to_structures` and `to_4structures` verified intact with zero stdout noise at `HEAD=fa4cfc8` (`tests/unit/test_decoding.py`).
+- **Impact Risk:** **Low** — eliminates spurious stdout errors and `SIGALRM` overhead when relaxation is disabled.
 
 ---
 
 ### DEF-014
 - **ID:** `DEF-014` (Slice 2B Source Tag: `DEF-UP-008`; cross-ref [`DEF-005`](#def-005), [`DEF-011`](#def-011))
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1868-L1877) — `SLICES.to_structures` (`lattice_type` classification)
+- **Source / Location:** [core.py](../../src/slices/core.py#L2424-L2437) (`SLICES.to_structures` `lattice_type` classification) and [decoding_strategies.py](../../src/slices/decoding_strategies.py#L611-L620)
 - **Category:** `Math`, `Optimization`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2B ([AUDIT_UPSTREAM_STYLE.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md#L254-L256)); verified directly in `src/slices/core.py:1868-1877`.
-- **Observed Behavior:** `to_structures` classifies the lattice symmetry constraint mode passed to `initialize_x_bounds` and `func` using exact IEEE-754 floating-point `set` deduplication and `==` comparisons on the diagonal entries of `metric_tensor_std`:
-  ```python
-  lattice_length_list = [metric_tensor_std[0,0], metric_tensor_std[1,1], metric_tensor_std[2,2]]
-  lattice_length_list_unique = list(set(lattice_length_list))
-  lattice_type = len(lattice_length_list_unique)
-  if lattice_type == 2:
-      if metric_tensor_std[0,0] == metric_tensor_std[1,1]: lattice_type = 23
-      if metric_tensor_std[0,0] == metric_tensor_std[2,2]: lattice_type = 22
-      if metric_tensor_std[2,2] == metric_tensor_std[1,1]: lattice_type = 21
-  ```
-  A floating-point rounding drift as small as `~1e-16` between two theoretically equal diagonal components flips `lattice_type` from `1` (cubic, 1 length variable) or `21`/`22`/`23` (2 length variables) to `3` (3 independent length variables), changing the dimensionality of `x` and `bounds` in `fmin_l_bfgs_b`.
-- **Why Deferred under Baseline Freeze:** This discrete branching sensitivity is the primary mechanistic reason upstream `tobascco_net.py` (`np.matrix.I`, `DEF-011`), `get_rescaled_lattice_vectors`, `np.linalg.cholesky`, and import-time `OMP_NUM_THREADS="1"` (`DEF-005`) must remain bit-for-bit untouched during the migration. Introducing a relative tolerance (e.g., `math.isclose(..., rel_tol=1e-9)`) would reclassify borderline high-symmetry crystals and alter their ZL* parameter spaces relative to v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Post-migration, audit the distribution of `|g_ii - g_jj| / max(g_ii, g_jj)` across the MP-20 dataset (all 7 crystal systems) to measure how often cubic/tetragonal/hexagonal nets miss symmetry classification due to `~1e-15` Cholesky/rescaling noise, and evaluate replacing exact `==` with `math.isclose(..., rel_tol=1e-9, abs_tol=1e-12)` alongside `DEF-011` and `DEF-005`.
-- **Impact Risk:** **High** — directly alters ZL* optimization variable dimensionality (`lattice_type` ∈ `{1, 21, 22, 23, 3}`) and symmetry preservation during L-BFGS-B optimization.
+- **Status:** `Deferred — Wave 2 (HIGH_VALUE_AB)`
+- **Provenance:** Stage 2B (`DEF-UP-008`); empirically re-evaluated in [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) and reconciled with `DEF-005` in [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** `to_structures` classifies `lattice_type` using exact IEEE-754 float `set` and `==` on the diagonal entries of `metric_tensor_std`.
+- **Why Deferred under Baseline Freeze:** Replacing exact `==` with tolerant comparison shifts `lattice_type` and ZL\* optimization dimensionality relative to upstream v4.0.2 (`5/48` `opt_lat` shift by `3.9e-8..2.75e-5 Å > atol=1e-12`).
+- **Empirical Re-Evaluation & Disposition:** Across `2,366` active MP-20 crystals (`7,098` diagonal pairs), **`1,734 / 2,366` (`73.29%`)** — including **`97.7%` of cubic (`565/576` miss `lt=1`)**, `94.3%` hexagonal, `94.5%` trigonal, `88.4%` tetragonal, and `15/18` active Golden Corpus crystals — lose symmetry constraints due to `1.6e-16..1.0e-13` rounding residuals, separated from true anisotropy (`> 1e-6`) by an **empty 7-decade spectral gap (`0` pairs in `(1e-13, 1e-9]`)**. On a 68-crystal CPU `nequip-s+l` A/B benchmark (`48/68` `lt` flips), transitive `math.isclose(rel_tol=1e-9, abs_tol=1e-12)` preserved **`62/68` strict and `63/68` loose matches (`0` flips, `max |dE| = 0.274 meV/atom`)** and reduced CPU decode time by **`-11.7%`** (`121.0 s -> 106.8 s`). **Wave 2 Plan (`HIGH_VALUE_AB`):** Adopt `math.isclose(rel_tol=1e-9, abs_tol=1e-12)` on the `v4.1` experimental branch with targeted golden fixture refresh.
+- **Impact Risk:** **High** — restores crystallographic symmetry constraints on `73.3%` of MP-20 crystals and cuts decode CPU time `-11.7%`, shifting `5` golden `opt` arrays slightly above `atol=1e-12`.
 
 ---
 
 ### DEF-015
-- **ID:** `DEF-015` (Slice 2A Source Tag: `FC-06`; cross-ref [`DEF-002`](#def-002))
-- **Source / Location:** `backup/v3-personal` (`301c75f`, commits `57c23ff` & `75ddf8b`), `backup/v3-personal:src/slices/core.py:1685-1705,1758-1769,2393-2395` vs frozen upstream [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1157-L1173), [L1224-L1227](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1224-L1227) (`SLICES.get_inner_p_target`)
+- **ID:** `DEF-015` (Slice 2A Source Tag: `FC-06`; cross-ref [`DEF-002`](#def-002), [`DEF-030`](#def-030), [`DEF-031`](#def-031))
+- **Source / Location:** `backup/v3-personal:src/slices/core.py:1685-1705,1758-1769,2393-2395` vs [core.py](../../src/slices/core.py#L1589-L1696) (`SLICES.get_inner_p_target`) and [decoding_strategies.py](../../src/slices/decoding_strategies.py#L219-L305), [L749-L756](../../src/slices/decoding_strategies.py#L749-L756)
 - **Category:** `Optimization`, `Graph`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2A ([AUDIT_FORK_DIFF.md Section 5.2 & Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L243-L245)); upstream target lines verified in `src/slices/core.py:1157-1227`.
-- **Observed Behavior:** In `backup/v3-personal`, when a bond `blist_original[i]` was absent from `blist_super` inside `get_inner_p_target()`, the fork injected `BondParameterFallback.estimate_bond_length(...)` instead of upstream's `print('Cannot find bond!!!'); continue` (`core.py:1165-1167`), and changed the `except` failure return from implicit `None` (`core.py:1225-1226`) to `(None, None, None)`. Furthermore, `blist_original[i]` holds **1-based `3×3×3` supercell indices** (`1..27*n_atom`), whereas the fork indexed `atom_symbols[blist_original[i][0]]` (length `n_atom`), triggering `IndexError` on fallback invocation.
-- **Why Deferred under Baseline Freeze:** Substituting covalent-radius bond estimates alters `inner_p_target[i, i]` diagonals and `colattice_weights` normalization whenever GFN-FF drops a bond, diverging from v4.0.2 ZL* targets; changing `None` to `(None, None, None)` alters caller unpacking/error handling. Moreover, v4.0.2's bundled `libgfnff` already resolved xtb's legacy actinide/crash failures.
-- **Proposed Post-Baseline Investigation / Fix:** Keep a bug-fixed `BondParameterFallback` (using proper supercell symbol lookup and `pymatgen` covalent radii) strictly inside opt-in `decoding_strategies.robust_decode` when `get_inner_p_target()` fails; post-migration, measure how often `Cannot find bond!!!` still occurs under v4.0.2 `libgfnff` on MP-20 before deciding whether core fallback logic is warranted.
-- **Impact Risk:** **High** — modifies `inner_p_target` matrices, bond-weight normalization, and failure return contract.
+- **Status:** `Deferred — Wave 3 (VERSIONED_OPT_IN; cross-ref DEF-030, DEF-031)`
+- **Provenance:** Stage 2A (`FC-06`); empirically re-evaluated in [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) and [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** `backup/v3-personal` injected inline `BondParameterFallback` inside `get_inner_p_target()` (with a 1-based supercell `IndexError` bug) and changed failure return from `None` to `(None, None, None)`.
+- **Why Deferred under Baseline Freeze:** Substituting covalent-radius bond estimates alters `inner_p_target` matrices and failure return contracts relative to upstream v4.0.2.
+- **Empirical Re-Evaluation & Disposition:** Across `2,883` MP-20 crystals, bundled `libgfnff` returned `None` on **`0/2,883` (`0.0%`)**, while dropping hypervalent hydride/hydroxide bonds (`"Cannot find bond!!!"`) on **`0.084%–0.80%`** (`Sm(HO)3`, `NdH2ClO2`, `ThH2`, `PrH2`). Routing opt-in `robust_decode` to Stage 2 `BondParameterFallback` whenever `diag(inner_p_target) <= 0` **tripled strict recovery (`25% [1/4] -> 75% [3/4]`)** at `0%` fast-path cost. **Wave 3 Plan:** Keep default `get_inner_p_target()` return contract frozen; wire `_last_gfnff_incomplete` Stage 2 trigger in opt-in `robust_decode` (paired with Wave 1 `DEF-030` and Wave 2 `DEF-031`).
+- **Impact Risk:** **High** — modifies target matrices on dropped bonds if injected into default `core.py`; zero risk when gated inside opt-in `robust_decode`.
 
 ---
 
 ### DEF-016
 - **ID:** `DEF-016` (Slice 2A Source Tag: `FC-07`)
-- **Source / Location:** `backup/v3-personal` (`301c75f`, commits `665b042` & `54fd2c1`), `backup/v3-personal:src/slices/core.py:595-635` vs frozen upstream [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L275-L296) (`SLICES.from_SLICES`)
+- **Source / Location:** `backup/v3-personal:src/slices/core.py:595-635` vs [core.py](../../src/slices/core.py#L465-L473) (`SLICES.from_SLICES`)
 - **Category:** `Compatibility`, `Graph`
-- **Status:** `Blocked — Do Not Port`
-- **Provenance:** Stage 2A ([AUDIT_FORK_DIFF.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L261)); blocked in Stage 3 Sign-Off ([REVIEW_SIGNOFF.md](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L135)).
-- **Observed Behavior:** In upstream v4.0.2 `core.py:281-288`, when a Strategy 4 SLICES string has prefix tokens before `_first_element_index` (`first_elem_idx > 0`) that fail `get_space_group_num_from_letter_enc(letter_enc)`, `from_SLICES` raises `Exception("Error: space_group_num = None")`, causing `check_SLICES` / `check_SLICES_basic` to return `False`. In `backup/v3-personal`, the fork swallowed that failure by setting `space_group_num = None` and also inferred `num_atoms` even when no numeric edge-index token was present.
-- **Why Deferred under Baseline Freeze:** Swallowing invalid space-group header errors causes `from_SLICES`, `check_SLICES`, and `check_SLICES_basic` to **accept corrupted/invalid Strategy 4 SLICES strings** that upstream v4.0.2 rejects, directly violating golden validation parity.
-- **Proposed Post-Baseline Investigation / Fix:** Do not port to `core.py`. Keep upstream's strict space-group header validation intact and include corrupted Strategy 4 headers in the Stage 3/5 golden validation test suite to guard against regression.
-- **Impact Risk:** **High** — silently alters boolean validity outputs of `check_SLICES` and `check_SLICES_basic` on malformed Strategy 4 strings.
+- **Status:** `Closed — Won't Fix (CLOSE_WONTFIX; Blocked in Stage 3)`
+- **Provenance:** Stage 2A (`FC-07`); Stage 3 Sign-Off ([REVIEW_SIGNOFF.md](REVIEW_SIGNOFF.md#L135)); verified intact in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md).
+- **Observed Behavior:** Fork swallowed invalid Strategy-4 space-group prefix errors (`space_group_num = None`), accepting malformed strings upstream rejects.
+- **Why Deferred under Baseline Freeze:** Blocked permanently in Stage 3 (`E03_bad_sg_prefix` `"q q q Si O 0 1 ooo"` must reject).
+- **Empirical Re-Evaluation & Disposition:** Re-evaluation verified Stage 3 block ruling 100% intact at `HEAD=fa4cfc8`. **Permanently closed (`CLOSE_WONTFIX`).**
+- **Impact Risk:** **High** — would silently accept corrupted Strategy-4 prefixes if ported.
 
 ---
 
 ### DEF-017
 - **ID:** `DEF-017` (Slice 2A Source Tag: `FC-09`)
-- **Source / Location:** `backup/v3-personal` (`301c75f`, commit `665b042`), `backup/v3-personal:src/slices/core.py:483-540` vs upstream [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L165-L200) (`SLICES.cif2structure_graph`, `SLICES.structure2structure_graph`; fixed upstream in commit `2635bcc`)
+- **Source / Location:** `backup/v3-personal:src/slices/core.py:483-540` vs [core.py](../../src/slices/core.py#L53-L58), [L289-L339](../../src/slices/core.py#L289-L339) (`cif2structure_graph`, `structure2structure_graph`; fixed upstream in `2635bcc`)
 - **Category:** `Compatibility`
-- **Status:** `Resolved Upstream — Do Not Regress`
-- **Provenance:** Stage 2A ([AUDIT_FORK_DIFF.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L263)) & Stage 2B commit `#21` (`2635bcc`); confirmed in Stage 3 Sign-Off ([REVIEW_SIGNOFF.md](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L135)).
-- **Observed Behavior:** Because `backup/v3-personal` diverged at `cea17da` (`== 142298b`), it retained the deprecated `StructureGraph.with_local_env_strategy(...)` API and duplicated `graph_method` dispatch across both `cif2structure_graph` and `structure2structure_graph`. Upstream v4.0.2 (`2635bcc`) already migrated to `StructureGraph.from_local_env_strategy(...)` (required by `pymatgen>=2025/2026`), added the `BrunnerNNReciprocal` import fallback, and deduplicated `cif2structure_graph` to delegate directly to `structure2structure_graph`.
-- **Why Deferred under Baseline Freeze:** Recorded explicitly so Stage 4 refactoring preserves upstream v4.0.2's `from_local_env_strategy` implementation and never overwrites it with older `backup/v3-personal` hunks.
-- **Proposed Post-Baseline Investigation / Fix:** None needed — already resolved in upstream v4.0.2 (`94ef8e0`).
-- **Impact Risk:** **High** (if regressed) — breaks compatibility with locked `pymatgen==2025.10.7` and `pymatgen>=2026.3`.
+- **Status:** `Closed — Won't Fix (CLOSE_WONTFIX; Resolved Upstream in 2635bcc)`
+- **Provenance:** Stage 2A (`FC-09`); Stage 2B commit `#21` (`2635bcc`); verified intact in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md).
+- **Observed Behavior:** Fork kept deprecated `StructureGraph.with_local_env_strategy` (which emits `FutureWarning` on `pymatgen==2025.10.7` and breaks on `>=2026.3`). Upstream `2635bcc` migrated to `from_local_env_strategy` and `BrunnerNNReciprocal`.
+- **Why Deferred under Baseline Freeze:** Recorded to prevent regression during Stage 4 refactoring.
+- **Empirical Re-Evaluation & Disposition:** Verified `from_local_env_strategy` and `BrunnerNNReciprocal` active at `HEAD=fa4cfc8` (and Wave 1 `DEF-005` prioritized `BrunnerNNReciprocal` first to eliminate import-order `FutureWarning`). **Permanently closed (`CLOSE_WONTFIX`).**
+- **Impact Risk:** **High** (if regressed) — breaks `pymatgen >= 2025/2026` compatibility.
 
 ---
 
 ### DEF-018
 - **ID:** `DEF-018` (Slice 2A Source Tag: `FC-10`)
-- **Source / Location:** `backup/v3-personal` (`301c75f`, commit `54fd2c1`), `backup/v3-personal:src/slices/core.py:1044-1071` vs frozen upstream [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L666-L722) (`SLICES.to_primitive_if_smaller`, `_run_with_primitive_fallback`, `structure2SLICES`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L270-L271), [L314-L317](../../src/slices/core.py#L314-L317), [L1039-L1040](../../src/slices/core.py#L1039-L1040) (`check_element`, `structure2structure_graph`, `to_primitive_if_smaller`) and [exceptions.py](../../src/slices/exceptions.py#L35-L41)
 - **Category:** `Compatibility`, `Runtime`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2A ([AUDIT_FORK_DIFF.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L264)).
-- **Observed Behavior:** `backup/v3-personal` added an explicit `if len(structure) == 0: raise ValueError(...)` guard at the entry of `structure2SLICES` (on the pre-v4.0 encoding path without primitive-cell pre-reduction). Upstream v4.0.2 (`da0d873`) routes `structure2SLICES`, `structure2randomSLICES`, and `from_cif` through `to_primitive_if_smaller` and `_run_with_primitive_fallback` without a custom empty-structure `ValueError`.
-- **Why Deferred under Baseline Freeze:** All encoding entry points and primitive-cell fallback branches in `core.py:666-722` are frozen; introducing new early-exit exception paths could alter error behavior on degenerate structures relative to v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Post-migration, verify how `to_primitive_if_smaller` and `structure2SLICES` fail on 0-site `Structure` instances and evaluate adding a clean `SLICESEncodingError` / `ValueError` guard with unit tests.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2A (`FC-10`); re-evaluated in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** On a 0-site `Structure`, `to_primitive_if_smaller` swallowed Spglib's error and returned the empty structure, causing `structure2SLICES(empty)` to silently return `""` and `structure2randomSLICES(empty)` to silently return `[""]`.
+- **Why Deferred under Baseline Freeze:** Encoding entry points were frozen during Stages 1–7 pending empty-input verification.
+- **Empirical Re-Evaluation & Disposition:** Confirmed silent `""` / `[""]` corruption and `0` regressions across `255` tests when raising `(SLICESEncodingError, ValueError)`. **Resolved in Wave 1 (`#86`):** Updated `SLICESEncodingError(SLICESError, ValueError)` in `exceptions.py` and added `if len(structure) == 0: raise SLICESEncodingError(...)` guards in `check_element`, `structure2structure_graph`, and `to_primitive_if_smaller`.
 - **Impact Risk:** **Low–Medium** — affects only degenerate 0-atom `Structure` inputs.
 
 ---
 
 ### DEF-019
-- **ID:** `DEF-019` (Slice 2A Source Tag: `FC-11`)
-- **Source / Location:** `backup/v3-personal` (`301c75f`, commits `665b042` & `54fd2c1`), `backup/v3-personal:src/slices/core.py:698-759,806-829` vs frozen upstream [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L345-L402), [L449-L470](file:///home/ordillo/tests/SLICES/src/slices/core.py#L449-L470) (`get_slices1..3`, `check_structural_validity`)
+- **ID:** `DEF-019` (Slice 2A Source Tag: `FC-11`; cross-ref [`DEF-025`](#def-025))
+- **Source / Location:** [core.py](../../src/slices/core.py#L553-L689) (`get_slices1..3`) and [core.py](../../src/slices/core.py#L707-L731) (`check_structural_validity`)
 - **Category:** `Compatibility`, `Runtime`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2A ([AUDIT_FORK_DIFF.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L265)); upstream signatures verified directly in `src/slices/core.py:345-470`.
-- **Observed Behavior:** `backup/v3-personal` made two API-contract changes relative to upstream v4.0.2:
-  1. Removed the 4th parameter `space_group_num=None` from `get_slices1`, `get_slices2`, and `get_slices3` (added upstream in commit `da0d873` so `get_slices_by_strategy` at `core.py:354` uniformly dispatches `method(atom_symbols, edge_indices, to_jimages, space_group_num)`).
-  2. Added an explicit `isinstance(str1, Structure)` guard raising `TypeError` in `check_structural_validity` (whereas upstream raises `AttributeError` when accessing `str1.lattice` on a non-`Structure`).
-- **Why Deferred under Baseline Freeze:** Removing `space_group_num=None` from `get_slices1..3` directly breaks `get_slices_by_strategy` (`TypeError: takes 3 positional arguments but 4 were given`) and any 4-arg callers. Deferring `check_structural_validity`'s `AttributeError` -> `TypeError` shift keeps exception-type parity with upstream v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Never drop `space_group_num=None` from `get_slices1..3`. Post-migration, evaluate adding explicit type validation (`TypeError`) on `check_structural_validity` if desired as part of a versioned API hardening pass.
-- **Impact Risk:** **Medium** — dropping the 4th argument breaks Strategy 1–3 encoding outright; `check_structural_validity` change affects only invalid non-`Structure` callers.
+- **Status:** `Resolved in Wave 1 (Part 2 SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) / Closed — Won't Fix (Part 1 4-arg get_slices1..3)`
+- **Provenance:** Stage 2A (`FC-11`); re-evaluated in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md); Part 2 implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** `backup/v3-personal` (1) removed the 4th parameter `space_group_num=None` from `get_slices1..3` (breaking `get_slices_by_strategy` 4-arg dispatch) and (2) added a `TypeError` check on `check_structural_validity`.
+- **Why Deferred under Baseline Freeze:** Part 1 breaks Strategy 1–3 encoding outright; Part 2 shifted `AttributeError -> TypeError` on invalid inputs.
+- **Empirical Re-Evaluation & Disposition:**
+  - **Part 1 (`CLOSE_WONTFIX`):** 4-arg `get_slices1..3(..., space_group_num=None)` is permanently required across 5 dispatch sites.
+  - **Part 2 (`Resolved in Wave 1`, `#86`):** Unified with `DEF-025` in `check_structural_validity`: checks `if not isinstance(str1, IStructure): raise TypeError(...)` (accepting both `Structure` and `IStructure`) with `0` caller/test regressions.
+- **Impact Risk:** **Medium** — Part 1 stays permanently closed; Part 2 hardens type checking on invalid callers.
 
 ---
 
 ### DEF-020
 - **ID:** `DEF-020` (Slice 2A Source Tag: `FC-12`; cross-ref [`DEF-005`](#def-005))
-- **Source / Location:** `backup/v3-personal` (`301c75f`, commits `54fd2c1` & `58ff66c`), `backup/v3-personal:src/slices/core.py:10-43,164-232` & `backup/v3-personal:src/slices/mlip_relaxer.py:22-35` vs upstream [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L4-L9) & [relax_backends.py](file:///home/ordillo/tests/SLICES/src/slices/relax_backends.py)
+- **Source / Location:** `backup/v3-personal:src/slices/core.py:10-43,164-232` & `mlip_relaxer.py:22-35` vs [core.py](../../src/slices/core.py#L17-L19), [__init__.py](../../src/slices/__init__.py), [mlip_relaxer.py](../../src/slices/mlip_relaxer.py)
 - **Category:** `Runtime`, `Compatibility`
-- **Status:** `Blocked — Do Not Port`
-- **Provenance:** Stage 2A ([AUDIT_FORK_DIFF.md Section 6](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md#L266)); blocked in Stage 3 Sign-Off ([REVIEW_SIGNOFF.md](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L135)).
-- **Observed Behavior:** In `backup/v3-personal`, importing `slices.core` or `slices.mlip_relaxer` executed process-wide side effects beyond upstream's `core.py:5-9` (`DEF-005`):
-  1. Mutated Python's global root logger via `logging.getLogger().setLevel(logging.CRITICAL)`, silencing all `INFO`/`WARNING`/`ERROR` logs across any host application or test runner importing `slices`.
-  2. Set `os.environ["TF_USE_LEGACY_KERAS"] = "1"`, monkey-patched `sys.modules["keras"] = tf_keras`, and probed `tf.config.list_physical_devices("GPU")` at module import time, pulling TensorFlow into every encoding-only or CPU NequIP workflow.
-- **Why Deferred under Baseline Freeze:** Violates lazy-import hygiene, breaks host-application logging and PyTorch-only v4.0.2 environments (where TensorFlow is not even installed), and mutates `sys.modules` globally.
-- **Proposed Post-Baseline Investigation / Fix:** Do not port to `core.py` or module-level `mlip_relaxer.py`. Isolate `TF_USE_LEGACY_KERAS` / `tf_keras` strictly inside `M3GNetRelaxer.__init__` when a user explicitly requests optional legacy `relax_model="m3gnet"`.
-- **Impact Risk:** **High** — corrupts process-wide logging and breaks TensorFlow-free v4.0.2 environments if imported eagerly.
+- **Status:** `Closed — Won't Fix (CLOSE_WONTFIX; Blocked in Stage 3)`
+- **Provenance:** Stage 2A (`FC-12`); Stage 3 Sign-Off ([REVIEW_SIGNOFF.md](REVIEW_SIGNOFF.md#L135)); verified intact in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md).
+- **Observed Behavior:** Fork mutated Python's global root logger to `CRITICAL` and eagerly injected `TF_USE_LEGACY_KERAS="1"`, `sys.modules["keras"] = tf_keras`, and TF GPU probes at import time.
+- **Why Deferred under Baseline Freeze:** Blocked permanently in Stage 3 to protect PyTorch-only environments and host logging.
+- **Empirical Re-Evaluation & Disposition:** Verified intact at `HEAD=fa4cfc8`: root logger stays `WARNING` (`30`), `tensorflow`/`keras` absent from `sys.modules` on import, `TF_USE_LEGACY_KERAS` isolated to `M3GNetRelaxer.__init__`. **Permanently closed (`CLOSE_WONTFIX`).**
+- **Impact Risk:** **High** — corrupts host logging and breaks TF-free environments if ported.
 
 ---
 
 ### DEF-021
 - **ID:** `DEF-021` (Slice 2C Source Tag: `DEF-BC-01`; cross-ref [`DEF-003`](#def-003))
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L549-L559) (`SLICES.check_SLICES`) and [tobascco_net.py](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L233-L235), [L536-L541](file:///home/ordillo/tests/SLICES/src/slices/tobascco_net.py#L536-L541) (`Net.get_cocycle_basis`, `Net.get_lattice_basis`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L733-L831) (`SLICES.check_SLICES`), [core.py](../../src/slices/core.py#L2370-L2384) (`SLICES.to_structures`), and [tobascco_net.py](../../src/slices/tobascco_net.py#L204-L235), [L467-L494](../../src/slices/tobascco_net.py#L467-L494)
 - **Category:** `Graph`, `Math`, `Compatibility`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2C ([AUDIT_BASELINE_HARNESS.md Section 5](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_BASELINE_HARNESS.md#L319-L332)); upstream lines verified directly in `core.py` and `tobascco_net.py`.
-- **Observed Behavior:** `check_SLICES()` executes `net.simple_cycle_basis()`, `net.get_lattice_basis()`, and `net.get_cocycle_basis()` (`core.py:554-556`) inside `try ... except: return False`, assuming failure raises an exception. In upstream `tobascco_net.py`, however, `get_lattice_basis()` logs `"Could not obtain the lattice basis from the cycle vectors!"` and returns `-1` without raising (leaving `net.lattice_basis = None`), and `get_cocycle_basis()` prints `"ERROR - could not find a linearly independent cocycle basis!"` without raising when `count != size`. Consequently, `check_SLICES()` silently returns `True` on non-3D/degenerate graphs that cannot form a valid 3D lattice basis; subsequent `to_structures()` or `SLICES2space_group_number()` calls crash in `net.get_metric_tensor()` with `TypeError: unsupported operand type(s) for *: 'NoneType' and 'float'`. Empirically reproduced on quasi-1D/2D MP-20 structures (`TiBr3` `mp-28214` row `464`, `MnBr2` `mp-569843` row `199`, `GaTe` `mp-10009` row `0`; locked as edge fixture `E11`).
-- **Why Deferred under Baseline Freeze:** Checking `if net.get_lattice_basis() == -1: return False` (or cocycle rank failure) in `check_SLICES()` directly alters boolean validity rates across generative-model benchmarks (`benchmark/Validity_rate_ucRNN__Success_rate_cRNN/`) relative to upstream v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Quantify how many generated SLICES strings in historical RNN/MatterGPT benchmarks pass `check_SLICES()` solely due to ignored `-1` / cocycle rank failures, then enforce explicit `if net.get_lattice_basis() == -1: return False` (and cocycle rank validation) in `check_SLICES()` and raise `LatticeBasisError` in `to_structures()` rather than `NoneType * float` `TypeError`.
-- **Impact Risk:** **High** — directly changes `check_SLICES()` boolean validity results on borderline/low-dimensional periodic graphs.
+- **Status:** `Partially Resolved in Wave 1 (to_structures LatticeBasisError/CocycleBasisError; commit a85e832, verified in 954a56a, 89/89 golden parity) / Deferred — Wave 2 (HIGH_VALUE_AB: check_SLICES)`
+- **Provenance:** Stage 2C (`DEF-BC-01`); empirically re-evaluated in [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) and [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md); Wave 1 crash hygiene implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** `check_SLICES()` ignores `net.get_lattice_basis() == -1` and cocycle rank failure, returning `True` on non-3D/rank-deficient graphs (`E11` `TiBr3`), while `to_structures()` previously crashed with `TypeError: unsupported operand type(s) for *: 'NoneType' and 'float'`.
+- **Why Deferred under Baseline Freeze:** Changing `check_SLICES()` alters validity rates and golden fixture `E11_quasi1d_lattice_basis_neg1`.
+- **Empirical Re-Evaluation & Disposition:**
+  - **Wave 1 Resolved (`#86`):** `to_structures()` (`L2370-L2384`) now raises `LatticeBasisError` on `basis_status == -1` / `net.lattice_basis is None` and `CocycleBasisError` on incomplete multi-vertex cocycle bases (`net.order > 1`), preserving 1-atom `G14` (`net.order == 1`) and leaving `check_SLICES()` untouched (`89/89` golden green).
+  - **Wave 2 Plan (`HIGH_VALUE_AB`, co-deployed with `DEF-003` SNF fallback):** Across `67,826` strings (`9` datasets), `check_SLICES() == True` false-positive rate is `0.38%–4.97%` (`401/38,244` in published cRNN `unique.sli`, where **`0/401` survived step `4_inverse`**). Pairing Wave 2 `DEF-003` exact `smith_normal_decomp` fallback (`180/180` unimodular rescues in `0.4 ms`) with `if graph_rank_check and (basis_status == -1 or cocycle_failed): return False` eliminates all `250` 1D/2D + `87` sublattice false positives while keeping RL `graph_rank_check=False` workflows intact (refreshes golden `E11`).
+- **Impact Risk:** **High** — Wave 1 improves failure diagnostics at `0.0` drift; Wave 2 fixes `0.38%–4.97%` non-3D false positives in `check_SLICES`.
 
 ---
 
 ### DEF-022
-- **ID:** `DEF-022` (Slice 2C Source Tag: `DEF-BC-02`)
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L741), [L835-L845](file:///home/ordillo/tests/SLICES/src/slices/core.py#L835-L845) (`SLICES.structure2randomSLICES`)
+- **ID:** `DEF-022` (Slice 2C Source Tag: `DEF-BC-02`; cross-ref [`DEF-033`](#def-033))
+- **Source / Location:** [core.py](../../src/slices/core.py#L1145-L1248) (`SLICES.structure2randomSLICES`)
 - **Category:** `Runtime`, `Compatibility`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2C ([AUDIT_BASELINE_HARNESS.md Section 5](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_BASELINE_HARNESS.md#L336-L343)); upstream lines verified directly in `core.py:835-845`.
-- **Observed Behavior:** `structure2randomSLICES()` collects unique augmented strings in `SLICES_set = set()` (`L741`), converts `SLICES_list = list(SLICES_set)` (`L843`), runs `random.shuffle(SLICES_list)` (`L844`), and returns `SLICES_list[:num]`. Because CPython randomizes string hash salts per process unless `PYTHONHASHSEED` is fixed, `list(SLICES_set)` yields different pre-shuffle ordering across processes even under `random.seed(42)` (empirically confirmed: `16/16` corpus structures had different list orders across unseeded-hash subprocesses, and `16/16` matched identically once `PYTHONHASHSEED=0` was set).
-- **Why Deferred under Baseline Freeze:** Replacing `list(SLICES_set)` with `sorted(SLICES_set)` or insertion-ordered `dict.fromkeys` would change the exact permutation returned under `PYTHONHASHSEED=0` relative to upstream v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Replace `SLICES_set = set()` with insertion-ordered deduplication or `sorted(SLICES_set)` prior to shuffling with an optional isolated `random.Random(seed)` parameter so augmentation is 100% process-independent regardless of `PYTHONHASHSEED`.
-- **Impact Risk:** **Low–Medium** — affects only output ordering and subset selection when `len(SLICES_set) > num` across different `PYTHONHASHSEED` values.
+- **Status:** `Deferred — Wave 3 (VERSIONED_OPT_IN)`
+- **Provenance:** Stage 2C (`DEF-BC-02`); empirically re-evaluated in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md) and [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md).
+- **Observed Behavior:** `structure2randomSLICES()` converts `SLICES_set = set()` to `list()` prior to `random.shuffle()`, making cross-process list ordering dependent on `PYTHONHASHSEED` even with `random.seed(42)`.
+- **Why Deferred under Baseline Freeze:** Replacing `list(SLICES_set)` with `sorted(...)` or insertion-ordered `dict` changes the exact permutation returned under `PYTHONHASHSEED=0` (`15/16` or `16/16` `random_slices_5` fixtures).
+- **Empirical Re-Evaluation & Disposition:** Across `PYTHONHASHSEED ∈ {0, 1, 42, 999}`, current `set()` has **`0/16` (`0%`)** exact-list invariance at `num=5` and **`3/16` (`18.8%`)** set invariance at `num=1` (`DEF-033`), whereas insertion-ordered `dict` / `sorted()` achieves **`16/16` (`100%`)** invariance. **Wave 3 Plan (`VERSIONED_OPT_IN`):** Add optional `seed: int | None = None` kwarg using isolated `random.Random(seed)` + insertion-ordered `dict` + pre-loop `len >= num` guard (`DEF-033`), achieving 100% cross-`PYTHONHASHSEED` determinism when `seed` is passed without breaking `PYTHONHASHSEED=0` golden order.
+- **Impact Risk:** **Low–Medium** — affects only output ordering and `num < len(SLICES_set)` subset selection across hash seeds.
 
 ---
 
 ### DEF-023
 - **ID:** `DEF-023` (Slice 2C Source Tag: `DEF-BC-03`)
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L110), [L1332-L1335](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1332-L1335), [L1746-L1750](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1746-L1750) (`SLICES.SLICES2space_group_number`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L214), [L366](../../src/slices/core.py#L366), [L2238-L2312](../../src/slices/core.py#L2238-L2312) (`SLICES.from_SLICES`, `SLICES.SLICES2space_group_number`)
 - **Category:** `Graph`, `Runtime`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2C ([AUDIT_BASELINE_HARNESS.md Section 5](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_BASELINE_HARNESS.md#L347-L354)); upstream lines verified directly in `core.py:1745-1755`.
-- **Observed Behavior:** `self.unstable_graph` is initialized to `False` in `SLICES.__init__` (`L110`) and refreshed solely inside `get_rescaled_lattice_vectors()` (`L1332-1335`) based on `np.diag(inner_p_std) > 0.0001`. Although `SLICES2space_group_number()` never calls `get_inner_p_target()` or `get_rescaled_lattice_vectors()`, line `1746` still branches on `if self.unstable_graph:` (`net.cocycle_rep = np.zeros((net.order-1, net.ndim)) + .5`). Consequently, on a fresh instance `self.unstable_graph` is always `False` (even for degenerate nets like `G18` `YHO2`), whereas on a reused instance that previously decoded an unstable graph via `to_structures()`, stale `self.unstable_graph == True` contaminates subsequent `SLICES2space_group_number()` calls.
-- **Why Deferred under Baseline Freeze:** Computing `inner_p_std` locally inside `SLICES2space_group_number()` would change space-group predictions on barycentrically degenerate nets (`G18`) compared to fresh-instance upstream v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Compute `inner_p_std = np.dot(np.dot(net.lattice_arcs, net.metric_tensor), net.lattice_arcs.T)` locally inside `SLICES2space_group_number()` without reading/mutating stale `self.unstable_graph`, and reset per-structure transient state at the start of `from_SLICES()`.
-- **Impact Risk:** **Medium** — causes instance-reuse state leakage and inconsistent space-group determination on barycentrically unstable graphs.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2C (`DEF-BC-03`); empirically re-evaluated in [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** `SLICES2space_group_number()` previously branched on `if self.unstable_graph:` (`net.cocycle_rep = ... + 0.5`), reading stale instance state left over from a prior `to_structures()` call on an unstable net (`G18` `YHO2`).
+- **Why Deferred under Baseline Freeze:** The initial Stage 2 proposal (computing `unstable_graph` locally and applying `+0.5`) would have altered fresh-instance predictions on degenerate nets.
+- **Empirical Re-Evaluation & Disposition:** Reusing a contaminated instance (`unstable_graph=True`, occurring on `16/2,374 = 0.67%` of `mp20_v4`) **collapsed SG accuracy from `91.62%` (`2,175/2,374`) to `4.68%` (`111/2,374`)** (`13/16` Golden CIFs corrupted). Crucially, applying `+0.5` cocycle locally **regressed unstable-subset SG accuracy from `56.25%` (`9/16`) to `12.50%` (`2/16`)** because non-zero cocycle breaks automorphism-equivariant barycentric symmetry (Delgado-Friedrichs–O'Keeffe theorem). **Resolved in Wave 1 (`#86`):** Deleted `if self.unstable_graph:` inside `SLICES2space_group_number` and reset `self.unstable_graph = False` at `from_SLICES` entry (`L366`), fixing 100% of reuse corruption (`NdSiRu -> 129` after `G18`) at `0.0` fresh/golden drift.
+- **Impact Risk:** **Medium** — eliminates severe instance-reuse corruption while preserving 100% fresh-instance accuracy.
 
 ---
 
 ### DEF-024
 - **ID:** `DEF-024` (Slice 2C Source Tag: `DEF-BC-04`; cross-ref [`DEF-016`](#def-016), [`DEF-019`](#def-019))
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L202-L332) (`SLICES.from_SLICES`) vs [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L372-L386) (`SLICES.get_slices2`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L343-L545) (`SLICES.from_SLICES`, `_is_int_token`) vs [core.py](../../src/slices/core.py#L583-L607) (`SLICES.get_slices2`)
 - **Category:** `Compatibility`, `Runtime`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2C ([AUDIT_BASELINE_HARNESS.md Section 5](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_BASELINE_HARNESS.md#L358-L369)); upstream lines verified directly in `core.py`.
-- **Observed Behavior:** Four input-parsing gaps exist in `from_SLICES()`:
-  1. **No `strategy == 2` parser or `else:` guard:** `to_SLICES(strategy=2)` encodes fixed-width strings, yet `from_SLICES` handles only `strategy in {1, 3, 4}`, falling through to `UnboundLocalError` on `edge_indices` (`L330`) for `strategy=2` or invalid strategy integers.
-  2. **Zero-edge strings (`"Si O"`):** When no token satisfies `.isnumeric()` in `strategy == 3` (`L219-223`) or `strategy == 4` (`L290-296`), `num_atoms` remains unbound (`UnboundLocalError`).
-  3. **Silent truncation of trailing tokens and extra label characters:** `int((len(tokens) - start_idx) / 3)` (and `/5`, `/7`) silently discards trailing partial edge tuples, and `for j in range(3): edge[2][j]` ignores extra characters when `len(edge[2]) > 3`.
-  4. **Unchecked negative node indices:** `edge_indices[i,0] > num_atoms - 1` (`L231, 259, 306`) omits `< 0`, allowing `"-1"` in edge tokens to parse as negative indices.
-- **Why Deferred under Baseline Freeze:** Tightening token-length or edge-label validation in `from_SLICES()` could reject malformed/truncated LLM- or RNN-generated strings that currently parse in `benchmark/` scripts.
-- **Proposed Post-Baseline Investigation / Fix:** Add `strategy == 2` decoding (or raise an explicit `ValueError("strategy=2 is encode-only")`), validate `strategy in {1, 2, 3, 4}`, guard `num_atoms is None` with `SLICESDecodingError`, enforce `0 <= idx < num_atoms`, and validate exact edge-tuple multiples and `len(edge[2]) == 3` (with an optional lenient mode if legacy generative benchmarks require truncation).
-- **Impact Risk:** **Medium** — alters exception types and rejection behavior on malformed or Strategy-2 SLICES strings.
+- **Status:** `Partially Resolved in Wave 1 (Gaps 1, 2, 3b, 4 SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity) / Deferred — Wave 3 (VERSIONED_OPT_IN: Gap 3a strict=True)`
+- **Provenance:** Stage 2C (`DEF-BC-04`); empirically re-evaluated in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md) & [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md); Wave 1 gaps implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** Four input-parsing gaps existed in `from_SLICES()`: (1) missing `strategy == 2` / invalid strategy guard (`UnboundLocalError`), (2) zero-edge strings (`"Si O"`) leaving `num_atoms` unbound, (3a/3b) silent truncation of trailing partial edge tokens and extra `len(edge[2]) > 3` label characters, and (4) unchecked negative `< 0` node indices.
+- **Why Deferred under Baseline Freeze:** Tightening parser rejections could reject historical benchmark strings or alter golden exception strings (`E01`–`E05`).
+- **Empirical Re-Evaluation & Disposition:** Scanning **`125,174` SLICES strings (`28` files)** showed `0` rely on `strategy=2` decode (non-injective `mod 100` collision for `>100` atoms), zero-edge strings, `len(label) > 3`, or `< 0` indices — **but `13/999` (`1.30%`) PBE-screened rows in `HTS/9_EAH_Band_gap_PBE/results_9_EAH_Band_gap_PBE.csv` have RNN-truncated trailing partial edge tokens and pass `check_SLICES(strategy=3)` today**.
+  - **Wave 1 Resolved (Gaps 1, 2, 3b, 4 — `#86`):** Updated `SLICESDecodingError(SLICESError, ValueError)` in `exceptions.py`; raised `SLICESDecodingError` on `strategy not in (1, 3, 4)` (including encode-only `strategy=2`) and zero-numeric-edge / zero-complete-edge strings; added signed-integer `_is_int_token`; enforced `0 <= idx < num_atoms` via `Exception("Error: wrong edge indices")` and `len(edge[2]) == 3` in Strategy 4 via `Exception("Error: wrong edge label")`, preserving `E01`–`E05` golden exception strings verbatim (`89/89` green) and keeping trailing partial tokens lenient.
+  - **Wave 3 Plan (Gap 3a `VERSIONED_OPT_IN`):** Add `from_SLICES(..., strict: bool = False)` raising `SLICESDecodingError` on trailing partial edge tokens when `strict=True` while preserving `strict=False` replay for `HTS/9_EAH_Band_gap_PBE`.
+- **Impact Risk:** **Medium** — Wave 1 eliminates `UnboundLocalError`, negative-index wraparound, and extra-label truncation at `0.0` golden/HTS drift.
 
 ---
 
 ### DEF-025
 - **ID:** `DEF-025` (Slice 2C Source Tag: `DEF-BC-05`; cross-ref [`DEF-019`](#def-019))
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L449-L470) (`SLICES.check_structural_validity`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L707-L731) (`SLICES.check_structural_validity`)
 - **Category:** `Math`, `Compatibility`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2C ([AUDIT_BASELINE_HARNESS.md Section 5](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_BASELINE_HARNESS.md#L373-L380)); upstream lines verified directly in `core.py:449-470`.
-- **Observed Behavior:** `check_structural_validity(str1)` inspects strictly upper-triangular pairs (`i < j`) of `str1.lattice.get_all_distances(str1.frac_coords, str1.frac_coords)`. On any 1-atom primitive cell (`len(str1) == 1`, e.g., `G14` `Na`), the loop executes zero times, leaving `min_value = 10000000` and returning `True` even if a collapsed lattice axis (`min(str1.lattice.abc) <= 0.5 Å`) places periodic self-images within `0.5 Å`. Multi-atom cells with short lattice axes (`<= 0.5 Å`) similarly ignore periodic self-image collisions because diagonal entries in `get_all_distances` are `0.0`.
-- **Why Deferred under Baseline Freeze:** `check_structural_validity()` is part of frozen structural-validity benchmarks; altering it changes validity outcomes on collapsed 1-atom or short-axis structures relative to v4.0.2.
-- **Proposed Post-Baseline Investigation / Fix:** Include periodic self-image checks via `min(str1.lattice.abc) > 0.5` (or `str1.get_neighbor_list(r=0.5)` excluding `[0,0,0]` self-pairs) and benchmark impact on historical MP-20 / RNN validity datasets.
-- **Impact Risk:** **Low–Medium** — affects only degenerate cells with lattice vector length `<= 0.5 Å`.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2C (`DEF-BC-05`); empirically re-evaluated in [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** Checking only strictly upper-triangular `i < j` pairs returned false `True` on 1-atom collapsed cells (`a = 0.3 Å`, `a = 0.5 Å`), 2-atom short-axis cells, and sheared cells where `min(abc) = 1.0 Å > 0.5 Å` yet `|a - b| = 0.2956 Å <= 0.5 Å` (`D5`/`D6`, defeating naive `min(abc) > 0.5`), and raised `ValueError` on 0-site structures.
+- **Why Deferred under Baseline Freeze:** Deferred pending empirical check across Golden and MP-20 corpora.
+- **Empirical Re-Evaluation & Disposition:** `str1.get_neighbor_list(r=0.5 + 1e-9)` excluding `(i == j) & np.all(img == 0, axis=1)` caught all degenerate and sheared cases at `+47.6 us/call` with **`0/59` Golden and `0/18,093` MP-20 flips**. **Resolved in Wave 1 (`#86`):** Unified with `DEF-019` Part 2 (`isinstance(str1, IStructure)` -> `len == 0 -> False` -> `get_neighbor_list(r=0.5 + 1e-9)`), passing `89/89` golden + `161/161` tests green.
+- **Impact Risk:** **Low–Medium** — catches degenerate periodic self-image collisions with zero drift on physical crystals.
 
 ---
 
 ### DEF-026
 - **ID:** `DEF-026` (Slice 2C Source Tag: `DEF-BC-06`)
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L186-L200) (`SLICES.structure2structure_graph`) and [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L856-L867) (`SLICES.get_dim`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L80), [L203-L206](../../src/slices/core.py#L203-L206), [L334-L338](../../src/slices/core.py#L334-L338), [L1288-L1292](../../src/slices/core.py#L1288-L1292) (`VALID_GRAPH_METHODS`, `SLICES.__init__`, `structure2structure_graph`, `get_dim`)
 - **Category:** `Runtime`, `Compatibility`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2C ([AUDIT_BASELINE_HARNESS.md Section 5](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_BASELINE_HARNESS.md#L384-L391)); strict freeze confirmed in Stage 3 Sign-Off ([REVIEW_SIGNOFF.md](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L136)).
-- **Observed Behavior:** Passing an unrecognized `graph_method` (e.g., `'econ'` in legacy fork tests) to `SLICES(graph_method=...)` is accepted in `__init__`, and then `structure2structure_graph()` (`L199`) and `get_dim()` (`L865`) execute `else: print("ERROR - graph_method not implemented")` before immediately dereferencing unassigned `structure_graph` / `bonded_structure`, raising `UnboundLocalError`.
-- **Why Deferred under Baseline Freeze:** Confirmed strictly frozen under Stage 3 Sign-Off (`REVIEW_SIGNOFF.md:136`) to keep upstream v4.0.2 control flow and exception semantics completely invariant during migration.
-- **Proposed Post-Baseline Investigation / Fix:** Post-migration, validate `graph_method` against `VALID_GRAPH_METHODS = ("econnn", "crystalnn", "brunnernn", "mininn")` and raise `ValueError`.
-- **Impact Risk:** **Low** — zero impact on valid `graph_method` inputs; replaces broken `UnboundLocalError` on invalid names.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2C (`DEF-BC-06`); Stage 3 Sign-Off; re-evaluated in [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** Invalid `graph_method` strings were accepted in `__init__` and then printed to stdout before crashing with `UnboundLocalError`.
+- **Why Deferred under Baseline Freeze:** Kept frozen under Stage 3 Sign-Off pending audit of all `.ini` configs and callers.
+- **Empirical Re-Evaluation & Disposition:** Verified `20/20` `.ini` configs (`17` `econnn`, `3` `crystalnn`) and `100%` of callers use valid methods. **Resolved in Wave 1 (`#86`):** Defined and exported `VALID_GRAPH_METHODS = ("econnn", "crystalnn", "brunnernn", "mininn")` and raised `ValueError` in `SLICES.__init__`, `structure2structure_graph`, and `get_dim`.
+- **Impact Risk:** **Low** — zero impact on valid callers; replaces `UnboundLocalError` with clear `ValueError`.
 
 ---
 
 ### DEF-027
 - **ID:** `DEF-027` (Slice 2C Source Tag: `DEF-BC-07`)
-- **Source / Location:** `upstream/main` (`94ef8e0`), [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1611-L1672) (`SLICES.func_check`, lines `1660` and `1669-1670`) vs [core.py](file:///home/ordillo/tests/SLICES/src/slices/core.py#L1588-L1609) (`SLICES.func`, hardened in commit `2635bcc`)
+- **Source / Location:** [core.py](../../src/slices/core.py#L2143-L2236) (`SLICES.func_check`) vs [core.py](../../src/slices/core.py#L2074-L2138) (`SLICES.func`)
 - **Category:** `Math`, `Runtime`
-- **Status:** `Frozen — Deferred (Baseline Preserved)`
-- **Provenance:** Stage 2C ([AUDIT_BASELINE_HARNESS.md Section 5](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_BASELINE_HARNESS.md#L395-L401)); upstream lines verified directly in `core.py:1588-1672`.
-- **Observed Behavior:** Upstream commit `2635bcc` added numerical guards to `func()` (`np.sqrt(max(inner_p[i][j], 1e-10))` at `L1593` and `if r_temp < 1e-8: r_temp = 1e-8` at `L1604-1605`) to prevent `ZeroDivisionError`/`NaN` during ZL* optimization. The companion diagnostic method `func_check()` (invoked when `self.check_results=True` at `core.py:1897`) was not updated and still computes unclamped `np.sqrt(inner_p[i][j])` (`L1660`) and `(uncovered_pair_lj[i][1] / r_temp) ** 12` (`L1670`), risking `ZeroDivisionError` or `NaN` in debug mode on degenerate geometries.
-- **Why Deferred under Baseline Freeze:** `func_check()` belongs to the frozen ZL* objective module; synchronize its clamping guards with `func()` post-baseline (or if explicitly approved in Stage 3 Review).
-- **Proposed Post-Baseline Investigation / Fix:** Mirror `func()`'s `epsilon2 = 1e-10` and `r_temp = max(r_temp, 1e-8)` guards in `func_check()` (and guard `sqrt(inner_p[i][i])` in the angle print at `L1664`), adding a regression test with `check_results=True`.
-- **Impact Risk:** **Low** — affects only `check_results=True` debug print mode on zero-distance edge/pair geometries.
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Stage 2C (`DEF-BC-07`); re-evaluated in [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** Debug objective `func_check()` lacked `func()`'s `1e-10` and `1e-8` distance clamps, reproducing `4 * 0.0 * inf -> nan` and `0.0 / 0.0 -> nan` on real Golden `G18` (`YHO2`) at `cocycle=0`.
+- **Why Deferred under Baseline Freeze:** Resided in the frozen ZL\* objective section during Stages 1–7.
+- **Empirical Re-Evaluation & Disposition:** `0` calls when `check_results=False` and `0.0` diff at converged `x_opt`. **Resolved in Wave 1 (`#86`):** Mirrored `func()`'s `np.sqrt(max(..., 1e-10))` (both bond $r^{-12}$ and angle print denominators) and `r_temp = max(r_temp, 1e-8)` guards in `func_check()` (`0.0` diff vs `func()` and `0` `RuntimeWarning`s on `G18`).
+- **Impact Risk:** **Low** — fixes `NaN`/`ZeroDivisionError` strictly in `check_results=True` diagnostic mode.
 
 ---
 
-## Stage 2 Audit Consolidation Status (Complete)
-
-All three Stage 2 parallel audits have been consolidated and deduplicated with 100% traceability:
-- **Stage 1 Seeds ([PLAN.md Section 4.2](file:///home/ordillo/tests/SLICES/docs/migration/PLAN.md#L158-L166)):** 6 entries (`DEF-001`–`DEF-006`).
-- **Slice 2B (`architect` -> [AUDIT_UPSTREAM_STYLE.md](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_UPSTREAM_STYLE.md)):** 8 entries (`DEF-UP-001`..`DEF-UP-008` -> `DEF-007`–`DEF-014`; 0 duplicates).
-- **Slice 2A (`auditor-fork` -> [AUDIT_FORK_DIFF.md](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_FORK_DIFF.md)):** 12 entries (`FC-01`..`FC-12` -> 6 cross-referenced merges into `DEF-002`, `DEF-003`, `DEF-008` + 6 net-new `DEF-015`–`DEF-020`).
-- **Slice 2C (`baseline` -> [AUDIT_BASELINE_HARNESS.md](file:///home/ordillo/tests/SLICES/docs/migration/AUDIT_BASELINE_HARNESS.md)):** 7 entries (`DEF-BC-01`..`DEF-BC-07` -> `DEF-021`–`DEF-027`; 0 duplicates).
-
-**Total Active Register Entries:** **27** (`DEF-001`–`DEF-027`). Next sequential ID available for Stage 4+ discoveries: **`DEF-028`**.
+### DEF-028
+- **ID:** `DEF-028` (Parent Investigation: [`DEF-006`](#def-006))
+- **Source / Location:** [gfnff_helper.py](../../src/slices/gfnff_helper.py#L59-L60), [L107-L156](../../src/slices/gfnff_helper.py#L107-L156) (`parse_nbf_text`, `_MIN_GFNFF_Z`, `_MAX_GFNFF_Z`)
+- **Category:** `Compatibility`, `Runtime`
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Post-Migration Re-Eval ([REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) & live verifier probe in [REEVAL_SYNTHESIS.md Section 3.2](reeval/REEVAL_SYNTHESIS.md#L86-L97)); implemented in Wave 1A-1 (`#85`).
+- **Observed Behavior:** Passing any element with `Z >= 104` (`Rf..Og`, valid symbols in `pymatgen` and `config.py`) into bundled `libgfnff.so.0.1.1` indexed past the 103-element Fortran parameter tables without bounds checking, reading non-deterministic heap/BSS memory garbage (verified live: `Db` `Z=105` returned `r0 = 969.63 Bohr` on call 1 vs **`-1,648,270,880.45 Bohr`** on call 2; `Rf` `Z=104` returned subnormal `-2.095e-321`).
+- **Why Deferred under Baseline Freeze:** Discovered during Post-Migration Cycle 1 live probing of `Z = 1..118` (`DEF-006`).
+- **Empirical Re-Evaluation & Disposition:** Classified as a **Critical `SAFE_NOW` memory-safety guard** required before any higher-`Z` Wave 3 opt-in (`DEF-006`). **Resolved in Wave 1 (`#85`):** Added `_MIN_GFNFF_Z = 1` and `_MAX_GFNFF_Z = 103` in `gfnff_helper.py` and enforced `1 <= Z <= 103` in `parse_nbf_text` prior to any `libgfnff.so.0.1.1` or fallback `xtb` call, raising `GFNFFExecutionError` naming unsupported symbol(s) and `Z` (e.g., `Rf (Z=104)`, `Db (Z=105)`) while preserving `ValueError` for malformed syntax or unrecognized tokens. Verified `Th (Z=90)` and `Lr (Z=103)` succeed with finite `vbond`, `Rf`/`Db`/`Og` raise `GFNFFExecutionError`, and `89/89` golden tests pass.
+- **Impact Risk:** **Critical** — prevents unguarded C/Fortran out-of-bounds memory reads and non-deterministic memory corruption.
 
 ---
 
-## Stage 3–5 Execution & Verification Status
+### DEF-029
+- **ID:** `DEF-029` (Parent Investigation: [`DEF-006`](#def-006))
+- **Source / Location:** [core.py](../../src/slices/core.py#L254-L273) (`SLICES.check_element`) and [relax_backends.py](../../src/slices/relax_backends.py#L454-L462), [L629](../../src/slices/relax_backends.py#L629) (`NequIPRelaxer`)
+- **Category:** `Compatibility`, `Relaxation`
+- **Status:** `Deferred — Wave 3 (VERSIONED_OPT_IN)`
+- **Provenance:** Post-Migration Re-Eval ([REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) & live verifier probe in [REEVAL_SYNTHESIS.md Section 3.2](reeval/REEVAL_SYNTHESIS.md#L86-L97)).
+- **Observed Behavior:** `NequIP-OAM-S/L` supports the non-contiguous 89-element OAM vocabulary `{1..83, 89..94}`: `Po, At, Rn` (`Z = 84..86`) pass `check_element()` (`Z < 87`) and `libgfnff` then crash `NequIPRelaxer` with a raw `KeyError`, whereas `Ac..Pu` (`Z = 89..94`) are rejected by `check_element()` despite achieving `6/6` (`100%`) end-to-end strict reconstruction accuracy on real MP-20 actinide crystals.
+- **Why Deferred under Baseline Freeze:** Discovered during Post-Migration Cycle 1 live probing of `Z = 1..118`; changing default `check_element()` would break locked `Z <= 86` golden fixtures (`G16`, `S03`).
+- **Empirical Re-Evaluation & Disposition:** Because NequIP-OAM's supported set is non-contiguous (`{1..83, 89..94}`), a single `max_z` threshold cannot accurately validate it. **Wave 3 Plan (`VERSIONED_OPT_IN`, paired with `DEF-006`):** Expose `check_element(structure, mode: Literal["legacy86", "nequip_oam", "gfnff103"] = "legacy86")` and add an informative `RelaxBackendError` element pre-check inside `NequIPRelaxer.relax` on unsupported atomic numbers (`Po..Ra`, `Am..Lr`) instead of raw `KeyError`.
+- **Impact Risk:** **Medium** — eliminates cryptic `KeyError` on `Z = 84..86` and unlocks validated `Ac..Pu` actinide decoding via opt-in mode.
 
-Per [REVIEW_SIGNOFF.md Section 3](file:///home/ordillo/tests/SLICES/docs/migration/REVIEW_SIGNOFF.md#L129-L137) (`reviewer`, `#21`) and Stage 4/5 independent gates (`#34`, `#45`, `#55`, `HEAD=8d9314b`), all 27 register entries are verified as follows:
-- **Resolved in Stage 4 & Verified in Stage 5 (2 entries — zero normal-path mathematical drift):**
-  - `DEF-007` (`RUL-01`): `TimeoutException(SLICESError)` implemented in `src/slices/exceptions.py`, imported in `src/slices/core.py` with POSIX main-thread `SIGALRM` scoping (commit `49237f6`), verified in `tests/unit/test_exceptions.py` and `tests/unit/test_decoding.py` (commit `8d9314b`).
-  - `DEF-013` (`RUL-02`, `CA-06`): `if self.relaxer is None:` short-circuit implemented in `core.py` `to_structures()` and `to_4structures()` (commit `49237f6`), verified with zero-stdout assertions in `tests/unit/test_decoding.py` (commit `8d9314b`).
-- **Blocked from Porting / Regression (3 entries):** `DEF-016` (`FC-07`), `DEF-017` (`FC-09`, already fixed upstream in `2635bcc`), and `DEF-020` (`FC-12`) confirmed absent from core runtime paths (guarded by `tests/regression/test_edge_cases.py`).
-- **Frozen — Deferred (Baseline Preserved, 22 entries):** `DEF-001`–`DEF-003`, `DEF-004` & `DEF-005` (`RUL-03` strict freeze), `DEF-006`, `DEF-008`–`DEF-012`, `DEF-014`–`DEF-015`, `DEF-018`–`DEF-019`, and `DEF-021`–`DEF-027` remain strictly preserved at upstream v4.0.2 (`89/89` golden equivalence tests passing at `atol=1e-12` and `250/250` active pytest tests green at `HEAD=8d9314b`).
+---
+
+### DEF-030
+- **ID:** `DEF-030` (Parent Investigation: [`DEF-015`](#def-015))
+- **Source / Location:** [core.py](../../src/slices/core.py#L1537-L1538) (`SLICES.get_inner_p_target_debug`) and [core.py](../../src/slices/core.py#L1641-L1644) (`SLICES.get_inner_p_target`)
+- **Category:** `Math`, `Runtime`
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Post-Migration Re-Eval ([REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) & [REEVAL_SYNTHESIS.md Section 3.2](reeval/REEVAL_SYNTHESIS.md#L86-L97)); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** `math.cos(data["vangl"][i][0])` lacked the finiteness guard already applied to `vbond`, raising `ValueError: math domain error` whenever `libgfnff` emitted a `NaN` equilibrium angle (observed on `1/1,000` cRNN strings, `idx 609`).
+- **Why Deferred under Baseline Freeze:** Discovered during Post-Migration Cycle 1 large-scale `libgfnff` stress testing (`3,883` topology evaluations).
+- **Empirical Re-Evaluation & Disposition:** Skipping non-finite `vangl` entries has `0.0` drift on every crystal with finite angles and prevents mid-target crashes. **Resolved in Wave 1 (`#86`):** Added `if not np.isfinite(data["vangl"][i][0]) or not np.isfinite(data["vangl"][i][1]): continue` in both `get_inner_p_target_debug` (`L1537-L1538`) and `get_inner_p_target` (`L1641-L1644`).
+- **Impact Risk:** **Low–Medium** — prevents `ValueError: math domain error` on rare `NaN` GFN-FF angles with `0.0` golden drift.
+
+---
+
+### DEF-031
+- **ID:** `DEF-031` (Parent Investigation: [`DEF-015`](#def-015))
+- **Source / Location:** [core.py](../../src/slices/core.py#L1573-L1578), [L1679-L1684](../../src/slices/core.py#L1679-L1684) (`get_inner_p_target_debug`, `get_inner_p_target`) and [decoding_strategies.py](../../src/slices/decoding_strategies.py#L749-L756) (`robust_decode`)
+- **Category:** `Optimization`, `Graph`
+- **Status:** `Split — Wave 2 (HIGH_VALUE_AB: core.py index alignment) / Wave 3 (VERSIONED_OPT_IN: robust_decode Stage 2 trigger)`
+- **Provenance:** Post-Migration Re-Eval ([REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) & [REEVAL_SYNTHESIS.md Section 3.2](reeval/REEVAL_SYNTHESIS.md#L86-L97)).
+- **Observed Behavior:** When `"Cannot find bond!!!"` skips $k$ edges (`0.084%` `mp20_v4`, `0.80%` `mp20/test` hypervalent hydrides `Sm(HO)3`, `NdH2ClO2`, `ThH2`, `PrH2`), `for i in range(len(bond_weight)): colattice_inds[0].append(i)` attaches diagonal bond weights to indices `0..E-k-1` instead of the true matched edge indices, and `robust_decode` returns Stage 1's distorted crystal instead of entering Stage 2 `BondParameterFallback`.
+- **Why Deferred under Baseline Freeze:** Discovered during Post-Migration Cycle 1; aligning indices changes `colattice_inds` on the `0.084%–0.80%` hydride subset where bonds are dropped.
+- **Empirical Re-Evaluation & Disposition:**
+  - **Wave 2 (`HIGH_VALUE_AB`):** Record `matched_bond_indices` alongside `bond_weight` in `core.py` so diagonal weights attach to their true edge indices (`0.0` drift on the `99.9%+` of crystals where all bonds match).
+  - **Wave 3 (`VERSIONED_OPT_IN`):** Track incomplete GFN-FF bond targets (`diag(inner_p_target) <= 0`) in `robust_decode` to trigger Stage 2 `BondParameterFallback` (`25% -> 75%` strict recovery on dropped-bond hydrides).
+- **Impact Risk:** **Medium–High** — fixes silent weight-to-edge misassignment on dropped-bond hydrides and triples opt-in hydride recovery.
+
+---
+
+### DEF-032
+- **ID:** `DEF-032` (Parent Investigation: [`DEF-001`](#def-001))
+- **Source / Location:** [core.py](../../src/slices/core.py#L1716-L1741) (`SLICES.get_uncovered_pair`)
+- **Category:** `Math`, `Graph`
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Post-Migration Re-Eval ([REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) & [REEVAL_SYNTHESIS.md Section 3.2](reeval/REEVAL_SYNTHESIS.md#L86-L97)); implemented in Wave 1A-2 (`#86`).
+- **Observed Behavior:** When `from_SLICES(..., fix_duplicate_edge=False)` or direct `SLICES(edge_indices=...)` supplied a bonded edge `[u, v]` with `u > v`, `unique_covered_pair_int` stored `[u, v]` and failed to match upper-triangular `[v, u]` in `triu_pair`, erroneously applying non-bonded LJ repulsion across a bonded edge.
+- **Why Deferred under Baseline Freeze:** Discovered during Post-Migration Cycle 1 audit of `get_uncovered_pair` / `get_uncovered_pair_lj`.
+- **Empirical Re-Evaluation & Disposition:** Canonicalizing undirected covered pairs has `0.0` drift on all canonical / `fix_duplicate_edge=True` / CIF-encoded paths while preventing spurious bonded-edge repulsion when `u > v`. **Resolved in Wave 1 (`#86`):** Canonicalized `covered_pair` entries as `(min(u, v), max(u, v))` deduplicated via `dict.fromkeys` (`L1728-L1731`).
+- **Impact Risk:** **Low–Medium** — eliminates non-bonded LJ artifacts on reversed-orientation graph inputs with `0.0` golden drift.
+
+---
+
+### DEF-033
+- **ID:** `DEF-033` (Parent Investigation: [`DEF-022`](#def-022))
+- **Source / Location:** [core.py](../../src/slices/core.py#L1145-L1248) (`SLICES.structure2randomSLICES`)
+- **Category:** `Runtime`, `Compatibility`
+- **Status:** `Deferred — Wave 3 (VERSIONED_OPT_IN)`
+- **Provenance:** Post-Migration Re-Eval ([REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md) & live verifier probe in [REEVAL_SYNTHESIS.md Section 3.2](reeval/REEVAL_SYNTHESIS.md#L86-L97)).
+- **Observed Behavior:** Because `if len(SLICES_set) >= num: break` executes at the *end* of loop iteration `0` after `SLICES_set.add(original_SLICES)`, calling `structure2randomSLICES(..., num=1)` inserts 2 distinct strings into `SLICES_set` and returns `list(SLICES_set)[:1]`, causing `13/16` (`81.25%`) Golden CIFs to return different single strings across `PYTHONHASHSEED` (`3` distinct outputs on `NdSiRu` across 4 hashseeds).
+- **Why Deferred under Baseline Freeze:** Discovered during Post-Migration Cycle 1 `PYTHONHASHSEED` invariance experiments (`DEF-022`); changing the default loop termination alters `PYTHONHASHSEED=0` golden outputs.
+- **Empirical Re-Evaluation & Disposition:** **Wave 3 Plan (`VERSIONED_OPT_IN`, paired with `DEF-022`):** Add a pre-loop `if len(seen) >= num: break` guard under the opt-in `seed: int | None = None` code path so `num=1` deterministically returns `[original_SLICES]` across all `PYTHONHASHSEED` values.
+- **Impact Risk:** **Low–Medium** — affects only `num=1` augmentation selection across differing `PYTHONHASHSEED` values.
+
+---
+
+### DEF-034
+- **ID:** `DEF-034` (Parent Investigation: [`DEF-011`](#def-011))
+- **Source / Location:** [tobascco_net.py](../../src/slices/tobascco_net.py#L438-L465) (`Net.linear_independent_vectors`)
+- **Category:** `Graph`, `Runtime`
+- **Status:** `Resolved in Wave 1 (SAFE_NOW; commit a85e832, verified in 954a56a, 89/89 golden parity)`
+- **Provenance:** Post-Migration Re-Eval ([REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) & [REEVAL_SYNTHESIS.md Section 3.2](reeval/REEVAL_SYNTHESIS.md#L86-L97)); implemented in Wave 1A-1 (`#85`).
+- **Observed Behavior:** Dead legacy helper (`0` callers in SLICES) allocated `index = np.zeros(r)` and incremented `counter` without bounding `counter < r - 1`, overflowing with `IndexError` on rank-deficient rectangular matrices (e.g., shape `(3, 4)` of rank `2`) when more than `r` adjacent column pairs were non-collinear.
+- **Why Deferred under Baseline Freeze:** Discovered during Post-Migration Cycle 1 `np.matrix` audit (`DEF-011`).
+- **Empirical Re-Evaluation & Disposition:** **Resolved in Wave 1 (`#85`):** Replaced `np.matrix(r_mat)` with `np.atleast_2d(np.asarray(r_mat))`, added `if r == 0: return np.zeros((0, dim))` and `counter < r - 1` bounds guards, and handled rectangular row/column indexing safely without `IndexError` (`0.0` golden drift).
+- **Impact Risk:** **Low** — hardens legacy helper alongside `np.matrix` removal.
+
+---
+
+## Register Disposition Summary (Post-Migration Cycle 1 — 34 Entries)
+
+All **34 entries (`DEF-001`–`DEF-034`)** have been empirically evaluated ([REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md)) with 100% Summary Index $\leftrightarrow$ Detailed Entry status parity:
+
+- **Resolved in Stage 4 & Verified in Stage 5 (`2` entries):** `DEF-007` (`RUL-01`), `DEF-013` (`RUL-02`, `CA-06`).
+- **Fully Resolved in Wave 1 (`SAFE_NOW`; commit a85e832, verified in 954a56a, `89/89` golden parity, `15` entries):** `DEF-004`, `DEF-005`, `DEF-008`, `DEF-010`, `DEF-011`, `DEF-012`, `DEF-018`, `DEF-023`, `DEF-025`, `DEF-026`, `DEF-027`, `DEF-028`, `DEF-030`, `DEF-032`, `DEF-034`.
+- **Split Resolved in Wave 1 / Permanently Closed (`1` entry):** `DEF-019` (Part 2 `IStructure` `TypeError` resolved in Wave 1; Part 1 4-arg `get_slices1..3` closed `CLOSE_WONTFIX`).
+- **Partially Resolved in Wave 1 + Deferred (`2` entries):** `DEF-021` (Wave 1 `LatticeBasisError`/`CocycleBasisError` in `to_structures`; Wave 2 `check_SLICES` rank gate), `DEF-024` (Wave 1 Gaps 1, 2, 3b, 4 preserving `E01`–`E05`; Wave 3 Gap 3a `strict=True`).
+- **Deferred — Wave 2 `HIGH_VALUE_AB` (`3` entries + Wave 2 portion of `DEF-021`):** `DEF-014` (`math.isclose` `lattice_type`), `DEF-003` (exact `SNF==(1,1,1)` fallback on `basis == -1`; unconditional reorder/`is_integral`/`iter_cycles` remain `KEEP_FROZEN`), `DEF-031` (`core.py` matched-index alignment; `robust_decode` Stage 2 trigger in Wave 3).
+- **Deferred — Wave 3 `VERSIONED_OPT_IN` (`6` entries + Wave 3 portions of `DEF-024`, `DEF-031`, `DEF-002`):** `DEF-001` (`lj_mixing="lorentz"`), `DEF-006` + `DEF-029` (`check_element(mode=...)` + `NequIPRelaxer` pre-check), `DEF-015` (`robust_decode` incomplete-GFN-FF fallback), `DEF-022` + `DEF-033` (`structure2randomSLICES(..., seed=...)`).
+- **Keep Frozen (`KEEP_FROZEN`, `2` entries):** `DEF-002` (default `to_structures()` permanently frozen; opt-in `robust_SLICES2structure()` in Wave 3), `DEF-009` (`ExpCellFilter` retained as default; ASE `DeprecationWarning` scoped in Wave 1).
+- **Closed — Won't Fix (`CLOSE_WONTFIX`, `3` entries):** `DEF-016` (Stage 3 block), `DEF-017` (resolved upstream `2635bcc`), `DEF-020` (Stage 3 block).
+
+**Total Active Register Entries:** **34** (`DEF-001`–`DEF-034`). Next sequential ID available: **`DEF-035`**.

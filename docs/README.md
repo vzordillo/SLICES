@@ -42,9 +42,20 @@ Primary-source planning, audits, review rulings, execution logs, and frozen-beha
 | [AUDIT_UPSTREAM_STYLE.md](migration/AUDIT_UPSTREAM_STYLE.md) | Stage 2B audit of upstream commits, CJK inventory, safety hazards, and Ruff/Google-style baseline |
 | [AUDIT_BASELINE_HARNESS.md](migration/AUDIT_BASELINE_HARNESS.md) | Stage 2C specification of the 89-test golden equivalence harness and test suite design |
 | [REVIEW_SIGNOFF.md](migration/REVIEW_SIGNOFF.md) | Stage 3 independent architectural review, cross-audit resolutions (`CA-01`–`CA-09`), and binding rulings (`RUL-01`–`RUL-08`) |
-| [DEFERRED_CORE_REGISTER.md](migration/DEFERRED_CORE_REGISTER.md) | Formal 27-entry register (`DEF-001`–`DEF-027`) tracking resolved non-math fixes, frozen deferred math behaviors, and blocked regressions |
-| [LAB_LOG.md](migration/LAB_LOG.md) | Chronological scientific lab log of all stages, verification metrics, and local commits |
+| [DEFERRED_CORE_REGISTER.md](migration/DEFERRED_CORE_REGISTER.md) | Formal 34-entry register (`DEF-001`–`DEF-034`) tracking Stage 4 and Wave 1 fixes, empirical re-evaluation verdicts (`Wave 2`/`Wave 3`), frozen behaviors, and closed regressions |
+| [LAB_LOG.md](migration/LAB_LOG.md) | Chronological scientific lab log of all stages, post-migration empirical re-evaluation, verification metrics, and local commits |
 | [FINAL_REPORT.md](migration/FINAL_REPORT.md) | Executive summary of the 7-stage v4.0.2 migration, commit ledger, verification scorecard, and maintenance guide |
+
+### Post-Migration Empirical Re-Evaluation Reports
+
+First-principles mathematical audits and controlled large-scale benchmarks (`125,174` SLICES strings, `18,093` MP-20 CIFs, `3,883` GFN-FF topology evaluations, and CPU `NequIP-OAM-S/L` A/B runs) underpinning the 3-wave post-migration roadmap:
+
+| Report | Scope |
+|---|---|
+| [REEVAL_SYNTHESIS.md](migration/reeval/REEVAL_SYNTHESIS.md) | Independent verifier stress-tests, cross-item coupling analysis, newly discovered defects (`DEF-028`–`DEF-034`), and actionable 3-wave execution roadmap |
+| [REEVAL_MATH_OPT.md](migration/reeval/REEVAL_MATH_OPT.md) | Empirical re-evaluation of core math & ZL\* optimization items (`DEF-001`, `DEF-006`, `DEF-011`, `DEF-014`, `DEF-025`, `DEF-027`; discovered `DEF-028`, `DEF-029`, `DEF-032`, `DEF-034`) |
+| [REEVAL_GRAPH_RELAX.md](migration/reeval/REEVAL_GRAPH_RELAX.md) | Empirical re-evaluation of quotient-net topology, GFN-FF targets & NequIP relaxation (`DEF-002`, `DEF-003`, `DEF-008`, `DEF-009`, `DEF-010`, `DEF-015`, `DEF-021`, `DEF-023`; discovered `DEF-030`, `DEF-031`) |
+| [REEVAL_RUNTIME_PARSE.md](migration/reeval/REEVAL_RUNTIME_PARSE.md) | Empirical re-evaluation of runtime side effects, determinism, SLICES parsing & Stage 3 blocks (`DEF-004`, `DEF-005`, `DEF-012`, `DEF-016`–`DEF-020`, `DEF-022`, `DEF-024`, `DEF-026`; discovered `DEF-033`) |
 
 ---
 

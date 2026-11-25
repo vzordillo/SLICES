@@ -4,6 +4,35 @@ All notable changes to SLICES are documented in this file. Commit hashes referen
 
 ---
 
+## [Unreleased — Wave 1 (`SAFE_NOW`)] — 2026-11-25 — Zero-Drift Bugfixes & Memory-Safety Guards
+
+Post-migration empirical re-evaluation across `125,174` SLICES strings, `18,093` MP-20 CIFs, `3,883` GFN-FF topology evaluations, and controlled CPU `NequIP-OAM-S/L` A/B benchmarks ([REEVAL_SYNTHESIS.md](docs/migration/reeval/REEVAL_SYNTHESIS.md)), followed by **15 zero-drift (`0.0` ULP, `89/89` golden baseline parity at `atol=1e-12`) Wave 1 fixes** across `src/slices/{exceptions,core,gfnff_helper,tobascco_net,relax_backends}.py`:
+
+### Fixed
+
+- **Critical Fortran Memory-Safety Guard (`DEF-028`, `src/slices/gfnff_helper.py`):** Enforced `1 <= Z <= 103` (`H..Lr`) in `parse_nbf_text` prior to calling bundled `libgfnff.so.0.1.1` or external `xtb`, raising `GFNFFExecutionError` naming unsupported trans-lawrencium elements (`Rf..Og`) instead of performing unguarded out-of-bounds Fortran parameter-table reads.
+- **Instance-Reuse Space-Group Corruption (`DEF-023`, `src/slices/core.py`):** Removed the stale `if self.unstable_graph:` branch inside `SLICES.SLICES2space_group_number` and reset `self.unstable_graph = False` at `from_SLICES` entry, eliminating instance-reuse space-group collapse (`91.62% -> 4.68%` on MP-20) while preserving `100%` fresh-instance parity.
+- **NumPy 2.x/3.x Matrix Removal & Rectangular Bounds (`DEF-011`, `DEF-034`, `src/slices/tobascco_net.py`):** Replaced all `np.matrix(...).I` calls in `Net.{eon_projection,projection,cycle_cocycle_I}` with `np.linalg.inv(...)` (`0.000e+00` ULP diff across `2,374` MP-20 crystals, `0` remaining `np.matrix` occurrences), and migrated `Net.linear_independent_vectors` to `np.atleast_2d(np.asarray(...))` with `r == 0` and `counter < r - 1` bounds guards against `IndexError`.
+- **Global RNG Purity & Stateless `Net` Defaults (`DEF-004`, `DEF-010`, `src/slices/tobascco_net.py`):** Removed dead `np.random.choice` / `np.random.shuffle` calls in `Net.{simple_cycle_basis,get_lattice_basis}` (`0` remaining `np.random` mutations) and replaced mutable `[]` / `{}` default arguments in `Net.{iter_cycles,vertex_positions}` with `None` guards.
+- **Import-Time Environment & Warning Hygiene (`DEF-005`, `DEF-009`, `src/slices/core.py`, `src/slices/relax_backends.py`):** Replaced unconditional overrides in `core.py` with `os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")` and `os.environ.setdefault("OMP_NUM_THREADS", "1")`, removed `PYTHONWARNINGS="ignore"` and blanket filters, scoped `DeprecationWarning` suppression strictly to `spglib`, imported `BrunnerNNReciprocal` first, and locally suppressed ASE's `ExpCellFilter` `DeprecationWarning` in `_cell_filter` while keeping empirically superior `ExpCellFilter` (`93.48%` vs `89.13%` strict match over `FrechetCellFilter`) as default.
+- **Strategy 1–4 Formula Extraction (`DEF-012`, `src/slices/core.py`):** Replaced fragile regex matching in `SLICES.SLICES2formula` with grammar-aware Strategy 1/2/3/4 token extraction (fixing silent wrong Strategy 1 formulas, Strategy 2 underscore failures, and digit-free `AttributeError`s; returning `None` cleanly on malformed strings).
+- **Parser Validation & Structured Exceptions (`DEF-024` Gaps 1/2/3b/4, `DEF-018`, `DEF-026`, `src/slices/exceptions.py`, `src/slices/core.py`):**
+  - Updated `SLICESEncodingError(SLICESError, ValueError)` and `SLICESDecodingError(SLICESError, ValueError)` to dual-inherit from `ValueError`.
+  - Exported `VALID_GRAPH_METHODS = ("econnn", "crystalnn", "brunnernn", "mininn")` and raised `ValueError` on invalid `graph_method` in `SLICES.__init__`, `structure2structure_graph`, and `get_dim`.
+  - Guarded 0-site `Structure` inputs with `SLICESEncodingError` in `check_element`, `structure2structure_graph`, and `to_primitive_if_smaller`.
+  - Raised `SLICESDecodingError` in `from_SLICES` for unsupported strategies (including encode-only `strategy=2`) and zero-edge strings, enforced `0 <= idx < num_atoms` and 3-character Strategy-4 edge labels while preserving golden `E01`–`E05` exception contracts and lenient trailing-token parsing.
+- **Periodic Self-Image & Sheared-Cell Validity (`DEF-025`, `DEF-019` Part 2, `src/slices/core.py`):** Updated `SLICES.check_structural_validity` to require `isinstance(str1, IStructure)` (`TypeError`), return `False` on 0-site structures, and check all non-trivial site and periodic image distances via `get_neighbor_list(r=0.5 + 1e-9)` (catching collapsed 1-atom and sheared short-image cells with `0/18,093` MP-20 flips).
+- **Decoding Diagnostics, Clamps & `>40`-Atom Relaxation (`DEF-008`, `DEF-021` Wave 1, `DEF-027`, `DEF-030`, `DEF-032`, `src/slices/core.py`):**
+  - Forwarded `fmax=self.fmax, steps=self.steps` in both branches of `relax_large_cell2` (`>40` atoms).
+  - Raised `LatticeBasisError` and `CocycleBasisError` in `to_structures()` on invalid 3D lattice or multi-vertex cocycle bases instead of crashing with `NoneType * float` `TypeError`.
+  - Guarded non-finite `vangl` entries with `np.isfinite` in `get_inner_p_target*`, canonicalized bonded pairs as `(min(u, v), max(u, v))` in `get_uncovered_pair`, and mirrored `func()`'s `1e-10`/`1e-8` distance clamps in `func_check()`.
+
+### Documentation
+
+- Added four empirical re-evaluation reports under `docs/migration/reeval/` ([REEVAL_SYNTHESIS.md](docs/migration/reeval/REEVAL_SYNTHESIS.md), [REEVAL_MATH_OPT.md](docs/migration/reeval/REEVAL_MATH_OPT.md), [REEVAL_GRAPH_RELAX.md](docs/migration/reeval/REEVAL_GRAPH_RELAX.md), [REEVAL_RUNTIME_PARSE.md](docs/migration/reeval/REEVAL_RUNTIME_PARSE.md)), expanded [DEFERRED_CORE_REGISTER.md](docs/migration/DEFERRED_CORE_REGISTER.md) to 34 entries (`DEF-001`–`DEF-034`), and synchronized Wave 1 API notes in `docs/api/API_{CORE,GRAPH,CONFIG}.md`.
+
+---
+
 ## [4.0.2-personal] — 2026-11-25 (`slices-4-personal`)
 
 Clean scientific-engineering migration of personal enhancements onto upstream **SLICES v4.0.2** (`94ef8e0`), maintaining **100% baseline numerical parity (`89/89` golden equivalence tests at `atol=1e-12`)** against immutable upstream v4.0.2 while removing unrelated generative-model bloat, eliminating host-safety hazards, and adding opt-in capabilities, CLI tooling, Google-style linting, and a unified test suite.

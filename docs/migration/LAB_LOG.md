@@ -588,6 +588,84 @@ All measurements were executed against the read-only upstream tree (`PYTHONPATH=
   - **Full Unified Pytest Suite (`PYTHONHASHSEED=0 OMP_NUM_THREADS=1 PYTHONPATH=src pytest -p no:cacheprovider tests/`):**
     - **`250 passed, 5 skipped, 0 failed` in `116.92 s`** (`255` collected: `89/89` frozen v4.0.2 golden equivalence assertions at `atol=1e-12`, `147` unit tests, `7` integration round-trip tests, `7` regression edge-case tests, and `5` clean `@pytest.mark.mlip` skips for uninstalled optional MLIPs).
 - **Final Local Commit (`7-a`) & Post-Commit Safety Invariants:**
-  - Staged `docs/README.md` and `docs/migration/` (`8` files) and created final local commit `docs(migration): seal 7-stage scientific lab log, deferred register, and final report` (`9` linear atomic commits ahead of `upstream/main` @ `94ef8e0`).
+  - Staged `docs/README.md` and `docs/migration/` (`8` files) and created final local commit `docs(migration): seal 7-stage scientific lab log, deferred register, and final report` (`fa4cfc8`, `9` linear atomic commits ahead of `upstream/main` @ `94ef8e0`).
   - Verified `git status --short` completely empty, `backup/v3-personal` @ `301c75f`, `upstream/main` @ `94ef8e0`, `/home/ordillo/tests/SLICES-upstream-baseline` locked & clean @ `94ef8e0`, `push.default=nothing` (**0 remote pushes**), and root `/` free disk **`9.7 GB` (`>= 5 GB`)**.
 - **Final Migration Verdict:** **STAGE 1–7 COMPLETE — 100% VERIFIED & SEALED LOCALLY ON `slices-4-personal`.**
+
+---
+
+### Post-Migration Cycle 1: Carbon High Empirical Re-Evaluation & Wave 1 (`SAFE_NOW`) Implementation (2026-11-25 10:45–12:55 JST — Completed)
+
+#### Cycle 1 Dispatch Matrix
+
+| Slot / Phase | Agent (Tier) | Exclusive File Ownership | Primary Deliverable / Scope | Status |
+|---|---|---|---|---|
+| **Re-Eval Runtime/Parse** (`W1-01a`) | `eval-runtime-parse` (Carbon High) | [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md) (`286` L) | Empirical evaluation of 8 runtime/parsing deferred items + 3 Stage 3 blocks across `125,174` SLICES strings (`#74`) | **Completed** (2026-11-25 10:46 JST, `#74`) |
+| **Re-Eval Math/Opt** (`W1-01b`) | `eval-math` (Carbon High) | [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) (`309` L) | First-principles empirical evaluation of 6 math/optimization deferred items across `18,093` MP-20 CIFs & `2,374` benchmark crystals (`#76`) | **Completed** (2026-11-25 10:46 JST, `#76`) |
+| **Re-Eval Graph/Relax** (`W1-01c`) | `eval-graph-relax` (Carbon High) | [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) (`283` L) | Empirical evaluation of 8 graph/relaxation deferred items across `67,826` strings, `3,883` GFN-FF runs & 49-crystal `nequip-s+l` A/B (`#77`) | **Completed** (2026-11-25 10:58 JST, `#77`) |
+| **Re-Eval Verifier & Synthesis** (`W1-01d`) | `eval-verifier` (Carbon High) | [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md) (`215` L) | Independent live stress-testing, cross-report reconciliation, 7 newly discovered defects (`DEF-028`–`DEF-034`), and 3-wave roadmap (`#81`) | **Completed** (2026-11-25 11:16 JST, `#81`) |
+| **Wave 1A-1 (`SAFE_NOW`)** (`W1-02`) | `w1-net-gfnff` (Carbon High) | `src/slices/{gfnff_helper,tobascco_net,relax_backends}.py` | `DEF-028`, `DEF-011`, `DEF-034`, `DEF-004`, `DEF-010`, `DEF-005`/`DEF-009` warning hygiene (`+66/-29` L, `89/89` golden) | **Completed** (2026-11-25 12:31 JST, `#85`) |
+| **Wave 1A-2 (`SAFE_NOW`)** (`W1-03`) | `w1-core` (Carbon High) | `src/slices/{exceptions,core}.py` | Dual-inheriting `ValueError` exceptions, `DEF-005`, `DEF-026`, `DEF-018`, `DEF-024` (W1), `DEF-025`/`DEF-019` (P2), `DEF-012`, `DEF-030`, `DEF-032`, `DEF-027`, `DEF-023`, `DEF-021` (W1), `DEF-008` (`+306/-81` L, `89/89` golden + `161/161` tests) | **Completed** (2026-11-25 12:37 JST, `#86`) |
+| **Wave 1B Docs Sync** (`W1-04a`) | `w1-scribe` (Neon XHigh) | `DEFERRED_CORE_REGISTER.md`, `LAB_LOG.md`, `CHANGELOG.md`, `docs/README.md`, `docs/api/API_{CORE,GRAPH,CONFIG}.md` | Add `DEF-028`–`DEF-034`, sync all 34 register statuses, update changelog/docs/API contracts (`0` CJK, `0` broken links) | **Completed** (2026-11-25 12:40 JST, `#88`/`#90`) |
+| **Wave 1B Tests** (`W1-04b`) | `w1-net-gfnff` (Carbon High) | `tests/regression/test_wave1_fixes.py` (`637` L) | 15 `@pytest.mark.regression` tests covering all 15 Wave 1 fixes (`15 passed in 5.19 s`, `0` warnings, `0` ruff, `0` CJK) | **Completed** (2026-11-25 12:45 JST, `#89`) |
+| **Gate W1 Verification & Commits** (`W1-04c`) | `w1-verifier` (Carbon High) | Independent Gate W1 audit & local atomic Wave 1 commits (`W1-a` `a85e832`, `W1-b` `954a56a`, `W1-c`) on `main` | `265 passed, 5 skipped, 0 failed` (`106.14 s`) + `0.000e+00` dual-tree parity + `0` ruff/compileall/CJK/link errors + `0` pushes | **PASS** (2026-11-25 12:55 JST, `#91`) |
+
+#### Entry `W1-01` — Carbon High 4-Agent Empirical Re-Evaluation (`#74`, `#76`, `#77`, `#81`, 2026-11-25 10:45–11:16 JST)
+- **Executors / Artifacts:** `eval-runtime-parse` -> [REEVAL_RUNTIME_PARSE.md](reeval/REEVAL_RUNTIME_PARSE.md) (`286` L), `eval-math` -> [REEVAL_MATH_OPT.md](reeval/REEVAL_MATH_OPT.md) (`309` L), `eval-graph-relax` -> [REEVAL_GRAPH_RELAX.md](reeval/REEVAL_GRAPH_RELAX.md) (`283` L), and independent verifier `eval-verifier` -> [REEVAL_SYNTHESIS.md](reeval/REEVAL_SYNTHESIS.md) (`215` L) — executed non-destructively at `HEAD=fa4cfc8` (`0` tracked files modified, `0` CJK hits, `/dev/shm` scratch cleaned).
+- **Headline Empirical Findings Overturning Static Assumptions:**
+  1. **`DEF-009` -> `KEEP_FROZEN`:** Controlled 49-crystal CPU `nequip-s+l` A/B testing proved `ExpCellFilter` outperforms `FrechetCellFilter` (`93.48%` [`43/46`] vs `89.13%` [`41/46`] strict match, `8.3%` faster, lower energy on `63.3%` vs `20.4%`); `FrechetCellFilter` failed on `G05` (premature filter-force stop, `+8.75 meV/at`) and `G10` `BaSn2` (interlayer `c`-axis collapse `6.51 -> 4.42 Å`, `-35.32 meV/at` wrong polymorph).
+  2. **`DEF-001` -> `VERSIONED_OPT_IN`:** Confirmed `LJ_PARAMS_LIST` columns store `[4*sigma, sigma]` lengths in Å (`vbond_param_ave_covered == 0.0`), not `[r0, eps]`; arithmetic Lorentz mixing restores permutation invariance (`5.00x` swing on `G18` eliminated) and slashes `f(x0)` `11.5x` while remaining recovery-neutral (`0` `match_check3` flips: `62/68` strict, `63/68` loose).
+  3. **`DEF-011` -> `SAFE_NOW`:** Square `np.linalg.inv` matches `np.matrix(...).I` to **`0.000e+00` (`0` ULP)** across `2,374/2,374` MP-20 and `19/19` Golden crystals (`0` `DEF-014` flips), whereas `np.linalg.pinv` drifts `6.50e-11` and flips `231/2,366` (`9.76%`).
+  4. **`DEF-014` -> `HIGH_VALUE_AB`:** Exact float `set`/`==` strips symmetry constraints from **`73.29%` (`1,734/2,366`)** of MP-20 crystals (`97.7%` cubic) across an empty 7-decade gap `(1e-13, 1e-9]`; `math.isclose(1e-9, 1e-12)` cuts decode CPU time `-11.7%` with `0` match regressions.
+  5. **`DEF-028` (`SAFE_NOW`) + `DEF-029` (`VERSIONED_OPT_IN`):** Live `Z = 1..118` probing discovered unguarded Fortran OOB memory reads in `libgfnff.so.0.1.1` for `Z >= 104` (`Db`: `969.63` vs `-1.648e9 Bohr`) and mapped `NequIP-OAM-S/L`'s non-contiguous 89-element vocabulary `{1..83, 89..94}` (`Po/At/Rn` `KeyError` vs `6/6` `Ac..Pu` actinide matches).
+  6. **`DEF-023` -> `SAFE_NOW`:** Instance reuse after `unstable_graph=True` collapsed MP-20 SG accuracy `91.62% -> 4.68%`, while applying `+0.5` cocycle locally regressed unstable nets `56.25% -> 12.50%`; deleting `if self.unstable_graph:` + resetting in `from_SLICES` eliminates reuse corruption at `0.0` drift.
+  7. **`DEF-003` + `DEF-021` -> Wave 2 Exact `smith_normal_decomp`:** Invoked strictly on `basis == -1`, exact integer SNF rescues `180/180` (`100.0%`) unimodular 3D nets in `~0.4 ms` (`39x–112x` faster than random shuffles) with `0.0` passing-net drift.
+- **New Register Entries Discovered (`7`):** Registered **`DEF-028` through `DEF-034`** alongside updated verdicts for `DEF-001`–`DEF-027` in [DEFERRED_CORE_REGISTER.md](DEFERRED_CORE_REGISTER.md).
+
+#### Entry `W1-02` — Wave 1A-1 Implementation: `gfnff_helper.py`, `tobascco_net.py`, `relax_backends.py` (`w1-net-gfnff`, 2026-11-25 12:31 JST)
+- **Executor / Report:** `w1-net-gfnff` (Carbon High; completed `#85`; `3 files changed, +66 / -29` lines; zero git index edits).
+- **Changes Implemented:**
+  1. `src/slices/gfnff_helper.py` (`+24/-2`, **`DEF-028`**): Added `_MIN_GFNFF_Z = 1` / `_MAX_GFNFF_Z = 103` and enforced `1 <= Z <= 103` in `parse_nbf_text` prior to `libgfnff.so.0.1.1` or external `xtb`, raising `GFNFFExecutionError` naming symbol(s) and `Z` on `Rf..Og` while retaining `ValueError` for malformed syntax or unknown element symbols.
+  2. `src/slices/tobascco_net.py` (`+35/-22`, **`DEF-011`, `DEF-034`, `DEF-004`, `DEF-010`**): Replaced `np.array(np.matrix(...).I)` with `np.linalg.inv(...)` in `eon_projection`, `projection`, and `cycle_cocycle_I` (`0` `np.matrix`, `0` `pinv`); migrated `linear_independent_vectors` to `np.atleast_2d(np.asarray(r_mat))` with `r == 0` and `counter < r - 1` bounds guards; removed dead `np.random.choice`/`np.random.shuffle` (`0` `np.random`); replaced mutable `[]`/`{}` defaults in `iter_cycles` and `vertex_positions` with `None` guards (`0` `B006`).
+  3. `src/slices/relax_backends.py` (`+8/-5`, **`DEF-005` + `DEF-009`**): Wrapped `ExpCellFilter` import and instantiation in `_cell_filter` inside `warnings.catch_warnings()` (`DeprecationWarning` ignored locally) while keeping `ExpCellFilter` as default.
+- **Verification (`#85`):** `ruff check` **`0` errors**; `0` CJK hits; direct probes verified `Th (90)`/`Lr (103)` pass, `Rf (104)`/`Db (105)`/`Og (118)` raise `GFNFFExecutionError`, `np.random.get_state()` unchanged, stateless `iter_cycles()`, `0` ASE warnings; `pytest tests/unit/test_{gfnff_helper,graph,relax_backends}.py` -> **`37 passed in 6.47 s`**; `pytest tests/baseline/test_golden_equivalence.py` -> **`89 passed in 72.87 s`** (`0.0` ULP drift).
+
+#### Entry `W1-03` — Wave 1A-2 Implementation: `exceptions.py` & `core.py` (`w1-core`, 2026-11-25 12:37 JST)
+- **Executor / Report:** `w1-core` (Carbon High; completed `#86`; `2 files changed, +306 / -81` lines; zero git index edits).
+- **Changes Implemented:**
+  1. `src/slices/exceptions.py` (`+21/-8`): Dual-inherited `SLICESEncodingError(SLICESError, ValueError)` and `SLICESDecodingError(SLICESError, ValueError)` while preserving sibling `(SLICESError, RuntimeError)` on `RelaxBackendError` / `ModelDownloadError`.
+  2. `src/slices/core.py` (`+285/-73`):
+     - `DEF-005`: `os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")`, `os.environ.setdefault("OMP_NUM_THREADS", "1")`, removed `PYTHONWARNINGS="ignore"` and blanket filters, scoped `spglib` `DeprecationWarning`, preferred `BrunnerNNReciprocal` import first.
+     - `DEF-026`: Exported `VALID_GRAPH_METHODS = ("econnn", "crystalnn", "brunnernn", "mininn")` and enforced `ValueError` in `__init__`, `structure2structure_graph`, and `get_dim`.
+     - `DEF-018`: Raised `SLICESEncodingError` on 0-site `Structure` in `check_element`, `structure2structure_graph`, and `to_primitive_if_smaller`.
+     - `DEF-024` (Gaps 1, 2, 3b, 4): Raised `SLICESDecodingError` on `strategy not in (1, 3, 4)` (including encode-only `strategy=2`) and zero-edge strings, added `_is_int_token`, enforced `0 <= idx < num_atoms` (`Exception("Error: wrong edge indices")`) and Strategy-4 `len(edge[2]) == 3` (`Exception("Error: wrong edge label")`), preserving `E01`–`E05` golden strings verbatim and lenient trailing tokens.
+     - `DEF-025` + `DEF-019` (Part 2): Enforced `isinstance(str1, IStructure)` (`TypeError`), `len(str1) == 0 -> False`, and `get_neighbor_list(r=0.5 + 1e-9)` excluding `(i == j) & (img == 0)` in `check_structural_validity`.
+     - `DEF-012`: Grammar-aware Strategy 1–4 token extraction in `SLICES2formula` (`100%` across Golden S1–S4 & `16,686` MP-20 rows; `None` on malformed strings).
+     - `DEF-030` + `DEF-032` + `DEF-027`: `np.isfinite` guard on `vangl` in `get_inner_p_target*`; `(min(u, v), max(u, v))` canonicalization in `get_uncovered_pair`; `func()` clamping guards mirrored in `func_check()`.
+     - `DEF-023` + `DEF-021` (W1) + `DEF-008`: Deleted `if self.unstable_graph:` in `SLICES2space_group_number` + reset in `from_SLICES`; raised `LatticeBasisError`/`CocycleBasisError` in `to_structures()`; forwarded `fmax=self.fmax, steps=self.steps` in both branches of `relax_large_cell2`.
+- **Verification (`#86`):** `ruff check` **`0` errors**; `0` CJK hits; `pytest tests/baseline/test_golden_equivalence.py` -> **`89 passed in 73.58 s`** (`atol=1e-12`); `pytest tests/unit/ tests/integration/ tests/regression/` -> **`161 passed, 5 skipped in 32.91 s`** (`0` existing test edits required).
+
+#### Entry `W1-04` — Wave 1B Documentation Sync, Regression Tests & Final Gate W1 Seal (`w1-verifier`, 2026-11-25 12:55 JST)
+- **Wave 1B-Docs (`w1-scribe`, `#88`/`#90` — Completed 2026-11-25 12:48 JST):** Updated `DEFERRED_CORE_REGISTER.md` (`DEF-001`–`DEF-034`, `34/34` exact index<->detail status parity), appended Cycle 1 (`W1-01`–`W1-04`) to `LAB_LOG.md`, added Wave 1 summary to `CHANGELOG.md`, linked all 4 empirical re-evaluation reports in `docs/README.md`, and updated Wave 1 API contracts in `docs/api/API_{CORE,GRAPH,CONFIG}.md` (`0` CJK hits, `0` broken relative links, `0` hardcoded host paths in user-facing docs).
+- **Wave 1B-Tests (`w1-net-gfnff`, `#87`/`#89` — Completed 2026-11-25 12:45 JST):** Authored `tests/regression/test_wave1_fixes.py` (`637` lines, `15` `@pytest.mark.regression` test functions covering all 15 Wave 1 fixes); verified `ruff check` **`0` errors**, `0` CJK hits, and `pytest tests/regression/test_wave1_fixes.py` -> **`15 passed in 5.19 s`** (`0` warnings).
+- **Final Gate W1 Independent Verification (`w1-verifier`, `#91` — PASS, 2026-11-25 12:55 JST):**
+  - **Scope & Diff Audit:** Confirmed `0` edits to `tests/baseline/**`, `src/slices/_vendor/**`, `pyproject.toml`, `uv.lock`, `HTS/**`, `benchmark/**`, `data/**`, and locked `/home/ordillo/tests/SLICES-upstream-baseline` (`94ef8e0`); line-by-line audit verified all 15 Wave 1 `SAFE_NOW` fixes match [REEVAL_SYNTHESIS.md Section 5](reeval/REEVAL_SYNTHESIS.md).
+  - **Lint, Syntax, Tooling, CJK & Link Gate:**
+    - `ruff check --no-cache src/ examples/ tools/ tests/` -> **`All checks passed!` (`0` errors)**.
+    - `PYTHONPYCACHEPREFIX=/dev/shm/w1-pyc python -m compileall -q -x 'error\.py' src/ examples/ tools/ tests/ HTS/ benchmark/ data/` (temp `/dev/shm/w1-pyc` immediately removed) -> **`exit=0` (`0` syntax errors)**.
+    - `python tools/validate_installation.py --quick` -> **`exit=0`**.
+    - `python tools/run_tests.py --lint-only --no-cache` -> **`exit=0`**.
+    - Repo-wide UTF-8 CJK scan across **`1,466` non-binary text files** (including `docs/migration/reeval/` and `tests/regression/test_wave1_fixes.py`) -> **`0` CJK hits**.
+    - Local Markdown link, GitHub-slug anchor & line-range audit across all **`11` modified/new documents (`581` local links)** -> **`0` broken links** (resolved 1 double-hyphen anchor typo in `REEVAL_MATH_OPT.md:17`).
+  - **Full Unified Pytest + Live Dual-Tree Golden Equivalence Gate:**
+    - `PYTHONHASHSEED=0 OMP_NUM_THREADS=1 SLICES_TORCH_THREADS=1 PYTHONPATH=/home/ordillo/tests/SLICES/src pytest -p no:cacheprovider tests/` -> **`265 passed, 5 skipped, 0 failed` (`270` collected) in `106.14 s`**, including **`89/89` frozen v4.0.2 golden equivalence at `atol=1e-12`** and **`15/15` `test_wave1_fixes.py`**, with **`0` SLICES/ASE/BrunnerNN/NumPy warnings** (`0` unexpected warnings).
+    - Live dual-tree subprocess parity (`/home/ordillo/tests/SLICES-upstream-baseline/src` vs `/home/ordillo/tests/SLICES/src`, `PYTHONHASHSEED=0`, `OMP_NUM_THREADS=1`): `NdSiRu.cif` (`E = -7.267593873805 eV/atom`) and `Sr3Ru2O7.cif` (`E = -6.791350100005 eV/atom`) -> **`max_diff = 0.000e+00`** across SLICES strings, canonical strings, `[std, opt, opt2]` lattices/fractional coordinates, energies, and `match_check3`.
+- **Wave 1 Local Atomic Commit Ledger (`main`, `push.default=nothing`, `0` remote pushes):**
+
+| Slot | Short SHA | Full SHA | Subject | Scope |
+|---|---|---|---|---|
+| `W1-a` | `a85e832` | `a85e832cabac9e80eb29a0d9f5aaa4a9512dd40d` | `fix(slices): apply Wave 1 SAFE_NOW bugfixes and Fortran memory-safety guards` | `src/slices/{exceptions,core,gfnff_helper,tobascco_net,relax_backends}.py` (`5 files, +372 / -110`) |
+| `W1-b` | `954a56a` | `954a56a9aeecbe763c46d30080592e1800ce14af` | `test(slices): add Wave 1 regression suite covering all 15 SAFE_NOW fixes` | `tests/regression/test_wave1_fixes.py` (`1 file, +637`) |
+| `W1-c` | *(this commit)* | *(sealed on `main` immediately following `954a56a`)* | `docs: add Carbon High re-evaluation reports and record Wave 1 fixes` | `docs/migration/reeval/`, `DEFERRED_CORE_REGISTER.md`, `LAB_LOG.md`, `CHANGELOG.md`, `docs/README.md`, `docs/api/API_{CORE,GRAPH,CONFIG}.md` |
+
+- **Gate W1 Final Verdict:** **WAVE 1 (`SAFE_NOW`) COMPLETE — 100% VERIFIED & COMMITTED LOCALLY ON `main` (`origin/main` untouched at `fa4cfc8`, `backup/v3-personal` at `301c75f`, `SLICES-upstream-baseline` locked at `94ef8e0`).**

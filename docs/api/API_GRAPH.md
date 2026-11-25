@@ -7,7 +7,7 @@
 
 ## 1. Periodic Quotient Graphs (`slices.tobascco_net`)
 
-Adapted from Boyd & Woo's `tobascco` graph-theoretic net-embedding algorithms (Eon's barycentric placement and metric-tensor projection). Mathematical and algebraic basis selection routines remain strictly frozen against upstream SLICES v4.0.2 (`DEF-003`, `DEF-004`, `DEF-010`, `DEF-011`).
+Adapted from Boyd & Woo's `tobascco` graph-theoretic net-embedding algorithms (Eon's barycentric placement and metric-tensor projection). Core topological basis selection (`DEF-003`) remains strictly frozen at upstream SLICES v4.0.2 (`0.0` ULP drift), while Wave 1 eliminated all `np.matrix` usage (`np.linalg.inv`, `DEF-011`), dead `np.random` mutations (`DEF-004`), mutable default arguments (`DEF-010`), and rectangular bounds overflows (`DEF-034`).
 
 ### Public Exports (`slices.tobascco_net.__all__`)
 
@@ -43,9 +43,9 @@ class Net:
 
 | Symbol | Kind / Signature | Description |
 |---|---|---|
-| `simple_cycle_basis` | `(self) -> None` | Builds fundamental cycle basis (`self.cycle`) and cycle voltages (`self.cycle_rep`) from a minimum spanning tree. |
+| `simple_cycle_basis` | `(self) -> None` | Builds fundamental cycle basis (`self.cycle`) and cycle voltages (`self.cycle_rep`) from a minimum spanning tree without touching global `np.random` (`DEF-004`). |
 | `get_cycle_basis` | `(self) -> None` | Builds cycle basis of rank `E - V + 1` via `iter_cycles`. |
-| `get_lattice_basis` | `(self) -> int` | Uses SymPy rational nullspace arithmetic to find `ndim` integral cycle combinations spanning unit lattice translations. Returns `1` on success and `-1` on failure (`DEF-003`, `DEF-021`). |
+| `get_lattice_basis` | `(self) -> int` | Uses SymPy rational nullspace arithmetic (with zero `np.random` state mutation; `DEF-004`) to find `ndim` integral cycle combinations spanning unit lattice translations. Returns `1` on success and `-1` on failure (`DEF-003`, `DEF-021`). |
 | `get_cocycle_basis` | `(self) -> None` | Constructs oriented cutset basis (`self.cocycle`, `self.cocycle_rep`) of size `V - 1` (`None` when `V == 1`). |
 | `get_metric_tensor` | `(self) -> None` | Computes barycentric metric tensor `L @ eon_projection @ L.T`. |
 | `barycentric_embedding` | `(self) -> None` | Sets zero cocycle coordinates (`periodic_rep`) and computes standard metric tensor. |
@@ -61,13 +61,13 @@ class Net:
 | `graph` (get/set) | `nx.MultiDiGraph` | Underlying directed multigraph (`order` = `V`, `shape` = `E`) |
 | `minimal` | `bool` | `True` iff cycle space dimension equals `self.ndim` |
 | `kernel` | `np.ndarray` | Stacked basis of zero-voltage cycles and cocycles |
-| `eon_projection` | `np.ndarray` | Orthogonal projector `I - K^T (K K^T)^{-1} K` onto `ker(alpha)^perp` |
+| `eon_projection` | `np.ndarray` | Orthogonal projector `I - K^T (K K^T)^{-1} K` onto `ker(alpha)^perp` (uses `np.linalg.inv`, zero `np.matrix`; `DEF-011`) |
 | `cycle_cocycle` | `np.ndarray` | Stacked `(E, E)` basis matrix `B = [cycle; cocycle]` |
-| `cycle_cocycle_I` | `np.ndarray` | Cached matrix inverse `B^{-1}` |
+| `cycle_cocycle_I` | `np.ndarray` | Cached matrix inverse `B^{-1}` computed via `np.linalg.inv` (`DEF-011`) |
 | `lattice_arcs` | `np.ndarray` | Fractional edge displacement vectors `B^{-1} @ periodic_rep` |
-| `projection` | `np.ndarray` | Orthogonal projector onto column space of `lattice_arcs` |
+| `projection` | `np.ndarray` | Orthogonal projector onto column space of `lattice_arcs` (uses `np.linalg.inv`; `DEF-011`) |
 
-Additional graph utilities on `Net`: `vertices`, `out_edges`, `in_edges`, `all_edges`, `neighbours`, `loop_edges`, `add_vertex`, `add_edge`, `delete_edge`, `insert_and_join`, `add_edges_between`, `get_voltage`, `get_index` (expects 1-based `'e1'`, `'e2'`, ... labels), `return_indices`, `return_coeff`, `to_ind`, `indices_with_voltage`, `iter_cycles`, `linear_independent_vectors`, `check_linear_dependency`, `cycle_cocycle_check`, `assign_ip_matrix`, `convert_params`, `vertex_positions`, `print_edge_count`, `report_errors`, `report_errors_nlopt`, `add_to_array`, `add_name`, `debug_print`.
+Additional graph utilities on `Net`: `vertices`, `out_edges`, `in_edges`, `all_edges`, `neighbours`, `loop_edges`, `add_vertex`, `add_edge`, `delete_edge`, `insert_and_join`, `add_edges_between`, `get_voltage`, `get_index` (expects 1-based `'e1'`, `'e2'`, ... labels), `return_indices`, `return_coeff`, `to_ind`, `indices_with_voltage`, `iter_cycles` (stateless `None` default containers; `DEF-010`), `linear_independent_vectors` (`np.atleast_2d(np.asarray(...))` with `r == 0` and `counter < r - 1` bounds guards; `DEF-034`), `check_linear_dependency`, `cycle_cocycle_check`, `assign_ip_matrix`, `convert_params`, `vertex_positions` (stateless `None` default containers; `DEF-010`), `print_edge_count`, `report_errors`, `report_errors_nlopt`, `add_to_array`, `add_name`, `debug_print`.
 
 ---
 
@@ -81,7 +81,7 @@ Computes equilibrium bond-length and angle targets (`blist`, `vbond`, `alist`, `
 
 ### Execution Backends & Cross-Platform Fallback
 
-1. **Linux x86_64 Default (Untouched Upstream v4.0.2):** Loads the bundled open-source `pprcht/gfnff` shared library (`src/slices/_vendor/gfnff/libgfnff.so.0.1.1`, LGPL-3.0-or-later) in memory via `ctypes` with `param_gfnff_legacy86.xtb` overlay (`Z = 1..86` matching historical xtb targets; `Z = 87..103` using modern library parameters).
+1. **Linux x86_64 Default (Untouched Upstream v4.0.2 + `1 <= Z <= 103` Guard):** Loads the bundled open-source `pprcht/gfnff` shared library (`src/slices/_vendor/gfnff/libgfnff.so.0.1.1`, LGPL-3.0-or-later) in memory via `ctypes` with `param_gfnff_legacy86.xtb` overlay (`Z = 1..86` matching historical xtb targets; `Z = 87..103` using modern library parameters). Atomic numbers outside `1 <= Z <= 103` (e.g., trans-lawrencium `Rf..Og`) are rejected in `parse_nbf_text` with `GFNFFExecutionError` before invoking `libgfnff.so.0.1.1` (`DEF-028`).
 2. **Non-Linux Fallback (`RUL-08`):** Only if importing/loading `slices._vendor.gfnff` raises `(ImportError, OSError)` (e.g., on macOS or Windows), `run_gfnff_helper` invokes `_run_external_xtb_fallback(nbf_text)`. It resolves an external modified `xtb` binary from `SLICES_XTB_PATH`, `XTB_MOD_PATH`, or `PATH` (`xtb_noring_nooutput_nostdout_noCN`), runs `subprocess.run(..., shell=False, timeout=30)` inside a `tempfile.TemporaryDirectory`, sanitizes Fortran `"********"` overflow fields, and raises `GFNFFExecutionError` with actionable setup guidance if no binary is configured.
 
 ### Functions & Constants
@@ -89,7 +89,7 @@ Computes equilibrium bond-length and angle targets (`blist`, `vbond`, `alist`, `
 | Symbol | Signature / Value | Description |
 |---|---|---|
 | `LEGACY86_PARAM_FILE` | `Path(.../_vendor/gfnff_extra/param_gfnff_legacy86.xtb)` | Default 86-element overlay parameter table |
-| `parse_nbf_text` | `(nbf_text: str) -> tuple[np.ndarray, np.ndarray]` | Parses `testBonds_cut.top` (`nat`, element symbols, 20 neighbor rows) into `(int32 Z array, (20, nat) int32 neighbor table)`. Raises `ValueError` on malformed input. |
+| `parse_nbf_text` | `(nbf_text: str) -> tuple[np.ndarray, np.ndarray]` | Parses `testBonds_cut.top` (`nat`, element symbols, 20 neighbor rows) into `(int32 Z array, (20, nat) int32 neighbor table)`. Raises `ValueError` on malformed line/shape counts or unrecognized element symbols, and raises `GFNFFExecutionError` if any atomic number lies outside `1 <= Z <= 103` (`H..Lr`; `DEF-028`). |
 | `run_gfnff_helper` | `(nbf_text: str) -> dict[str, Any]` | Returns `{"blist": ..., "vbond": ..., "alist": ..., "vangl": ..., "metadata": {"param_mode": ...}}` with 1-based atom indices. |
 | `write_debug_files` | `(nbf_text: str, data: dict[str, Any], directory: str | os.PathLike[str] = ".") -> None` | Writes `testBonds_cut.top` and `gfnff_lists.json` for `SLICES(check_results=True)`. |
 

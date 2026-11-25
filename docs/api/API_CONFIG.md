@@ -54,10 +54,11 @@ Every environment variable read or set across `src/slices/*.py` is documented be
 | Variable | Module(s) | Default | Valid Values & Behavior |
 |---|---|---|---|
 | `SLICES_FORCE_LOCAL` | `utils.py` | Unset (`False`) | Set to `"1"`, `"true"`, or `"yes"` to force `is_slurm_available()` to return `False` and execute `splitRun*` shards locally even on a SLURM login node. |
-| `OMP_NUM_THREADS` | `core.py`, `relax_backends.py`, `utils.py` | Set to `"1"` on `slices.core` import (`DEF-005`) | Enforces single-threaded OpenMP/BLAS execution for deterministic CPU Cholesky, L-BFGS-B, and `multiprocessing.Pool` workers (alongside `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `NUMEXPR_NUM_THREADS` in `utils._init_single_thread_worker`). |
+| `OMP_NUM_THREADS` | `core.py`, `relax_backends.py`, `utils.py` | `setdefault("1")` on `slices.core` import (`DEF-005`) | Uses `os.environ.setdefault("OMP_NUM_THREADS", "1")` on `slices.core` import so explicit user overrides are honored while unset runs default to single-threaded execution (preventing multi-worker OpenMP/BLAS oversubscription; `utils._init_single_thread_worker` also sets `MKL_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `NUMEXPR_NUM_THREADS` in pool workers). |
 | `PYTHONHASHSEED` | Python runtime (recommended `"0"`) | Random per process | Set `PYTHONHASHSEED=0` when exact cross-process list order is required from `SLICES.structure2randomSLICES` (`DEF-022`) and when running `tests/baseline/test_golden_equivalence.py`. |
-| `PYTHONWARNINGS` | `core.py` | Set to `"ignore"` on `slices.core` import (`DEF-005`) | Frozen upstream import-time warning suppression. |
-| `TF_CPP_MIN_LOG_LEVEL` | `core.py` | Set to `"3"` on `slices.core` import (`DEF-005`) | Frozen upstream TensorFlow C++ log-level setting. |
+| `TF_CPP_MIN_LOG_LEVEL` | `core.py` | `setdefault("3")` on `slices.core` import (`DEF-005`) | Uses `os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")` on `slices.core` import without overriding caller settings. |
+
+> **Scoped Warning Hygiene (`DEF-005`, `DEF-009`):** `slices.core` no longer sets `PYTHONWARNINGS="ignore"` or blanket `DeprecationWarning`/`FutureWarning` filters. Instead, `slices.core` scopes `DeprecationWarning` filtering strictly to `module=r"^spglib\."`, imports `BrunnerNNReciprocal` before deprecated aliases, and `slices.relax_backends._cell_filter` locally suppresses ASE's `ExpCellFilter` `DeprecationWarning` inside `warnings.catch_warnings()`.
 
 ---
 
@@ -77,7 +78,7 @@ Every environment variable read or set across `src/slices/*.py` is documented be
 - `select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "D"]` with `[tool.ruff.lint.pydocstyle] convention = "google"`.
 - `extend-exclude = ["src/slices/_vendor", "HTS", "benchmark", "data", "docs"]`.
 - Minimal documented `per-file-ignores`:
-  - `"src/slices/core.py" = ["E402"]` (`DEF-005` frozen top-of-file env setup).
+  - `"src/slices/core.py" = ["E402"]` (`DEF-005` top-of-file `setdefault` env setup and scoped `spglib` warning filter before scientific imports).
   - `"src/slices/utils_wyckoff.py" = ["E501"]` (frozen 250-entry `sg_encoding` literal).
   - `"examples/3.benchmark_relax_models.py" = ["E402"]` (standalone `OMP_NUM_THREADS="1"` before imports).
   - `"tests/**/*.py" = ["B017", "D100", "D101", "D102", "D103", "D104", "D107", "E501", "RUF100"]`.
