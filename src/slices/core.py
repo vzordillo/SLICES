@@ -153,6 +153,45 @@ def function_timeout(seconds: int) -> Callable[[Callable[..., Any]], Callable[..
     return decorator
 
 
+def _classify_lattice_type(
+    metric_tensor_std: np.ndarray,
+    rel_tol: float = 1e-9,
+    abs_tol: float = 1e-12,
+) -> int:
+    """Classify squared-length symmetry constraints on ``metric_tensor_std`` diagonals.
+
+    Uses pairwise ``math.isclose`` comparisons with transitive closure so near-equal
+    barycentric metric-tensor diagonals perturbed by IEEE-754 rounding retain their
+    symmetry-constrained ZL* parameterization.
+
+    Args:
+        metric_tensor_std: Rescaled ``(3, 3)`` standard metric tensor.
+        rel_tol: Relative tolerance passed to :func:`math.isclose`. Defaults to ``1e-9``.
+        abs_tol: Absolute tolerance passed to :func:`math.isclose`. Defaults to ``1e-12``.
+
+    Returns:
+        Symmetry constraint code: ``1`` (``a == b == c``), ``23`` (``a == b != c``),
+        ``22`` (``a == c != b``), ``21`` (``b == c != a``), or ``3`` (all distinct).
+    """
+    g0, g1, g2 = (
+        float(metric_tensor_std[0, 0]),
+        float(metric_tensor_std[1, 1]),
+        float(metric_tensor_std[2, 2]),
+    )
+    eq01 = math.isclose(g0, g1, rel_tol=rel_tol, abs_tol=abs_tol)
+    eq02 = math.isclose(g0, g2, rel_tol=rel_tol, abs_tol=abs_tol)
+    eq12 = math.isclose(g1, g2, rel_tol=rel_tol, abs_tol=abs_tol)
+    if (eq01 and eq02) or (eq01 and eq12) or (eq02 and eq12):
+        return 1
+    if eq01:
+        return 23
+    if eq02:
+        return 22
+    if eq12:
+        return 21
+    return 3
+
+
 class SLICES:
     """Invertible crystal representation via SLICES strings and labeled quotient graphs."""
 
@@ -797,9 +836,10 @@ class SLICES:
             dupli_check: If ``True``, fail when duplicate edges exist instead of
                 deduplicating them during parsing. Defaults to ``False``.
             graph_rank_check: If ``True``, require first homology group rank
-                ``H1(X, Z) >= 3`` so Eon's method can construct a 3D embedding.
-                Set ``True`` for generative models and ``False`` when 3D
-                invertibility is not required. Defaults to ``True``.
+                ``H1(X, Z) >= 3`` and valid 3D lattice and cocycle bases so Eon's
+                method can construct a 3D embedding. Set ``True`` for generative
+                models and ``False`` when 3D invertibility is not required.
+                Defaults to ``True``.
             strict: If ``True``, reject trailing partial edge tokens instead of
                 truncating them during parsing. Defaults to ``False``.
 
@@ -878,8 +918,21 @@ class SLICES:
             net = Net(x_dat, dim=3)
             net.voltage = net_voltage
             net.simple_cycle_basis()
-            net.get_lattice_basis()
+            basis_status = net.get_lattice_basis()
+            if graph_rank_check and (basis_status == -1 or net.lattice_basis is None):
+                return False
             net.get_cocycle_basis()
+            if (
+                graph_rank_check
+                and net.order > 1
+                and (
+                    net.cocycle is None
+                    or net.cocycle_rep is None
+                    or net.cocycle.ndim != 2
+                    or len(net.cocycle) < net.order - 1
+                )
+            ):
+                return False
         except Exception:
             return False
         return True
@@ -1669,6 +1722,7 @@ class SLICES:
         blist_original = blist
         blist_flip = np.flip(blist_original, 1)
         bond_weight: list[float] = []
+        matched_bond_indices: list[int] = []
         blist_super = np.array(data["blist"], dtype=int)
         inner_p_target = np.zeros((len(blist_original), len(blist_original)))
         for i in range(len(blist_original)):
@@ -1687,6 +1741,7 @@ class SLICES:
                 data["vbond"][index][2] = 1
             else:
                 bond_weight.append(abs(data["vbond"][index][2]))
+            matched_bond_indices.append(i)
             inner_p_target[i, i] = round(
                 (data["vbond"][index][3] * 0.529177 * 1.05 * bond_scaling) ** 2, 5
             )
@@ -1739,11 +1794,11 @@ class SLICES:
         temp_max = 0
         for i in range(len(bond_weight)):
             temp_max = max(temp_max, bond_weight[i])
-        for i in range(len(bond_weight)):
-            colattice_inds[0].append(i)
-            colattice_inds[1].append(i)
+        for edge_idx, weight in zip(matched_bond_indices, bond_weight, strict=True):
+            colattice_inds[0].append(edge_idx)
+            colattice_inds[1].append(edge_idx)
             colattice_weights.append(
-                round(bond_weight[i] / temp_max, 2) if temp_max > 0 else 0.0
+                round(weight / temp_max, 2) if temp_max > 0 else 0.0
             )
         if self.check_results:
             inner_p_target_dict = {
@@ -1777,6 +1832,7 @@ class SLICES:
             blist_original = blist
             blist_flip = np.flip(blist_original, 1)
             bond_weight: list[float] = []
+            matched_bond_indices: list[int] = []
             blist_super = np.array(data["blist"], dtype=int)
             inner_p_target = np.zeros((len(blist_original), len(blist_original)))
             for i in range(len(blist_original)):
@@ -1795,6 +1851,7 @@ class SLICES:
                     data["vbond"][index][2] = 1
                 else:
                     bond_weight.append(abs(data["vbond"][index][2]))
+                matched_bond_indices.append(i)
                 inner_p_target[i, i] = round(
                     (data["vbond"][index][3] * 0.529177 * 1.05 * bond_scaling) ** 2, 5
                 )
@@ -1849,11 +1906,11 @@ class SLICES:
             temp_max = 0
             for i in range(len(bond_weight)):
                 temp_max = max(temp_max, bond_weight[i])
-            for i in range(len(bond_weight)):
-                colattice_inds[0].append(i)
-                colattice_inds[1].append(i)
+            for edge_idx, weight in zip(matched_bond_indices, bond_weight, strict=True):
+                colattice_inds[0].append(edge_idx)
+                colattice_inds[1].append(edge_idx)
                 colattice_weights.append(
-                    round(bond_weight[i] / temp_max, 2) if temp_max > 0 else 0.0
+                    round(weight / temp_max, 2) if temp_max > 0 else 0.0
                 )
             if self.check_results:
                 inner_p_target_dict = {
@@ -2642,20 +2699,7 @@ class SLICES:
         if net.cocycle_rep is None:
             structure_recreated_opt = structure_recreated_std
         else:
-            lattice_length_list = [
-                metric_tensor_std[0, 0],
-                metric_tensor_std[1, 1],
-                metric_tensor_std[2, 2],
-            ]
-            lattice_length_list_unique = list(set(lattice_length_list))
-            lattice_type = len(lattice_length_list_unique)
-            if lattice_type == 2:
-                if metric_tensor_std[0, 0] == metric_tensor_std[1, 1]:
-                    lattice_type = 23
-                if metric_tensor_std[0, 0] == metric_tensor_std[2, 2]:
-                    lattice_type = 22
-                if metric_tensor_std[2, 2] == metric_tensor_std[1, 1]:
-                    lattice_type = 21
+            lattice_type = _classify_lattice_type(metric_tensor_std)
             x0, bounds = self.initialize_x_bounds(
                 net.ndim,
                 net.cocycle_rep,

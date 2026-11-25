@@ -31,6 +31,7 @@ References:
 from __future__ import annotations
 
 import logging
+import math
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -159,7 +160,12 @@ class CycleBasisOptimizer:
         tolerance: float = 1e-6,
         seed: int | None = 0,
     ) -> bool:
-        """Attempt to populate ``net.lattice_basis`` across seeded cycle permutations.
+        """Attempt to populate ``net.lattice_basis`` via exact SNF or seeded permutations.
+
+        Invokes :meth:`slices.tobascco_net.Net.get_lattice_basis` (which includes
+        the exact integer Smith Normal Form fallback) first so unimodular nets
+        are solved deterministically without RNG, retaining the seeded cycle
+        permutation search only when ``get_lattice_basis()`` still returns ``-1``.
 
         Args:
             net: Initialized :class:`slices.tobascco_net.Net` with ``cycle`` and
@@ -177,6 +183,9 @@ class CycleBasisOptimizer:
 
         if net.cycle_rep is None or net.cycle is None or len(net.cycle_rep) == 0:
             return False
+
+        if net.get_lattice_basis() != -1 and net.lattice_basis is not None:
+            return True
 
         rng = np.random.default_rng(seed)
         n_cycles = len(net.cycle_rep)
@@ -582,6 +591,44 @@ def _evaluate_lorentz_lj_pairs(
     )
 
 
+def _classify_lattice_type(
+    metric_tensor_std: np.ndarray,
+    rel_tol: float = 1e-9,
+    abs_tol: float = 1e-12,
+) -> int:
+    """Classify metric-tensor diagonal symmetry with transitive ``math.isclose``.
+
+    Matches ``slices.core._classify_lattice_type`` so rescaled standard metric
+    tensors whose equal axial lengths differ only by IEEE-754 rounding noise
+    retain their crystallographic length constraints during ZL* optimization.
+
+    Args:
+        metric_tensor_std: Rescaled ``3 x 3`` standard metric tensor.
+        rel_tol: Relative tolerance for ``math.isclose``. Defaults to ``1e-9``.
+        abs_tol: Absolute tolerance for ``math.isclose``. Defaults to ``1e-12``.
+
+    Returns:
+        Symmetry constraint code: ``1`` (``a = b = c``), ``23`` (``a = b != c``),
+        ``22`` (``a = c != b``), ``21`` (``b = c != a``), or ``3``
+        (three independent axial lengths).
+    """
+    g0 = float(metric_tensor_std[0, 0])
+    g1 = float(metric_tensor_std[1, 1])
+    g2 = float(metric_tensor_std[2, 2])
+    eq01 = math.isclose(g0, g1, rel_tol=rel_tol, abs_tol=abs_tol)
+    eq02 = math.isclose(g0, g2, rel_tol=rel_tol, abs_tol=abs_tol)
+    eq12 = math.isclose(g1, g2, rel_tol=rel_tol, abs_tol=abs_tol)
+    if (eq01 and eq02) or (eq01 and eq12) or (eq02 and eq12):
+        return 1
+    if eq01:
+        return 23
+    if eq02:
+        return 22
+    if eq12:
+        return 21
+    return 3
+
+
 def _reconstruct_zl_multistart(
     slices_inst: SLICES,
     n_starts: int = 3,
@@ -679,15 +726,7 @@ def _reconstruct_zl_multistart(
     if net.cocycle_rep is None:
         return std_structure, std_structure
 
-    diag_vals = [metric_tensor_std[0, 0], metric_tensor_std[1, 1], metric_tensor_std[2, 2]]
-    lattice_type = len(set(diag_vals))
-    if lattice_type == 2:
-        if metric_tensor_std[0, 0] == metric_tensor_std[1, 1]:
-            lattice_type = 23
-        if metric_tensor_std[0, 0] == metric_tensor_std[2, 2]:
-            lattice_type = 22
-        if metric_tensor_std[2, 2] == metric_tensor_std[1, 1]:
-            lattice_type = 21
+    lattice_type = _classify_lattice_type(metric_tensor_std)
 
     x0, bounds = slices_inst.initialize_x_bounds(
         net.ndim,

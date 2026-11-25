@@ -22,6 +22,8 @@ from uuid import UUID, uuid4
 import networkx as nx
 import numpy as np
 import sympy as sy
+from sympy.polys.matrices import DomainMatrix
+from sympy.polys.matrices.normalforms import smith_normal_decomp
 
 _logger = logging.getLogger(__name__)
 
@@ -464,8 +466,107 @@ class Net:
                 r_independent[i, :] = mat[:, idx]
         return r_independent
 
+    def _get_lattice_basis_via_snf(self) -> bool:
+        """Construct an integral ``(ndim, shape)`` lattice basis via Smith Normal Form.
+
+        Invoked strictly as a fallback when the primary single-nullspace-vector
+        search in :meth:`get_lattice_basis` fails to isolate a unit pivot. Over
+        the principal ideal domain ``ZZ``, ``smith_normal_decomp`` factors the
+        ``(m, d)`` integer cycle-voltage array ``C`` as ``D = U * C * V`` with
+        unimodular ``U`` and ``V``. An integral cycle combination spanning the
+        standard unit lattice exists if and only if ``m >= d`` and the invariant
+        factors on the diagonal of ``D`` equal ``(1, ..., 1)`` up to sign, in
+        which case ``W = V * S * U[:d, :]`` satisfies ``W * C = I_d`` and
+        ``L = W * cycle`` yields the exact integral lattice cycle basis.
+
+        Returns:
+            ``True`` if ``self.lattice_basis`` was populated with a full-rank
+            integral basis of shape ``(ndim, shape)``; ``False`` otherwise.
+        """
+        if self.cycle_rep is None or self.cycle is None:
+            return False
+        d = int(self.ndim)
+        if d <= 0:
+            return False
+        cycle_rep = np.asarray(self.cycle_rep)
+        cycle = np.asarray(self.cycle)
+        if (
+            cycle_rep.ndim != 2
+            or cycle.ndim != 2
+            or cycle_rep.shape[0] < d
+            or cycle_rep.shape[1] != d
+            or cycle.shape[0] != cycle_rep.shape[0]
+            or cycle.shape[1] == 0
+        ):
+            return False
+        if not (np.all(np.isfinite(cycle_rep)) and np.all(np.isfinite(cycle))):
+            return False
+        if not (
+            np.all(np.equal(np.mod(cycle_rep, 1), 0))
+            and np.all(np.equal(np.mod(cycle, 1), 0))
+        ):
+            return False
+
+        m = int(cycle_rep.shape[0])
+        n_edges = int(cycle.shape[1])
+        zz = sy.ZZ
+        c_dm = DomainMatrix(
+            [[zz(int(val)) for val in row] for row in cycle_rep.tolist()],
+            (m, d),
+            zz,
+        )
+        d_dm, u_dm, v_dm = smith_normal_decomp(c_dm)
+        d_list = d_dm.to_list()
+        diag_signs: list[int] = []
+        for k in range(d):
+            dk = int(d_list[k][k])
+            if abs(dk) != 1:
+                return False
+            diag_signs.append(dk)
+
+        if abs(int(v_dm.det())) != 1:
+            return False
+
+        u_list = u_dm.to_list()
+        u_top_dm = DomainMatrix(
+            [[zz(diag_signs[r]) * u_list[r][c] for c in range(m)] for r in range(d)],
+            (d, m),
+            zz,
+        )
+        w_dm = v_dm * u_top_dm
+        if (w_dm * c_dm).to_dense() != DomainMatrix.eye(d, zz).to_dense():
+            return False
+
+        w_py = [[int(val) for val in row] for row in w_dm.to_list()]
+        max_w = max(abs(val) for row in w_py for val in row)
+        if max_w <= 10**12 and float(np.max(np.abs(cycle))) <= 10**6:
+            lat = (
+                np.asarray(w_py, dtype=np.int64) @ np.asarray(cycle, dtype=np.int64)
+            ).astype(float)
+        else:
+            cyc_dm = DomainMatrix(
+                [[zz(int(val)) for val in row] for row in cycle.tolist()],
+                (m, n_edges),
+                zz,
+            )
+            lat_dm = w_dm * cyc_dm
+            lat = np.array(
+                [[float(int(val)) for val in row] for row in lat_dm.to_list()],
+                dtype=float,
+            )
+        if not all(self.is_integral(lat[k]) for k in range(d)):
+            return False
+
+        self.lattice_basis = lat
+        return True
+
     def get_lattice_basis(self) -> int:
         """Solve for integral cycle combinations spanning the ``ndim`` unit lattice vectors.
+
+        Executes the primary SymPy single-nullspace-vector search first so nets
+        that already succeed retain bit-identical basis vectors, falling back to
+        exact integer Smith Normal Form (:meth:`_get_lattice_basis_via_snf`)
+        only when the primary loop fails on a pivot.
 
         Returns:
             ``1`` if all ``ndim`` integral basis vectors were found, ``-1`` otherwise.
@@ -488,6 +589,9 @@ class Net:
                         lattice.append(tv)
                         break
             if not found_vector:
+                if self._get_lattice_basis_via_snf():
+                    return 1
+                self.lattice_basis = None
                 _logger.error("Could not obtain the lattice basis from the cycle vectors!")
                 return -1
         self.lattice_basis = np.array(lattice)
